@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  firstName String?
+  lastName  String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events    Event[]
+}
+
+model Event {
+  id            String      @id @default(uuid())
+  name          String
+  type          String?
+  eventDate     DateTime
+  installTime   String?
+  pickupTime    String?
+  address       String?
+  guestCount    Int?
+  status        EventStatus @default(TO_PREPARE)
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  organizerName  String?
+  organizerEmail String?
+  organizerPhone String?
+
+  totalPrice Decimal? @db.Decimal(10,2)
+  deposit    Decimal? @db.Decimal(10,2)
+  balance    Decimal? @db.Decimal(10,2)
+
+  depositPaid     Boolean @default(false)
+  balancePaid     Boolean @default(false)
+  cautionReceived Boolean @default(false)
+  cautionReturned Boolean @default(false)
+
+  notes String?
+
+  googleCalendarEventId String?
+  googleDriveFolderId   String?
+
+  organizerToken String? @unique
+  guestToken     String? @unique
+
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials EventMaterial[]
+}
+
+enum EventStatus {
+  TO_PREPARE
+  READY
+  IN_PROGRESS
+  COMPLETED
+  PROBLEM
+  CANCELLED
+}
+
+model Material {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events    EventMaterial[]
+}
+
+model EventMaterial {
+  eventId    String
+  materialId String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  @@id([eventId, materialId])
+}
+
+model Consumable {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  printer      String
+  unitsPerBox  Int
+  currentUnits Int      @default(0)
+  warningAt    Int      @default(300)
+  criticalAt   Int      @default(100)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  movements    StockMovement[]
+}
+
+model StockMovement {
+  id           String     @id @default(uuid())
+  consumableId String
+  quantity     Int
+  reason       String?
+  eventName    String?
+  createdAt    DateTime   @default(now())
+  consumable   Consumable @relation(fields: [consumableId], references: [id], onDelete: Cascade)
+}

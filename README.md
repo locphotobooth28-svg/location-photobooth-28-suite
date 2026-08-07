@@ -1,33 +1,32 @@
-# Location Photobooth 28 Suite — V5.1.0
+# Location Photobooth 28 Suite — V6.3.1
 
-Première vraie base React + Express + PWA.
+Correctif de la V6.3.
 
-## Fonctionnalités
-- interface noir / or ;
-- logo Location Photobooth 28 ;
-- connexion administrateur ;
-- tableau de bord ;
-- base PWA installable ;
-- API Express ;
-- prêt pour Render.
+## Important
+Conserve ton fichier `.env` actuel.
 
-## Installation locale
+Puis lance :
+
 ```bash
 npm install
+npx prisma generate
 npm run build
 npm start
 ```
 
-Puis ouvrir http://localhost:3000
+Vérifie ensuite :
 
-## Variables Render
-- ADMIN_EMAIL
-- ADMIN_PASSWORD
-- SESSION_SECRET
+`http://localhost:3000/api/health`
 
-## Render
-Build Command:
-`npm install && npm run build`
+Résultat attendu :
+- `ok: true`
+- `version: 6.3.1`
+- `database: ok`
 
-Start Command:
-`npm start`
+Puis teste la création d'un événement.
+
+## Correctifs
+- Prisma 7 + PostgreSQL avec driver adapter.
+- Création d'événement.
+- Messages d'erreur frontend plus explicites.
+- Planning et détection des conflits conservés.
