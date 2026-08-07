@@ -1,0 +1,1 @@
+# location-photobooth-28-suite
