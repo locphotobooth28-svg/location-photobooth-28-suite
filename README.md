@@ -1,1 +1,3 @@
-# location-photobooth-28-suite
+# Location Photobooth 28 Suite
+
+Version 5.0.0

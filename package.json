@@ -1,0 +1,12 @@
+{
+  "name": "location-photobooth-28-suite",
+  "version": "5.0.0",
+  "description": "Location Photobooth 28 Suite",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
