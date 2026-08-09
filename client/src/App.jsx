@@ -392,120 +392,347 @@ function CalendarView({ events, onOpenEvent }) {
 
 
 function GooglePanel() {
-  const [status,setStatus]=useState(null);
-  const [calendars,setCalendars]=useState([]);
-  const [folders,setFolders]=useState([]);
-  const [settings,setSettings]=useState({defaultCalendarId:"",defaultCalendarSummary:"",driveRootFolderId:""});
-  const [busy,setBusy]=useState(false);
+  const [status,setStatus] = useState(null);
+  const [calendars,setCalendars] = useState([]);
+  const [folders,setFolders] = useState([]);
+  const [settings,setSettings] = useState({
+    defaultCalendarId:"",
+    defaultCalendarSummary:"",
+    driveRootFolderId:""
+  });
+  const [busy,setBusy] = useState(false);
 
   async function load(){
     try{
-      const sr=await fetch("/api/google/status");
-      if(sr.status===401){
-        setStatus({unauthorized:true,configured:true,connected:false});
+      const sr = await fetch("/api/google/status", {
+        credentials:"include"
+      });
+
+      if(sr.status === 401){
+        setStatus({
+          unauthorized:true,
+          configured:true,
+          connected:false,
+          calendarConnected:false,
+          driveConnected:false
+        });
         return;
       }
-      const st=await sr.json();
+
+      const st = await sr.json();
       setStatus(st);
 
-      if(st.connected){
-        const [cr,fr]=await Promise.all([
-          fetch("/api/google/calendars"),
-          fetch("/api/google/drive-folders?parentId=root")
-        ]);
-        const cd=cr.ok?await cr.json():{calendars:[]};
-        const fd=fr.ok?await fr.json():{folders:[]};
-        setCalendars(cd.calendars||[]);
-        setFolders(fd.folders||[]);
-        setSettings({
-          defaultCalendarId:st.defaultCalendarId||"primary",
-          defaultCalendarSummary:st.defaultCalendarSummary||"",
-          driveRootFolderId:st.driveRootFolderId||""
+      let calendarList = [];
+      let folderList = [];
+
+      if(st.calendarConnected){
+        const cr = await fetch("/api/google/calendars", {
+          credentials:"include"
         });
+
+        if(cr.ok){
+          const cd = await cr.json();
+          calendarList = cd.calendars || [];
+        }
       }
+
+      if(st.driveConnected){
+        const fr = await fetch(
+          "/api/google/drive-folders?parentId=root",
+          {credentials:"include"}
+        );
+
+        if(fr.ok){
+          const fd = await fr.json();
+          folderList = fd.folders || [];
+        }
+      }
+
+      setCalendars(calendarList);
+      setFolders(folderList);
+
+      setSettings({
+        defaultCalendarId:
+          st.defaultCalendarId || "primary",
+        defaultCalendarSummary:
+          st.defaultCalendarSummary || "",
+        driveRootFolderId:
+          st.driveRootFolderId || ""
+      });
+
     }catch(e){
-      setStatus({configured:false,connected:false,error:e.message});
+      setStatus({
+        configured:false,
+        connected:false,
+        calendarConnected:false,
+        driveConnected:false,
+        error:e.message
+      });
     }
   }
 
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{
+    load();
+  },[]);
 
   async function save(){
     setBusy(true);
-    const cal=calendars.find(c=>c.id===settings.defaultCalendarId);
-    const r=await fetch("/api/google/settings",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({...settings,defaultCalendarSummary:cal?.summary||""})
-    });
-    const d=await r.json();
-    setBusy(false);
-    if(!r.ok)return alert(d.message||"Erreur Google.");
-    alert("✅ Paramètres Google enregistrés.");
-    load();
+
+    try{
+      const cal = calendars.find(
+        c => c.id === settings.defaultCalendarId
+      );
+
+      const r = await fetch("/api/google/settings", {
+        method:"POST",
+        credentials:"include",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          ...settings,
+          defaultCalendarSummary:cal?.summary || ""
+        })
+      });
+
+      const d = await r.json();
+
+      if(!r.ok){
+        alert(d.message || "Erreur Google.");
+        return;
+      }
+
+      alert("Parametres Google enregistres.");
+      await load();
+
+    }finally{
+      setBusy(false);
+    }
   }
 
-  async function disconnect(){
-    if(!confirm("Déconnecter Google ?"))return;
-    await fetch("/api/google/disconnect",{method:"POST"});
-    load();
+  async function disconnect(kind){
+    const label =
+      kind === "calendar"
+        ? "Google Calendar"
+        : "Google Drive";
+
+    if(!confirm(`Deconnecter ${label} ?`)){
+      return;
+    }
+
+    const r = await fetch(
+      `/api/google/disconnect/${kind}`,
+      {
+        method:"POST",
+        credentials:"include"
+      }
+    );
+
+    if(!r.ok){
+      alert(`Impossible de deconnecter ${label}.`);
+      return;
+    }
+
+    await load();
   }
 
-  if(!status)return <section className="google-panel"><p>Chargement…</p></section>;
+  if(!status){
+    return <div>Chargement...</div>;
+  }
 
-  return <section className="google-panel">
-    <div className="google-hero">
-      <div>
-        <div className="eyebrow">GOOGLE WORKSPACE</div>
-        <h2>Connexion et structure</h2>
-        <p className="muted">Choisis tes agendas et dossiers existants. LP28 ne recrée pas ton organisation.</p>
-      </div>
-      <div className={`google-status ${status.connected?"connected":"disconnected"}`}>
-        {status.connected?"✓ Connecté":"○ Non connecté"}
-      </div>
-    </div>
-
-    {status.unauthorized ? <div className="alert">
-      Session LP28 non reconnue. Déconnecte-toi puis reconnecte-toi à LP28.
-    </div> : !status.configured ? <div className="alert">
-      Configuration Google absente du serveur.
-    </div> : !status.connected ? <div className="google-connect-box">
-      <div className="google-big-icon">G</div>
-      <div><h3>Connecter Google</h3><p className="muted">Calendar + Drive</p></div>
-      <a className="primary" href="/auth/google/start">Connecter Google</a>
-    </div> : <>
-      <div className="google-account-line">
-        <div><span className="muted">Compte</span><strong>{status.googleEmail||"Google"}</strong></div>
-        <span className="privacy-pill">🔒 Privé · Occupé</span>
+  return (
+    <section>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">GOOGLE WORKSPACE</span>
+          <h2>Connexion et structure</h2>
+          <p className="muted">
+            Calendar et Drive peuvent utiliser deux comptes Google differents.
+          </p>
+        </div>
       </div>
 
-      <div className="google-settings-grid">
-        <article className="google-setting-card">
-          <div className="google-setting-icon">📅</div>
-          <h3>Agenda par défaut</h3>
-          <select value={settings.defaultCalendarId} onChange={e=>setSettings(v=>({...v,defaultCalendarId:e.target.value}))}>
-            {calendars.map(c=><option key={c.id} value={c.id}>{c.primary?"★ ":""}{c.summary}</option>)}
-          </select>
-          <small>{calendars.length} agenda(s) détecté(s)</small>
-        </article>
+      {status.unauthorized ? (
+        <div className="alert">
+          Session LP28 non reconnue. Deconnecte-toi puis reconnecte-toi a LP28.
+        </div>
+      ) : !status.configured ? (
+        <div className="alert">
+          Configuration Google absente du serveur.
+        </div>
+      ) : (
+        <>
+          <div className="google-settings-grid">
 
-        <article className="google-setting-card">
-          <div className="google-setting-icon">☁️</div>
-          <h3>Dossier Drive racine</h3>
-          <select value={settings.driveRootFolderId} onChange={e=>setSettings(v=>({...v,driveRootFolderId:e.target.value}))}>
-            <option value="">Créer/utiliser « Location Photobooth 28 »</option>
-            {folders.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-          <small>{folders.length} dossier(s) détecté(s)</small>
-        </article>
-      </div>
+            <article className="google-setting-card">
+              <div className="google-setting-icon">📅</div>
 
-      <div className="google-actions">
-        <button className="primary" disabled={busy} onClick={save}>{busy?"Enregistrement…":"Enregistrer mes choix"}</button>
-        <button className="secondary-btn" onClick={disconnect}>Déconnecter Google</button>
-      </div>
-    </>}
-  </section>;
+              <h3>Google Calendar</h3>
+
+              {status.calendarConnected ? (
+                <>
+                  <div className="google-account-line">
+                    <div>
+                      <span className="muted">Compte Calendar</span>
+                      <strong>
+                        {status.calendarEmail || "Google Calendar"}
+                      </strong>
+                    </div>
+
+                    <span className="privacy-pill">
+                      ✓ Connecte
+                    </span>
+                  </div>
+
+                  <h4>Agenda par defaut</h4>
+
+                  <select
+                    value={settings.defaultCalendarId}
+                    onChange={e=>
+                      setSettings(v=>({
+                        ...v,
+                        defaultCalendarId:e.target.value
+                      }))
+                    }
+                  >
+                    {calendars.map(c=>(
+                      <option key={c.id} value={c.id}>
+                        {c.primary ? "★ " : ""}
+                        {c.summary}
+                      </option>
+                    ))}
+                  </select>
+
+                  <small>
+                    {calendars.length} agenda(s) detecte(s)
+                  </small>
+
+                  <div className="google-actions">
+                    <button
+                      className="secondary-btn"
+                      onClick={()=>disconnect("calendar")}
+                    >
+                      Deconnecter Calendar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="google-connect-box">
+                  <div className="google-big-icon">G</div>
+
+                  <div>
+                    <h3>Connecter Calendar</h3>
+                    <p className="muted">
+                      Choisis le compte qui possede ton agenda LP28.
+                    </p>
+                  </div>
+
+                  <a
+                    className="primary"
+                    href="/auth/google/start/calendar"
+                  >
+                    Connecter Calendar
+                  </a>
+                </div>
+              )}
+            </article>
+
+
+            <article className="google-setting-card">
+              <div className="google-setting-icon">📁</div>
+
+              <h3>Google Drive</h3>
+
+              {status.driveConnected ? (
+                <>
+                  <div className="google-account-line">
+                    <div>
+                      <span className="muted">Compte Drive</span>
+                      <strong>
+                        {status.driveEmail || "Google Drive"}
+                      </strong>
+                    </div>
+
+                    <span className="privacy-pill">
+                      ✓ Connecte
+                    </span>
+                  </div>
+
+                  <h4>Dossier Drive racine</h4>
+
+                  <select
+                    value={settings.driveRootFolderId}
+                    onChange={e=>
+                      setSettings(v=>({
+                        ...v,
+                        driveRootFolderId:e.target.value
+                      }))
+                    }
+                  >
+                    <option value="">
+                      Creer/utiliser "Location Photobooth 28"
+                    </option>
+
+                    {folders.map(f=>(
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <small>
+                    {folders.length} dossier(s) detecte(s)
+                  </small>
+
+                  <div className="google-actions">
+                    <button
+                      className="secondary-btn"
+                      onClick={()=>disconnect("drive")}
+                    >
+                      Deconnecter Drive
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="google-connect-box">
+                  <div className="google-big-icon">G</div>
+
+                  <div>
+                    <h3>Connecter Drive</h3>
+                    <p className="muted">
+                      Choisis le compte qui stockera les fichiers LP28.
+                    </p>
+                  </div>
+
+                  <a
+                    className="primary"
+                    href="/auth/google/start/drive"
+                  >
+                    Connecter Drive
+                  </a>
+                </div>
+              )}
+            </article>
+
+          </div>
+
+          {(status.calendarConnected || status.driveConnected) && (
+            <div className="google-actions">
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={save}
+              >
+                {busy
+                  ? "Enregistrement..."
+                  : "Enregistrer mes choix"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
 }
 
 

@@ -306,58 +306,132 @@ app.post("/api/logout", (req, res) => {
 
 
 app.get("/api/google/status", adminOnly, async (req, res) => {
-  const c = await googleService.connection();
+  const calendar = await googleService.connection("calendar");
+  const drive = await googleService.connection("drive");
+
   res.json({
     configured: googleService.configured(),
-    connected: Boolean(c),
-    googleEmail: c?.googleEmail || null,
-    defaultCalendarId: c?.defaultCalendarId || process.env.GOOGLE_CALENDAR_ID || "primary",
-    defaultCalendarSummary: c?.defaultCalendarSummary || null,
-    driveRootFolderId: c?.driveRootFolderId || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null
+
+    calendarConnected: Boolean(calendar),
+    calendarEmail: calendar?.googleEmail || null,
+    defaultCalendarId:
+      calendar?.defaultCalendarId ||
+      process.env.GOOGLE_CALENDAR_ID ||
+      "primary",
+    defaultCalendarSummary:
+      calendar?.defaultCalendarSummary || null,
+
+    driveConnected: Boolean(drive),
+    driveEmail: drive?.googleEmail || null,
+    driveRootFolderId:
+      drive?.driveRootFolderId ||
+      process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ||
+      null,
+
+    connected: Boolean(calendar || drive)
   });
 });
 
-app.get("/auth/google/start", adminOnly, (req, res) => {
+app.get("/auth/google/start/:kind", adminOnly, (req, res) => {
   try {
-    console.log("GOOGLE START: route appelée");
+    const kind = req.params.kind;
 
-    const url = googleService.authUrl(req);
+    if(kind !== "calendar" && kind !== "drive"){
+      return res.status(400).send("Type de connexion Google invalide.");
+    }
 
-    console.log("GOOGLE START: URL générée =", url.substring(0, 120));
+    console.log(`GOOGLE START: ${kind}`);
+
+    const url = googleService.authUrl(req, kind);
 
     req.session.save(err => {
-      if (err) {
-        console.error("GOOGLE START: erreur session =", err);
+      if(err){
+        console.error(`GOOGLE START ${kind}: erreur session =`, err);
         return res.status(500).send("Erreur session Google.");
       }
 
-      console.log("GOOGLE START: session sauvegardée, redirection");
+      console.log(`GOOGLE START ${kind}: redirection Google`);
       res.redirect(url);
     });
-  } catch (err) {
+
+  } catch(err){
     console.error("OAuth Google :", err);
-    res.status(500).send(`Configuration Google incomplète : ${err.message}`);
+    res.status(500).send(
+      `Configuration Google incomplète : ${err.message}`
+    );
   }
+});
+
+app.get("/auth/google/start", adminOnly, (req, res) => {
+  res.redirect("/auth/google/start/calendar");
 });
 
 app.get("/auth/google/callback", adminOnly, async (req, res) => {
   try {
-    if (!req.query.code) return res.status(400).send("Code OAuth manquant.");
-    if (!req.query.state || req.query.state !== req.session.googleOAuthState) {
-      return res.status(400).send("Ã‰tat OAuth invalide.");
+    if(!req.query.code){
+      return res.status(400).send("Code OAuth manquant.");
     }
+
+    if(
+      !req.query.state ||
+      req.query.state !== req.session.googleOAuthState
+    ){
+      return res.status(400).send("État OAuth invalide.");
+    }
+
     delete req.session.googleOAuthState;
-    await googleService.callback(req, req.query.code);
-    res.redirect("/?google=connected");
-  } catch (err) {
+
+    const result = await googleService.callback(
+      req,
+      req.query.code
+    );
+
+    res.redirect(
+      `/?google=${encodeURIComponent(result.kind || "connected")}`
+    );
+
+  } catch(err){
     console.error("Callback Google :", err);
-    res.status(500).send(`Connexion Google impossible : ${err.message}`);
+    res.status(500).send(
+      `Connexion Google impossible : ${err.message}`
+    );
   }
+});
+
+app.post("/api/google/disconnect/:kind", adminOnly, async (req, res) => {
+  const kind = req.params.kind;
+
+  if(kind !== "calendar" && kind !== "drive"){
+    return res.status(400).json({
+      ok:false,
+      message:"Type de connexion Google invalide."
+    });
+  }
+app.post("/api/google/disconnect/:kind", adminOnly, async (req, res) => {
+  const kind = req.params.kind;
+
+  if(kind !== "calendar" && kind !== "drive"){
+    return res.status(400).json({
+      ok:false,
+      message:"Type de connexion Google invalide."
+    });
+  }
+
+  await googleService.disconnect(kind);
+
+  res.json({
+    ok:true,
+    kind
+  });
 });
 
 app.post("/api/google/disconnect", adminOnly, async (req, res) => {
   await googleService.disconnect();
-  res.json({ ok: true });
+
+  res.json({
+    ok:true
+  });
+});
 });
 
 app.get("/api/google/calendars", adminOnly, async (req, res) => {

@@ -3,17 +3,25 @@ const { google } = require("googleapis");
 const { DateTime } = require("luxon");
 const prisma = require("../lib/prisma");
 
-const SCOPES = [
+const CALENDAR_SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/calendar.events.owned",
-  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+];
+
+const DRIVE_SCOPES = [
+  "openid",
+  "email",
   "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/drive.metadata.readonly"
 ];
 
 function configured(){
-  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET
+  );
 }
 
 function redirectUri(req){
@@ -22,7 +30,10 @@ function redirectUri(req){
 }
 
 function oauthClient(req){
-  if(!configured()) throw new Error("Google OAuth n'est pas configuré.");
+  if(!configured()){
+    throw new Error("Google OAuth n'est pas configuré.");
+  }
+
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -31,134 +42,271 @@ function oauthClient(req){
 }
 
 function key(){
-  const source=process.env.GOOGLE_TOKEN_KEY || process.env.SESSION_SECRET;
-  if(!source) throw new Error("GOOGLE_TOKEN_KEY ou SESSION_SECRET est requis.");
-  return crypto.createHash("sha256").update(source).digest();
+  const source =
+    process.env.GOOGLE_TOKEN_KEY ||
+    process.env.SESSION_SECRET;
+
+  if(!source){
+    throw new Error(
+      "GOOGLE_TOKEN_KEY ou SESSION_SECRET est requis."
+    );
+  }
+
+  return crypto
+    .createHash("sha256")
+    .update(source)
+    .digest();
 }
 
 function encrypt(obj){
-  const iv=crypto.randomBytes(12);
-  const cipher=crypto.createCipheriv("aes-256-gcm",key(),iv);
-  const enc=Buffer.concat([cipher.update(JSON.stringify(obj),"utf8"),cipher.final()]);
-  const tag=cipher.getAuthTag();
-  return [iv,tag,enc].map(x=>x.toString("base64")).join(".");
+  const iv = crypto.randomBytes(12);
+
+  const cipher = crypto.createCipheriv(
+    "aes-256-gcm",
+    key(),
+    iv
+  );
+
+  const enc = Buffer.concat([
+    cipher.update(JSON.stringify(obj),"utf8"),
+    cipher.final()
+  ]);
+
+  const tag = cipher.getAuthTag();
+
+  return [iv,tag,enc]
+    .map(x=>x.toString("base64"))
+    .join(".");
 }
 
 function decrypt(payload){
-  const [ivB64,tagB64,dataB64]=String(payload||"").split(".");
-  if(!ivB64||!tagB64||!dataB64) throw new Error("Jeton Google invalide.");
-  const decipher=crypto.createDecipheriv("aes-256-gcm",key(),Buffer.from(ivB64,"base64"));
-  decipher.setAuthTag(Buffer.from(tagB64,"base64"));
-  const clear=Buffer.concat([decipher.update(Buffer.from(dataB64,"base64")),decipher.final()]);
-  return JSON.parse(clear.toString("utf8"));
+  const [ivB64,tagB64,dataB64] =
+    String(payload||"").split(".");
+
+  if(!ivB64 || !tagB64 || !dataB64){
+    throw new Error("Jeton Google invalide.");
+  }
+
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    key(),
+    Buffer.from(ivB64,"base64")
+  );
+
+  decipher.setAuthTag(
+    Buffer.from(tagB64,"base64")
+  );
+
+  const clear = Buffer.concat([
+    decipher.update(
+      Buffer.from(dataB64,"base64")
+    ),
+    decipher.final()
+  ]);
+
+  return JSON.parse(
+    clear.toString("utf8")
+  );
 }
 
-async function connection(){
-  return prisma.googleConnection.findUnique({where:{id:"primary"}});
+async function connection(kind="calendar"){
+  return prisma.googleConnection.findUnique({
+    where:{id:kind}
+  });
 }
 
-async function saveTokens(tokens,extra={}){
-  const current=await connection();
-  let merged=tokens;
+async function saveTokens(tokens, extra={}, kind="calendar"){
+  const current = await connection(kind);
+
+  let merged = tokens;
+
   if(current){
-    try{ merged={...decrypt(current.tokenEncrypted),...tokens}; }catch{}
+    try{
+      merged = {
+        ...decrypt(current.tokenEncrypted),
+        ...tokens
+      };
+    }catch{}
   }
 
   return prisma.googleConnection.upsert({
-    where:{id:"primary"},
+    where:{id:kind},
+
     update:{
       tokenEncrypted:encrypt(merged),
-      googleEmail:extra.googleEmail ?? current?.googleEmail ?? null,
-      scopes:extra.scopes ?? current?.scopes ?? null,
-      driveRootFolderId:extra.driveRootFolderId ?? current?.driveRootFolderId ?? null,
-      defaultCalendarId:extra.defaultCalendarId ?? current?.defaultCalendarId ?? null,
-      defaultCalendarSummary:extra.defaultCalendarSummary ?? current?.defaultCalendarSummary ?? null,
+      googleEmail:
+        extra.googleEmail ??
+        current?.googleEmail ??
+        null,
+
+      scopes:
+        extra.scopes ??
+        current?.scopes ??
+        null,
+
+      driveRootFolderId:
+        extra.driveRootFolderId ??
+        current?.driveRootFolderId ??
+        null,
+
+      defaultCalendarId:
+        extra.defaultCalendarId ??
+        current?.defaultCalendarId ??
+        null,
+
+      defaultCalendarSummary:
+        extra.defaultCalendarSummary ??
+        current?.defaultCalendarSummary ??
+        null
     },
+
     create:{
-      id:"primary",
+      id:kind,
       tokenEncrypted:encrypt(merged),
-      googleEmail:extra.googleEmail||null,
-      scopes:extra.scopes||null,
-      driveRootFolderId:extra.driveRootFolderId||null,
-      defaultCalendarId:extra.defaultCalendarId||null,
-      defaultCalendarSummary:extra.defaultCalendarSummary||null,
+      googleEmail:extra.googleEmail || null,
+      scopes:extra.scopes || null,
+      driveRootFolderId:extra.driveRootFolderId || null,
+      defaultCalendarId:extra.defaultCalendarId || null,
+      defaultCalendarSummary:extra.defaultCalendarSummary || null
     }
   });
 }
 
-async function auth(req){
-  const c=await connection();
-  if(!c) return null;
-  const client=oauthClient(req);
-  client.setCredentials(decrypt(c.tokenEncrypted));
-  client.on("tokens",async t=>{
-    try{await saveTokens(t);}catch(e){console.error("Refresh token Google :",e.message);}
+async function auth(req, kind="calendar"){
+  const c = await connection(kind);
+
+  if(!c){
+    return null;
+  }
+
+  const client = oauthClient(req);
+
+  client.setCredentials(
+    decrypt(c.tokenEncrypted)
+  );
+
+  client.on("tokens", async t=>{
+    try{
+      await saveTokens(t,{},kind);
+    }catch(e){
+      console.error(
+        `Refresh token Google ${kind} :`,
+        e.message
+      );
+    }
   });
+
   return client;
 }
 
-function authUrl(req){
-  const client=oauthClient(req);
-  const state=crypto.randomBytes(24).toString("hex");
-  req.session.googleOAuthState=state;
+function authUrl(req, kind="calendar"){
+  const client = oauthClient(req);
+
+  const state =
+    crypto.randomBytes(24).toString("hex");
+
+  req.session.googleOAuthState = state;
+  req.session.googleOAuthKind = kind;
+
+  const scopes =
+    kind === "drive"
+      ? DRIVE_SCOPES
+      : CALENDAR_SCOPES;
+
   return client.generateAuthUrl({
     access_type:"offline",
     prompt:"consent",
     include_granted_scopes:true,
-    scope:SCOPES,
+    scope:scopes,
     state
   });
 }
 
-async function callback(req, code) {
-  console.log("GOOGLE CALLBACK: début");
+async function callback(req, code){
+  const kind =
+    req.session.googleOAuthKind ||
+    "calendar";
+
+  console.log(
+    "GOOGLE CALLBACK:",
+    kind
+  );
 
   const client = oauthClient(req);
 
-  console.log("GOOGLE CALLBACK: récupération tokens");
-  const { tokens } = await client.getToken(code);
-
-  console.log("GOOGLE CALLBACK: tokens reçus", {
-    access_token: Boolean(tokens.access_token),
-    refresh_token: Boolean(tokens.refresh_token)
-  });
+  const {tokens} =
+    await client.getToken(code);
 
   client.setCredentials(tokens);
 
   let email = null;
 
-  try {
+  try{
     const oauth2 = google.oauth2({
-      version: "v2",
-      auth: client
+      version:"v2",
+      auth:client
     });
 
-    const me = await oauth2.userinfo.get();
-    email = me.data.email || null;
+    const me =
+      await oauth2.userinfo.get();
 
-    console.log("GOOGLE CALLBACK: email =", email);
-  } catch (err) {
-    console.error("GOOGLE CALLBACK: userinfo erreur =", err.message);
+    email =
+      me.data.email || null;
+
+  }catch(err){
+    console.error(
+      "Google userinfo :",
+      err.message
+    );
   }
 
-  console.log("GOOGLE CALLBACK: avant saveTokens");
+  const scopes =
+    kind === "drive"
+      ? DRIVE_SCOPES
+      : CALENDAR_SCOPES;
 
-  await saveTokens(tokens, {
-    googleEmail: email,
-    scopes: SCOPES.join(" ")
-  });
+  await saveTokens(
+    tokens,
+    {
+      googleEmail:email,
+      scopes:scopes.join(" ")
+    },
+    kind
+  );
 
-  console.log("GOOGLE CALLBACK: saveTokens terminé");
+  delete req.session.googleOAuthKind;
 
-  return { email };
+  console.log(
+    `Google ${kind} connecté :`,
+    email
+  );
+
+  return {
+    email,
+    kind
+  };
 }
 
-async function disconnect(){
-  await prisma.googleConnection.deleteMany({where:{id:"primary"}});
+async function disconnect(kind){
+  if(kind === "calendar" || kind === "drive"){
+    await prisma.googleConnection.deleteMany({
+      where:{id:kind}
+    });
+
+    return;
+  }
+
+  await prisma.googleConnection.deleteMany({
+    where:{
+      id:{
+        in:["calendar","drive","primary"]
+      }
+    }
+  });
 }
 
 async function listCalendars(req){
-  const client=await auth(req);
+  const client=await auth(req,"calendar");
   if(!client) return [];
   const api=google.calendar({version:"v3",auth:client});
   const out=[];
@@ -185,7 +333,7 @@ async function listCalendars(req){
 }
 
 async function listDriveFolders(req,parentId="root"){
-  const client=await auth(req);
+  const client=await auth(req,"drive");
   if(!client) return [];
   const drive=google.drive({version:"v3",auth:client});
   const safe=String(parentId||"root").replace(/'/g,"\\'");
@@ -199,13 +347,37 @@ async function listDriveFolders(req,parentId="root"){
 }
 
 async function saveSettings(data={}){
-  const c=await connection();
-  if(!c) throw new Error("Google n'est pas connecté.");
-  return saveTokens({},{
-    defaultCalendarId:data.defaultCalendarId ?? c.defaultCalendarId ?? null,
-    defaultCalendarSummary:data.defaultCalendarSummary ?? c.defaultCalendarSummary ?? null,
-    driveRootFolderId:data.driveRootFolderId ?? c.driveRootFolderId ?? null
-  });
+  const calendar = await connection("calendar");
+  const drive = await connection("drive");
+
+  if(!calendar && !drive){
+    throw new Error("Aucun compte Google n'est connecté.");
+  }
+
+  let savedCalendar = calendar;
+  let savedDrive = drive;
+
+  if(calendar){
+    savedCalendar = await saveTokens({}, {
+      defaultCalendarId:
+        data.defaultCalendarId ?? calendar.defaultCalendarId ?? null,
+      defaultCalendarSummary:
+        data.defaultCalendarSummary ?? calendar.defaultCalendarSummary ?? null
+    }, "calendar");
+  }
+
+  if(drive){
+    savedDrive = await saveTokens({}, {
+      driveRootFolderId:
+        data.driveRootFolderId ?? drive.driveRootFolderId ?? null
+    }, "drive");
+  }
+
+  return {
+    defaultCalendarId: savedCalendar?.defaultCalendarId || null,
+    defaultCalendarSummary: savedCalendar?.defaultCalendarSummary || null,
+    driveRootFolderId: savedDrive?.driveRootFolderId || null
+  };
 }
 
 function times(event){
@@ -235,24 +407,47 @@ function description(event){
 }
 
 async function ensureRootFolder(client){
-  const c=await connection();
-  if(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID) return process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-  if(c?.driveRootFolderId) return c.driveRootFolderId;
+  const c = await connection("drive");
 
-  const drive=google.drive({version:"v3",auth:client});
-  const folder=await drive.files.create({
-    requestBody:{name:"Location Photobooth 28",mimeType:"application/vnd.google-apps.folder"},
+  if(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID){
+    return process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  }
+
+  if(c?.driveRootFolderId){
+    return c.driveRootFolderId;
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const folder = await drive.files.create({
+    requestBody:{
+      name:"Location Photobooth 28",
+      mimeType:"application/vnd.google-apps.folder"
+    },
     fields:"id"
   });
-  await saveTokens({}, {driveRootFolderId:folder.data.id});
+
+  await saveTokens(
+    {},
+    {driveRootFolderId:folder.data.id},
+    "drive"
+  );
+
   return folder.data.id;
 }
-
 async function createFolder(drive,name,parentId){
-  const r=await drive.files.create({
-    requestBody:{name,mimeType:"application/vnd.google-apps.folder",parents:[parentId]},
+  const r = await drive.files.create({
+    requestBody:{
+      name,
+      mimeType:"application/vnd.google-apps.folder",
+      parents:[parentId]
+    },
     fields:"id,webViewLink"
   });
+
   return r.data;
 }
 
@@ -273,7 +468,7 @@ async function ensureDrive(client,event){
 }
 
 async function syncCalendar(client,event){
-  const c=await connection();
+  const c=await connection("calendar");
   const calendarId=
     event.googleCalendarId ||
     c?.defaultCalendarId ||
@@ -316,28 +511,71 @@ async function syncCalendar(client,event){
 }
 
 async function syncEvent(req,id){
-  const client=await auth(req);
-  if(!client) return {connected:false,calendar:false,drive:false};
+  const calendarClient = await auth(req,"calendar");
+  const driveClient = await auth(req,"drive");
 
-  const event=await prisma.event.findUnique({
+  if(!calendarClient && !driveClient){
+    return {
+      connected:false,
+      calendar:false,
+      drive:false
+    };
+  }
+
+  const event = await prisma.event.findUnique({
     where:{id},
-    include:{materials:{include:{material:true}}}
+    include:{
+      materials:{
+        include:{material:true}
+      }
+    }
   });
-  if(!event) throw new Error("Événement introuvable.");
 
-  const result={connected:true,calendar:false,drive:false,warnings:[]};
-  try{await syncCalendar(client,event);result.calendar=true;}
-  catch(e){result.warnings.push(`Agenda : ${e.message}`);}
-  try{await ensureDrive(client,event);result.drive=true;}
-  catch(e){result.warnings.push(`Drive : ${e.message}`);}
+  if(!event){
+    throw new Error("Événement introuvable.");
+  }
+
+  const result = {
+    connected:true,
+    calendar:false,
+    drive:false,
+    calendarConnected:Boolean(calendarClient),
+    driveConnected:Boolean(driveClient),
+    warnings:[]
+  };
+
+  if(calendarClient){
+    try{
+      await syncCalendar(calendarClient,event);
+      result.calendar=true;
+    }catch(e){
+      result.warnings.push(`Agenda : ${e.message}`);
+    }
+  }else{
+    result.warnings.push("Agenda : compte Calendar non connecté.");
+  }
+
+  if(driveClient){
+    try{
+      await ensureDrive(driveClient,event);
+      result.drive=true;
+    }catch(e){
+      result.warnings.push(`Drive : ${e.message}`);
+    }
+  }else{
+    result.warnings.push("Drive : compte Drive non connecté.");
+  }
+
   return result;
 }
-
+ 
 async function deleteCalendarEvent(req,event){
   if(!event?.googleCalendarEventId) return;
-  const client=await auth(req);
+
+  const client=await auth(req,"calendar");
   if(!client) return;
-  const c=await connection();
+
+  const c=await connection("calendar");
   const calendarId=event.googleCalendarId||c?.defaultCalendarId||process.env.GOOGLE_CALENDAR_ID||"primary";
   const api=google.calendar({version:"v3",auth:client});
   try{
