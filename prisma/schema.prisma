@@ -34,6 +34,7 @@ model Event {
   type          String?
   eventDate     DateTime
   installTime   String?
+  pickupDate    DateTime?
   pickupTime    String?
   address       String?
   guestCount    Int?
@@ -55,10 +56,29 @@ model Event {
   cautionReceived Boolean @default(false)
   cautionReturned Boolean @default(false)
 
+  bookingStatus BookingStatus @default(CONFIRMED)
+  optionUntil DateTime?
+  sceneJets Json?
+  portalEnabled Boolean @default(false)
+  guestUploadEnabled Boolean @default(false)
+  guestVideoEnabled Boolean @default(false)
+  guestUploadModerated Boolean @default(false)
+  portalExpiresAt DateTime?
+  portalPassword String?
+  fotoshareUrl String?
+
+  frameSource FrameSource @default(NONE)
+  frameStatus FrameStatus @default(NOT_REQUIRED)
+  preparation Json?
+
   notes String?
 
   googleCalendarEventId String?
+  googleCalendarId      String?
   googleDriveFolderId   String?
+
+  printerId String?
+  printer   Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
 
   organizerToken String? @unique
   guestToken     String? @unique
@@ -68,6 +88,7 @@ model Event {
   updatedAt DateTime @updatedAt
 
   materials EventMaterial[]
+  memories MemoryMedia[]
 }
 
 enum EventStatus {
@@ -80,10 +101,17 @@ enum EventStatus {
 }
 
 model Material {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  category  String?
-  active    Boolean  @default(true)
+  id             String   @id @default(uuid())
+  name           String   @unique
+  category       String?
+  active         Boolean  @default(true)
+
+  // V8 : vraie logique de stock / planning
+  capacity       Int      @default(1)
+  blocksPlanning Boolean  @default(true)
+  bookingVisible Boolean  @default(true)
+  resourceKind   String   @default("SHARED")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   events    EventMaterial[]
@@ -92,6 +120,7 @@ model Material {
 model EventMaterial {
   eventId    String
   materialId String
+  quantity   Int      @default(1)
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   @@id([eventId, materialId])
@@ -118,4 +147,114 @@ model StockMovement {
   eventName    String?
   createdAt    DateTime   @default(now())
   consumable   Consumable @relation(fields: [consumableId], references: [id], onDelete: Cascade)
+}
+
+
+model GoogleConnection {
+  id                String   @id @default("primary")
+  tokenEncrypted    String   @db.Text
+  googleEmail       String?
+  scopes            String?  @db.Text
+  driveRootFolderId      String?
+  defaultCalendarId      String?
+  defaultCalendarSummary String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+
+enum FrameSource {
+  NONE
+  CLIENT
+  LP28
+}
+
+enum FrameStatus {
+  NOT_REQUIRED
+  TO_DO
+  IN_PROGRESS
+  DONE
+}
+
+
+enum BookingStatus {
+  QUOTE_DRAFT
+  QUOTE_SENT
+  OPTION
+  CONFIRMED
+  CANCELLED
+  DECLINED
+  COMPLETED
+}
+
+
+model Printer {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  model             String
+  active            Boolean  @default(true)
+
+  // Quantité réellement présente dans l'imprimante au moment du suivi.
+  loadedCapacity    Int      @default(0)
+  remainingPrints   Int      @default(0)
+  warningAt         Int      @default(100)
+
+  totalPrints       Int      @default(0)
+  lastReloadAt      DateTime?
+  notes             String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  events Event[]
+  movements PrinterPaperMovement[]
+}
+
+model PrinterPaperMovement {
+  id          String   @id @default(uuid())
+  printerId   String
+  eventId     String?
+  quantity    Int
+  movementType String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  printer Printer @relation(fields: [printerId], references: [id], onDelete: Cascade)
+}
+
+
+model AssistanceVideo {
+  id String @id @default(uuid())
+  title String
+  url String
+  active Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppSetting {
+  key String @id
+  value String @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+
+model MemoryMedia {
+  id           String   @id @default(uuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  mediaType    String
+  status       String   @default("VISIBLE")
+  source       String   @default("PORTAL")
+  deletedAt    DateTime?
+  uploadedBy   String   @default("GUEST")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([eventId, status])
 }

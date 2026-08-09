@@ -18,3 +18,17 @@ services:
         generateValue: true
       - key: APP_URL
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_TOKEN_KEY
+        sync: false
+      - key: GOOGLE_TIMEZONE
+        value: Europe/Paris
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+      - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
+        sync: false

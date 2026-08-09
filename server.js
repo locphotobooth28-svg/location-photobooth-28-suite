@@ -1,27 +1,49 @@
-require("dotenv").config();
+﻿require("dotenv").config();
 
 const express = require("express");
 const session = require("express-session");
 const path = require("path");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const fs = require("fs");
+const multer = require("multer");
 const prisma = require("./lib/prisma");
+const googleService = require("./services/googleService");
+const { ensureCatalog, ensureSelectedMaterials } = require("./lib/catalog");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MEMORIES_DIR = process.env.MEMORIES_DIR || path.join(__dirname, "uploads", "memories");
+fs.mkdirSync(MEMORIES_DIR, { recursive: true });
+const memoriesStorage = multer.diskStorage({
+  destination: (req,file,cb)=>cb(null,MEMORIES_DIR),
+  filename: (req,file,cb)=>{
+    const ext=path.extname(file.originalname||"").toLowerCase().replace(/[^.a-z0-9]/g,"").slice(0,8);
+    cb(null,`${Date.now()}-${crypto.randomBytes(10).toString("hex")}${ext}`);
+  }
+});
+const memoriesUpload = multer({
+  storage: memoriesStorage,
+  limits:{fileSize:25*1024*1024,files:100},
+  fileFilter:(req,file,cb)=>{
+    const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif","video/mp4","video/quicktime"].includes(file.mimetype);
+    cb(ok?null:new Error("Format non autorisÃ©."),ok);
+  }
+});
 
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
+  name: "lp28.sid",
   secret: process.env.SESSION_SECRET || "change-me-location-photobooth-28-suite",
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: "auto",
     maxAge: 12 * 60 * 60 * 1000
   }
 }));
@@ -31,11 +53,70 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "change-moi";
 
 function adminOnly(req, res, next) {
   if (req.session.admin) return next();
-  return res.status(401).json({ ok: false, message: "Non autorisé." });
+  return res.status(401).json({ ok: false, message: "Non autorisÃ©." });
+}
+
+const DEFAULT_ASSISTANCE_SETTINGS = {
+  copilotUrl: "https://copilot.fotoshare.co/events",
+  remoteDesktopUrl: "https://remotedesktop.google.com/access/",
+  lumaboothDashboardUrl: "https://dash.lumabooth.com/admin",
+  googleCalendarUrl: "https://calendar.google.com/",
+  googleDriveUrl: "https://drive.google.com/",
+  supportPhone: "",
+  whatsappUrl: "",
+  googleReviewUrl: ""
+};
+
+async function ensureV82Settings(){
+  for(const [key,value] of Object.entries(DEFAULT_ASSISTANCE_SETTINGS)){
+    await prisma.appSetting.upsert({where:{key},update:{},create:{key,value}});
+  }
 }
 
 function appBaseUrl(req) {
   return (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+}
+
+function eventRangeFromInput(date, time, pickupDate, pickupTime) {
+  const start = new Date(`${date}T${time || "00:00"}:00`);
+  const endDate = pickupDate || date;
+  let end = new Date(`${endDate}T${pickupTime || "23:59"}:00`);
+  if (end < start) end = new Date(new Date(end).setDate(end.getDate() + 1));
+  return { start, end };
+}
+
+function eventRangeFromRecord(event) {
+  const date = event.eventDate.toISOString().slice(0,10);
+  const pickupDate = event.pickupDate
+    ? event.pickupDate.toISOString().slice(0,10)
+    : date;
+  return eventRangeFromInput(
+    date,
+    event.installTime || "00:00",
+    pickupDate,
+    event.pickupTime || "23:59"
+  );
+}
+
+function rangesOverlap(aStart, aEnd, bStart, bEnd) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function defaultPreparation(materialNames = []) {
+  const names = Array.isArray(materialNames) ? materialNames : [];
+  return {
+    materialChecked: false,
+    paperChecked: false,
+    cablesChecked: false,
+    powerChecked: false,
+    qrChecked: false,
+    contractChecked: false,
+    frameChecked: false,
+    loaded: false,
+    departed: false,
+    returned: false,
+    selectedMaterials: names
+  };
 }
 
 const PHOTOBOOTHS = [
@@ -44,56 +125,154 @@ const PHOTOBOOTHS = [
   "Borne Photobooth Gabin"
 ];
 
-async function findMaterialConflicts({ date, materialNames, excludeEventId = null }) {
-  const selectedBooths = (Array.isArray(materialNames) ? materialNames : [])
-    .filter(name => PHOTOBOOTHS.includes(name));
+function plannedPrints(materialNames){
+  for(const name of materialNames || []){
+    const m=String(name).match(/Forfait\s+(\d+)\s+impressions/i);
+    if(m) return Number(m[1]);
+  }
+  return 0;
+}
 
-  if (!date || selectedBooths.length === 0) return [];
+function requestedQuantityForMaterial(name, sceneJets){
+  if(name === "Location Kit Jet d'Ã©tincelle" && sceneJets?.enabled){
+    return Math.min(Math.max(Number(sceneJets.boxes || 1),1),12);
+  }
+  return 1;
+}
 
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(`${date}T23:59:59.999`);
+async function findMaterialConflicts({
+  date,time,pickupDate,pickupTime,materialNames,sceneJets,excludeEventId=null
+}){
+  const selected=[...new Set(
+    (Array.isArray(materialNames)?materialNames:[])
+      .map(String)
+      .filter(Boolean)
+      .filter(name=>!["Appareil photo Reflex Nikon D7200","Flash + parapluie"].includes(name))
+  )];
+  if(!date || selected.length===0) return [];
 
-  const events = await prisma.event.findMany({
-    where: {
-      archived: false,
-      eventDate: { gte: start, lte: end },
-      ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
-      materials: {
-        some: {
-          material: {
-            name: { in: selectedBooths }
-          }
-        }
-      }
-    },
-    include: {
-      materials: { include: { material: true } }
-    }
+  const requestedRange=eventRangeFromInput(date,time,pickupDate,pickupTime);
+
+  const materials=await prisma.material.findMany({
+    where:{name:{in:selected},active:true}
   });
 
-  const conflicts = [];
-  for (const event of events) {
-    const names = event.materials.map(x => x.material.name);
-    for (const booth of selectedBooths) {
-      if (names.includes(booth)) {
-        conflicts.push({
-          material: booth,
-          eventId: event.id,
-          eventName: event.name,
-          date: event.eventDate.toISOString().slice(0, 10),
-          time: event.installTime || null
-        });
+  const blocking=materials.filter(m=>m.blocksPlanning);
+  if(blocking.length===0) return [];
+
+  const candidates=await prisma.event.findMany({
+    where:{
+      archived:false,
+      bookingStatus:{in:["OPTION","CONFIRMED"]},
+      ...(excludeEventId?{id:{not:excludeEventId}}:{})
+    },
+    include:{materials:{include:{material:true}}}
+  });
+
+  const conflicts=[];
+
+  for(const material of blocking){
+    const requestedQty=requestedQuantityForMaterial(material.name,sceneJets);
+    let alreadyReserved=0;
+    const reservations=[];
+
+    for(const event of candidates){
+      const range=eventRangeFromRecord(event);
+      if(!rangesOverlap(requestedRange.start,requestedRange.end,range.start,range.end)) continue;
+
+      const link=event.materials.find(x=>x.materialId===material.id || x.material?.name===material.name);
+      if(!link) continue;
+
+      let qty=Number(link.quantity||1);
+      if(material.name==="Location Kit Jet d'Ã©tincelle" && event.sceneJets?.enabled){
+        qty=Math.min(Math.max(Number(event.sceneJets.boxes||1),1),12);
       }
+
+      alreadyReserved+=qty;
+      reservations.push({
+        eventId:event.id,
+        eventName:event.name,
+        quantity:qty,
+        date:event.eventDate.toISOString().slice(0,10),
+        pickupDate:event.pickupDate?.toISOString().slice(0,10)||null
+      });
+    }
+
+    if(alreadyReserved + requestedQty > material.capacity){
+      conflicts.push({
+        material:material.name,
+        capacity:material.capacity,
+        alreadyReserved,
+        requested:requestedQty,
+        available:Math.max(material.capacity-alreadyReserved,0),
+        reservations
+      });
     }
   }
 
   return conflicts;
 }
 
+async function choosePrinterForEvent({
+  date,time,pickupDate,pickupTime,planned,excludeEventId=null,currentPrinterId=null
+}){
+  if(!planned) return {printer:null,warning:null};
+
+  const requestedRange=eventRangeFromInput(date,time,pickupDate,pickupTime);
+  const printers=await prisma.printer.findMany({
+    where:{active:true},
+    orderBy:[{remainingPrints:"desc"},{name:"asc"}]
+  });
+
+  const overlapping=await prisma.event.findMany({
+    where:{
+      archived:false,
+      bookingStatus:{in:["OPTION","CONFIRMED"]},
+      printerId:{not:null},
+      ...(excludeEventId?{id:{not:excludeEventId}}:{})
+    }
+  });
+
+  const occupied=new Set();
+  for(const e of overlapping){
+    const range=eventRangeFromRecord(e);
+    if(rangesOverlap(requestedRange.start,requestedRange.end,range.start,range.end) && e.printerId){
+      occupied.add(e.printerId);
+    }
+  }
+
+  if(currentPrinterId && !occupied.has(currentPrinterId)){
+    const current=printers.find(p=>p.id===currentPrinterId);
+    if(current){
+      return {
+        printer:current,
+        warning:current.remainingPrints < planned
+          ? `PrÃ©voir un remplacement de papier : ${current.remainingPrints} tirages restants pour ${planned} prÃ©vus.`
+          : null
+      };
+    }
+  }
+
+  const free=printers.filter(p=>!occupied.has(p.id));
+  if(!free.length){
+    return {printer:null,warning:"Aucune imprimante n'est disponible sur cette pÃ©riode."};
+  }
+
+  const enough=free.filter(p=>p.remainingPrints>=planned).sort((a,b)=>a.remainingPrints-b.remainingPrints);
+  const printer=enough[0] || free[0];
+
+  return {
+    printer,
+    warning:printer.remainingPrints < planned
+      ? `Papier insuffisant actuellement dans ${printer.name} : ${printer.remainingPrints} restants pour ${planned} prÃ©vus.`
+      : null
+  };
+}
+
 app.get("/api/health", async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, app: "Location Photobooth 28 Suite", version: "6.3.1", database: "ok" });
+    res.json({ ok: true, app: "Location Photobooth 28 Suite", version: "8.2.1", database: "ok" });
   } catch {
     res.status(500).json({ ok: false, database: "error" });
   }
@@ -105,15 +284,106 @@ app.get("/api/session", (req, res) => {
 
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body || {};
-  if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-    req.session.admin = true;
-    return res.json({ ok: true });
+
+  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ ok: false, message: "Identifiants incorrects." });
   }
-  res.status(401).json({ ok: false, message: "Identifiants incorrects." });
+
+  req.session.admin = true;
+  req.session.save((err) => {
+    if (err) {
+      console.error("Erreur sauvegarde session :", err);
+      return res.status(500).json({ ok: false, message: "Impossible d'enregistrer la session." });
+    }
+    res.json({ ok: true, authenticated: true });
+  });
 });
 
 app.post("/api/logout", (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
+});
+
+
+
+app.get("/api/google/status", adminOnly, async (req, res) => {
+  const c = await googleService.connection();
+  res.json({
+    configured: googleService.configured(),
+    connected: Boolean(c),
+    googleEmail: c?.googleEmail || null,
+    defaultCalendarId: c?.defaultCalendarId || process.env.GOOGLE_CALENDAR_ID || "primary",
+    defaultCalendarSummary: c?.defaultCalendarSummary || null,
+    driveRootFolderId: c?.driveRootFolderId || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null
+  });
+});
+
+app.get("/auth/google/start", adminOnly, (req, res) => {
+  try {
+    res.redirect(googleService.authUrl(req));
+  } catch (err) {
+    console.error("OAuth Google :", err);
+    res.status(500).send(`Configuration Google incomplÃ¨te : ${err.message}`);
+  }
+});
+
+app.get("/auth/google/callback", adminOnly, async (req, res) => {
+  try {
+    if (!req.query.code) return res.status(400).send("Code OAuth manquant.");
+    if (!req.query.state || req.query.state !== req.session.googleOAuthState) {
+      return res.status(400).send("Ã‰tat OAuth invalide.");
+    }
+    delete req.session.googleOAuthState;
+    await googleService.callback(req, req.query.code);
+    res.redirect("/?google=connected");
+  } catch (err) {
+    console.error("Callback Google :", err);
+    res.status(500).send(`Connexion Google impossible : ${err.message}`);
+  }
+});
+
+app.post("/api/google/disconnect", adminOnly, async (req, res) => {
+  await googleService.disconnect();
+  res.json({ ok: true });
+});
+
+app.get("/api/google/calendars", adminOnly, async (req, res) => {
+  try {
+    res.json({ ok: true, calendars: await googleService.listCalendars(req) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+app.get("/api/google/drive-folders", adminOnly, async (req, res) => {
+  try {
+    res.json({ ok: true, folders: await googleService.listDriveFolders(req, req.query.parentId || "root") });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+app.post("/api/google/settings", adminOnly, async (req, res) => {
+  try {
+    const saved = await googleService.saveSettings(req.body || {});
+    res.json({
+      ok: true,
+      defaultCalendarId: saved.defaultCalendarId,
+      defaultCalendarSummary: saved.defaultCalendarSummary,
+      driveRootFolderId: saved.driveRootFolderId
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});
+
+app.post("/api/events/:id/google-sync", adminOnly, async (req, res) => {
+  try {
+    const result = await googleService.syncEvent(req, req.params.id);
+    if (!result.connected) return res.status(409).json({ ok: false, message: "Google n'est pas connectÃ©." });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
 });
 
 app.get("/api/dashboard", adminOnly, async (req, res) => {
@@ -138,14 +408,16 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
 });
 
 app.get("/api/materials", adminOnly, async (req, res) => {
+  await ensureCatalog(prisma);
   const materials = await prisma.material.findMany({
-    where: { active: true },
+    where: { active: true, bookingVisible: true },
     orderBy: [{ category: "asc" }, { name: "asc" }]
   });
   res.json({ materials });
 });
 
 app.get("/api/consumables", adminOnly, async (req, res) => {
+  await ensureCatalog(prisma);
   const consumables = await prisma.consumable.findMany({
     include: { movements: { orderBy: { createdAt: "desc" }, take: 20 } },
     orderBy: { printer: "asc" }
@@ -185,9 +457,12 @@ app.get("/api/clients", adminOnly, async (req, res) => {
 
 
 app.post("/api/events/check-conflicts", adminOnly, async (req, res) => {
-  const { date, materials, excludeEventId } = req.body || {};
+  const { date, time, pickupDate, pickupTime, materials, excludeEventId } = req.body || {};
   const conflicts = await findMaterialConflicts({
     date,
+    time,
+    pickupDate,
+    pickupTime,
     materialNames: materials,
     excludeEventId: excludeEventId || null
   });
@@ -210,6 +485,7 @@ app.get("/api/events", adminOnly, async (req, res) => {
       type: e.type,
       date: e.eventDate.toISOString().slice(0,10),
       time: e.installTime,
+      pickupDate: e.pickupDate ? e.pickupDate.toISOString().slice(0,10) : null,
       pickupTime: e.pickupTime,
       address: e.address,
       guestCount: e.guestCount,
@@ -223,9 +499,32 @@ app.get("/api/events", adminOnly, async (req, res) => {
         cautionReceived: e.cautionReceived,
         cautionReturned: e.cautionReturned
       },
+      bookingStatus: e.bookingStatus,
+      optionUntil: e.optionUntil ? e.optionUntil.toISOString().slice(0,10) : null,
+      sceneJets: e.sceneJets,
+      portalEnabled: e.portalEnabled,
+      guestUploadEnabled: e.guestUploadEnabled,
+      guestVideoEnabled: e.guestVideoEnabled,
+      guestUploadModerated: e.guestUploadModerated,
+      portalExpiresAt: e.portalExpiresAt ? e.portalExpiresAt.toISOString().slice(0,10) : null,
+      portalPassword: e.portalPassword,
+      fotoshareUrl: e.fotoshareUrl,
+      frameSource: e.frameSource,
+      frameStatus: e.frameStatus,
+      preparation: e.preparation,
       notes: e.notes,
       archived: e.archived,
-      status: e.status
+      status: e.status,
+      googleCalendarEventId: e.googleCalendarEventId,
+      googleCalendarId: e.googleCalendarId,
+      googleDriveFolderId: e.googleDriveFolderId,
+      printer: e.printer ? {
+        id: e.printer.id,
+        name: e.printer.name,
+        model: e.printer.model,
+        remainingPrints: e.printer.remainingPrints,
+        loadedCapacity: e.printer.loadedCapacity
+      } : null
     }))
   });
 });
@@ -260,21 +559,36 @@ app.post("/api/events", adminOnly, async (req, res) => {
 
   const conflicts = await findMaterialConflicts({
     date: b.date,
-    materialNames: selected
+    time: b.time,
+    pickupDate: b.pickupDate,
+    pickupTime: b.pickupTime,
+    materialNames: selected,
+    sceneJets: b.sceneJets
   });
 
   if (conflicts.length) {
     return res.status(409).json({
       ok: false,
       error: "material_conflict",
-      message: "Une borne Photobooth est déjà réservée à cette date.",
+      message: "Ressource indisponible sur cette pÃ©riode.",
       conflicts
     });
   }
 
-  const materials = await prisma.material.findMany({
-    where: { name: { in: selected } }
+  const materials = await ensureSelectedMaterials(prisma, selected);
+
+  const printCount = plannedPrints(selected);
+  const printerChoice = await choosePrinterForEvent({
+    date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,planned:printCount
   });
+
+  if(printCount > 0 && !printerChoice.printer){
+    return res.status(409).json({
+      ok:false,
+      error:"printer_conflict",
+      message:printerChoice.warning || "Aucune imprimante disponible sur cette pÃ©riode."
+    });
+  }
 
   const event = await prisma.event.create({
     data: {
@@ -282,12 +596,26 @@ app.post("/api/events", adminOnly, async (req, res) => {
       type: String(b.type || "").trim() || null,
       eventDate: new Date(`${b.date}T12:00:00`),
       installTime: String(b.time || "").trim() || null,
+      pickupDate: b.pickupDate ? new Date(`${b.pickupDate}T12:00:00`) : null,
       pickupTime: String(b.pickupTime || "").trim() || null,
       address: String(b.address || "").trim() || null,
       guestCount: b.guestCount ? Number(b.guestCount) : null,
       organizerName: organizerName || null,
       organizerEmail: String(b.organizerEmail || "").trim() || null,
       organizerPhone: String(b.organizerPhone || "").trim() || null,
+      bookingStatus: ["QUOTE_DRAFT","QUOTE_SENT","OPTION","CONFIRMED","CANCELLED","DECLINED","COMPLETED"].includes(b.bookingStatus) ? b.bookingStatus : "CONFIRMED",
+      optionUntil: b.optionUntil ? new Date(`${b.optionUntil}T12:00:00`) : null,
+      sceneJets: b.sceneJets || null,
+      portalEnabled: Boolean(b.portalEnabled),
+      guestUploadEnabled: Boolean(b.guestUploadEnabled),
+      guestVideoEnabled: Boolean(b.guestVideoEnabled),
+      guestUploadModerated: Boolean(b.guestUploadModerated),
+      portalExpiresAt: b.portalExpiresAt ? new Date(b.portalExpiresAt + "T12:00:00") : null,
+      portalPassword: String(b.portalPassword || "").trim() || null,
+      fotoshareUrl: String(b.fotoshareUrl || "").trim() || null,
+      frameSource: ["NONE","CLIENT","LP28"].includes(b.frameSource) ? b.frameSource : "NONE",
+      frameStatus: ["NOT_REQUIRED","TO_DO","IN_PROGRESS","DONE"].includes(b.frameStatus) ? b.frameStatus : "NOT_REQUIRED",
+      preparation: b.preparation || defaultPreparation(selected),
       notes: String(b.notes || "").trim() || null,
       depositPaid: Boolean(b.payments?.depositPaid),
       balancePaid: Boolean(b.payments?.balancePaid),
@@ -295,6 +623,8 @@ app.post("/api/events", adminOnly, async (req, res) => {
       cautionReturned: Boolean(b.payments?.cautionReturned),
       organizerToken: crypto.randomBytes(18).toString("hex"),
       guestToken: crypto.randomBytes(12).toString("hex"),
+      googleCalendarId: String(b.googleCalendarId || "").trim() || null,
+      printerId: printerChoice.printer?.id || null,
       clientId,
       materials: {
         create: materials.map(m => ({ materialId: m.id }))
@@ -302,7 +632,15 @@ app.post("/api/events", adminOnly, async (req, res) => {
     }
   });
 
-  res.json({ ok: true, event });
+  let google = { connected: false, calendar: false, drive: false };
+  try {
+    google = await googleService.syncEvent(req, event.id);
+  } catch (err) {
+    console.error("Auto-sync Google aprÃ¨s crÃ©ation :", err.message);
+    google = { connected: true, calendar: false, drive: false, warnings: [err.message] };
+  }
+
+  res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
 app.put("/api/events/:id", adminOnly, async (req, res) => {
@@ -311,7 +649,11 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
 
   const conflicts = await findMaterialConflicts({
     date: b.date,
+    time: b.time,
+    pickupDate: b.pickupDate,
+    pickupTime: b.pickupTime,
     materialNames: selected,
+    sceneJets: b.sceneJets,
     excludeEventId: req.params.id
   });
 
@@ -319,12 +661,27 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
     return res.status(409).json({
       ok: false,
       error: "material_conflict",
-      message: "Une borne Photobooth est déjà réservée à cette date.",
+      message: "Ressource indisponible sur cette pÃ©riode.",
       conflicts
     });
   }
 
-  const materials = await prisma.material.findMany({ where: { name: { in: selected } } });
+  const materials = await ensureSelectedMaterials(prisma, selected);
+
+  const currentEventForPrinter = await prisma.event.findUnique({ where:{id:req.params.id} });
+  const printCount = plannedPrints(selected);
+  const printerChoice = await choosePrinterForEvent({
+    date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,
+    planned:printCount,excludeEventId:req.params.id,currentPrinterId:currentEventForPrinter?.printerId||null
+  });
+
+  if(printCount > 0 && !printerChoice.printer){
+    return res.status(409).json({
+      ok:false,
+      error:"printer_conflict",
+      message:printerChoice.warning || "Aucune imprimante disponible sur cette pÃ©riode."
+    });
+  }
 
   const event = await prisma.$transaction(async tx => {
     await tx.eventMaterial.deleteMany({ where: { eventId: req.params.id } });
@@ -336,13 +693,29 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
         type: String(b.type || "").trim() || null,
         eventDate: new Date(`${b.date}T12:00:00`),
         installTime: String(b.time || "").trim() || null,
+        pickupDate: b.pickupDate ? new Date(`${b.pickupDate}T12:00:00`) : null,
         pickupTime: String(b.pickupTime || "").trim() || null,
         address: String(b.address || "").trim() || null,
         guestCount: b.guestCount ? Number(b.guestCount) : null,
         organizerName: String(b.organizerName || "").trim() || null,
         organizerEmail: String(b.organizerEmail || "").trim() || null,
         organizerPhone: String(b.organizerPhone || "").trim() || null,
+        bookingStatus: ["QUOTE_DRAFT","QUOTE_SENT","OPTION","CONFIRMED","CANCELLED","DECLINED","COMPLETED"].includes(b.bookingStatus) ? b.bookingStatus : "CONFIRMED",
+        optionUntil: b.optionUntil ? new Date(`${b.optionUntil}T12:00:00`) : null,
+        sceneJets: b.sceneJets || null,
+        portalEnabled: Boolean(b.portalEnabled),
+        guestUploadEnabled: Boolean(b.guestUploadEnabled),
+        guestVideoEnabled: Boolean(b.guestVideoEnabled),
+        guestUploadModerated: Boolean(b.guestUploadModerated),
+        portalExpiresAt: b.portalExpiresAt ? new Date(b.portalExpiresAt + "T12:00:00") : null,
+        portalPassword: String(b.portalPassword || "").trim() || null,
+        fotoshareUrl: String(b.fotoshareUrl || "").trim() || null,
+        frameSource: ["NONE","CLIENT","LP28"].includes(b.frameSource) ? b.frameSource : "NONE",
+        frameStatus: ["NOT_REQUIRED","TO_DO","IN_PROGRESS","DONE"].includes(b.frameStatus) ? b.frameStatus : "NOT_REQUIRED",
+        preparation: b.preparation || defaultPreparation(selected),
         notes: String(b.notes || "").trim() || null,
+        googleCalendarId: String(b.googleCalendarId || "").trim() || null,
+        printerId: printCount > 0 ? (printerChoice.printer?.id || null) : null,
         depositPaid: Boolean(b.payments?.depositPaid),
         balancePaid: Boolean(b.payments?.balancePaid),
         cautionReceived: Boolean(b.payments?.cautionReceived),
@@ -354,12 +727,20 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
     });
   });
 
-  res.json({ ok: true, event });
+  let google = { connected: false, calendar: false, drive: false };
+  try {
+    google = await googleService.syncEvent(req, event.id);
+  } catch (err) {
+    console.error("Auto-sync Google aprÃ¨s modification :", err.message);
+    google = { connected: true, calendar: false, drive: false, warnings: [err.message] };
+  }
+
+  res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
 app.post("/api/events/:id/archive", adminOnly, async (req, res) => {
   const current = await prisma.event.findUnique({ where: { id: req.params.id } });
-  if (!current) return res.status(404).json({ ok: false, message: "Événement introuvable." });
+  if (!current) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
 
   const event = await prisma.event.update({
     where: { id: current.id },
@@ -370,13 +751,19 @@ app.post("/api/events/:id/archive", adminOnly, async (req, res) => {
 });
 
 app.delete("/api/events/:id", adminOnly, async (req, res) => {
+  const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+  if (!event) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
+
+  await googleService.deleteCalendarEvent(req, event);
   await prisma.event.delete({ where: { id: req.params.id } });
+
+  // Le dossier Drive est volontairement conservÃ© pour Ã©viter toute perte de photos/documents.
   res.json({ ok: true });
 });
 
 app.get("/api/events/:id/share", adminOnly, async (req, res) => {
   const event = await prisma.event.findUnique({ where: { id: req.params.id } });
-  if (!event) return res.status(404).json({ ok: false, message: "Événement introuvable." });
+  if (!event) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
 
   const base = appBaseUrl(req);
   const guestUrl = `${base}/invites/${event.id}/${event.guestToken}`;
@@ -386,14 +773,525 @@ app.get("/api/events/:id/share", adminOnly, async (req, res) => {
   res.json({ ok: true, guestUrl, organizerUrl, qrDataUrl });
 });
 
+
+app.get("/api/material-planning", adminOnly, async (req, res) => {
+  const start = req.query.start ? new Date(`${req.query.start}T00:00:00`) : new Date();
+  const days = Math.min(Math.max(Number(req.query.days || 7), 1), 31);
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+
+  const events = await prisma.event.findMany({
+    where: {
+      archived: false,
+      eventDate: { lt: end }
+    },
+    include: {
+      printer: true,
+      materials: { include: { material: true } }
+    },
+    orderBy: { eventDate: "asc" }
+  });
+
+  const materials = await prisma.material.findMany({
+    where: { active: true },
+    orderBy: [{ category: "asc" }, { name: "asc" }]
+  });
+
+  const relevantEvents = events.filter(event => {
+    const range = eventRangeFromRecord(event);
+    return range.end >= start && range.start < end;
+  });
+
+  res.json({
+    ok: true,
+    start: start.toISOString().slice(0,10),
+    days,
+    materials,
+    events: relevantEvents.map(event => ({
+      id: event.id,
+      name: event.name,
+      type: event.type,
+      date: event.eventDate.toISOString().slice(0,10),
+      time: event.installTime,
+      pickupDate: event.pickupDate?.toISOString().slice(0,10) || event.eventDate.toISOString().slice(0,10),
+      pickupTime: event.pickupTime,
+      address: event.address,
+      materials: event.materials.map(x => x.material.name)
+    }))
+  });
+});
+
+app.get("/api/availability", adminOnly, async (req, res) => {
+  const date = String(req.query.date || "");
+  const time = String(req.query.time || "00:00");
+  const pickupDate = String(req.query.pickupDate || date);
+  const pickupTime = String(req.query.pickupTime || "23:59");
+
+  if (!date) return res.status(400).json({ ok: false, message: "Date obligatoire." });
+
+  const materials = await prisma.material.findMany({
+    where: { active: true },
+    orderBy: [{ category: "asc" }, { name: "asc" }]
+  });
+
+  const result = [];
+  for (const material of materials) {
+    const conflicts = await findMaterialConflicts({
+      date, time, pickupDate, pickupTime,
+      materialNames: [material.name]
+    });
+
+    result.push({
+      id: material.id,
+      name: material.name,
+      category: material.category,
+      available: conflicts.length === 0,
+      conflicts
+    });
+  }
+
+  res.json({ ok: true, items: result });
+});
+
+app.put("/api/events/:id/preparation", adminOnly, async (req, res) => {
+  const preparation = req.body?.preparation || {};
+  const event = await prisma.event.update({
+    where: { id: req.params.id },
+    data: { preparation }
+  });
+  res.json({ ok: true, preparation: event.preparation });
+});
+
+
+app.get("/api/planning-24-months", adminOnly, async (req, res) => {
+  const startDate = req.query.start
+    ? new Date(`${req.query.start}-01T00:00:00`)
+    : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + 24);
+
+  const events = await prisma.event.findMany({
+    where: {
+      archived: false,
+      bookingStatus: { in: ["OPTION", "CONFIRMED"] },
+      eventDate: { gte: startDate, lt: endDate }
+    },
+    include: {
+      materials: { include: { material: true } }
+    },
+    orderBy: { eventDate: "asc" }
+  });
+
+  const months = [];
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const monthEvents = events.filter(e => e.eventDate.toISOString().slice(0,7) === key);
+
+    months.push({
+      key,
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      total: monthEvents.length,
+      confirmed: monthEvents.filter(e => e.bookingStatus === "CONFIRMED").length,
+      options: monthEvents.filter(e => e.bookingStatus === "OPTION").length,
+      materials: monthEvents.flatMap(e => e.materials.map(x => x.material.name))
+    });
+  }
+
+  res.json({ ok: true, months });
+});
+
+
+// ---------------- V8 ADMIN ONLY : inventaire / imprimantes / papier ----------------
+app.get("/api/admin/inventory", adminOnly, async (req,res)=>{
+  const [materials,printers]=await Promise.all([
+    prisma.material.findMany({where:{active:true},orderBy:[{category:"asc"},{name:"asc"}]}),
+    prisma.printer.findMany({where:{active:true},orderBy:{name:"asc"}})
+  ]);
+  res.json({ok:true,materials,printers});
+});
+
+app.post("/api/admin/printers/:id/reload", adminOnly, async (req,res)=>{
+  const capacity=Math.max(Number(req.body?.capacity||0),0);
+  if(!capacity) return res.status(400).json({ok:false,message:"CapacitÃ© obligatoire."});
+
+  const printer=await prisma.printer.update({
+    where:{id:req.params.id},
+    data:{
+      loadedCapacity:capacity,
+      remainingPrints:capacity,
+      lastReloadAt:new Date()
+    }
+  });
+
+  await prisma.printerPaperMovement.create({
+    data:{
+      printerId:printer.id,
+      quantity:capacity,
+      movementType:"RELOAD",
+      note:"Nouveau consommable installÃ©"
+    }
+  });
+
+  res.json({ok:true,printer});
+});
+
+app.post("/api/admin/printers/:id/use", adminOnly, async (req,res)=>{
+  const used=Math.max(Number(req.body?.used||0),0);
+  if(!used) return res.status(400).json({ok:false,message:"Nombre d'impressions obligatoire."});
+
+  const current=await prisma.printer.findUnique({where:{id:req.params.id}});
+  if(!current) return res.status(404).json({ok:false,message:"Imprimante introuvable."});
+
+  const remaining=Math.max(current.remainingPrints-used,0);
+  const printer=await prisma.printer.update({
+    where:{id:current.id},
+    data:{
+      remainingPrints:remaining,
+      totalPrints:{increment:used}
+    }
+  });
+
+  await prisma.printerPaperMovement.create({
+    data:{
+      printerId:current.id,
+      eventId:req.body?.eventId||null,
+      quantity:-used,
+      movementType:"USE",
+      note:req.body?.note||null
+    }
+  });
+
+  res.json({ok:true,printer});
+});
+
+app.get("/api/admin/printers/:id/history", adminOnly, async (req,res)=>{
+  const movements=await prisma.printerPaperMovement.findMany({
+    where:{printerId:req.params.id},
+    orderBy:{createdAt:"desc"},
+    take:100
+  });
+  res.json({ok:true,movements});
+});
+
+// ---------------- V8.2 ADMIN : Assistance & Pilotage ----------------
+app.get("/api/admin/assistance", adminOnly, async (req,res)=>{
+  await ensureV82Settings();
+  const [videos,settingsRows]=await Promise.all([
+    prisma.assistanceVideo.findMany({where:{active:true},orderBy:[{sortOrder:"asc"},{createdAt:"asc"}]}),
+    prisma.appSetting.findMany()
+  ]);
+  res.json({ok:true,videos,settings:Object.fromEntries(settingsRows.map(x=>[x.key,x.value]))});
+});
+
+app.post("/api/admin/assistance/videos", adminOnly, async (req,res)=>{
+  const title=String(req.body?.title||"").trim();
+  const url=String(req.body?.url||"").trim();
+  if(!title||!url)return res.status(400).json({ok:false,message:"Titre et lien obligatoires."});
+  const video=await prisma.assistanceVideo.create({data:{title,url,sortOrder:Number(req.body?.sortOrder||0)}});
+  res.json({ok:true,video});
+});
+
+app.delete("/api/admin/assistance/videos/:id", adminOnly, async (req,res)=>{
+  await prisma.assistanceVideo.delete({where:{id:req.params.id}});
+  res.json({ok:true});
+});
+
+app.post("/api/admin/assistance/settings", adminOnly, async (req,res)=>{
+  for(const key of Object.keys(DEFAULT_ASSISTANCE_SETTINGS)){
+    if(typeof req.body?.[key]==="string"){
+      await prisma.appSetting.upsert({
+        where:{key},
+        update:{value:req.body[key].trim()},
+        create:{key,value:req.body[key].trim()}
+      });
+    }
+  }
+  res.json({ok:true});
+});
+
+async function portalAccess(token){
+  const event=await prisma.event.findFirst({where:{OR:[{guestToken:token},{organizerToken:token}]}});
+  if(!event)return null;
+  return {event,role:event.organizerToken===token?"ORGANIZER":"GUEST"};
+}
+function safeMedia(m){
+  return {id:m.id,url:`/memories/${encodeURIComponent(m.fileName)}`,originalName:m.originalName,mimeType:m.mimeType,mediaType:m.mediaType,status:m.status,createdAt:m.createdAt};
+}
+
+// Endpoint public limitÃ© au portail organisateur/invitÃ©.
+// Aucun lien d'administration, inventaire ou stock n'est exposÃ© ici.
+app.get("/api/guest/:token/portal", async (req,res)=>{
+  await ensureV82Settings();
+  const access=await portalAccess(req.params.token);
+  const event=access?.event;
+  if(!event||!event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
+  if(event.portalExpiresAt&&event.portalExpiresAt<new Date())return res.status(410).json({ok:false,message:"Portail expirÃ©."});
+
+  const [videos,settingsRows]=await Promise.all([
+    prisma.assistanceVideo.findMany({where:{active:true},orderBy:[{sortOrder:"asc"},{createdAt:"asc"}]}),
+    prisma.appSetting.findMany({where:{key:{in:["supportPhone","whatsappUrl","googleReviewUrl"]}}})
+  ]);
+  const safeSettings=Object.fromEntries(settingsRows.map(x=>[x.key,x.value]));
+
+  res.json({
+    ok:true,
+    event:{
+      name:event.name,
+      type:event.type,
+      date:event.eventDate.toISOString().slice(0,10),
+      guestUploadEnabled:event.guestUploadEnabled,
+      guestVideoEnabled:event.guestVideoEnabled,
+      guestUploadModerated:event.guestUploadModerated,
+      fotoshareUrl:event.fotoshareUrl
+    },
+    assistanceVideos:videos.map(v=>({id:v.id,title:v.title,url:v.url})),
+    role:access.role,
+    support:{
+      phone:safeSettings.supportPhone||"",
+      whatsappUrl:safeSettings.whatsappUrl||"",
+      googleReviewUrl:safeSettings.googleReviewUrl||""
+    }
+  });
+});
+
+// ---------------- V8.2.2 : LP28 Memories ----------------
+app.use("/memories", express.static(MEMORIES_DIR, {fallthrough:false,maxAge:"1h"}));
+
+app.get("/api/guest/:token/memories", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access?.event?.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
+  const where={eventId:access.event.id,status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE"};
+  const media=await prisma.memoryMedia.findMany({where,orderBy:{createdAt:"asc"}});
+  res.json({ok:true,role:access.role,media:media.map(safeMedia)});
+});
+
+app.post("/api/guest/:token/memories/upload", memoriesUpload.array("files",100), async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access?.event?.portalEnabled){ for(const f of req.files||[]) fs.unlink(f.path,()=>{}); return res.status(404).json({ok:false,message:"Portail indisponible."}); }
+  const files=req.files||[];
+  if(!files.length)return res.status(400).json({ok:false,message:"Aucun fichier reÃ§u."});
+  for(const f of files){
+    const isVideo=f.mimetype.startsWith("video/");
+    const allowed=isVideo?access.event.guestVideoEnabled:access.event.guestUploadEnabled;
+    if(!allowed){ fs.unlink(f.path,()=>{}); continue; }
+    await prisma.memoryMedia.create({data:{eventId:access.event.id,fileName:f.filename,originalName:f.originalname,mimeType:f.mimetype,sizeBytes:f.size,mediaType:isVideo?"VIDEO":"PHOTO",status:access.event.guestUploadModerated?"PENDING":"VISIBLE",uploadedBy:access.role}});
+  }
+  res.json({ok:true});
+});
+
+app.post("/api/guest/:token/memories/:id/hide", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access||access.role!=="ORGANIZER")return res.status(403).json({ok:false,message:"RÃ©servÃ© Ã  l'organisateur."});
+  const media=await prisma.memoryMedia.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+  if(!media)return res.status(404).json({ok:false});
+  await prisma.memoryMedia.update({where:{id:media.id},data:{status:"HIDDEN"}}); res.json({ok:true});
+});
+app.post("/api/guest/:token/memories/:id/show", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access||access.role!=="ORGANIZER")return res.status(403).json({ok:false,message:"RÃ©servÃ© Ã  l'organisateur."});
+  const media=await prisma.memoryMedia.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+  if(!media)return res.status(404).json({ok:false});
+  await prisma.memoryMedia.update({where:{id:media.id},data:{status:"VISIBLE"}}); res.json({ok:true});
+});
+app.post("/api/guest/:token/memories/:id/approve", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access||access.role!=="ORGANIZER")return res.status(403).json({ok:false,message:"RÃ©servÃ© Ã  l'organisateur."});
+  const media=await prisma.memoryMedia.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+  if(!media)return res.status(404).json({ok:false});
+  await prisma.memoryMedia.update({where:{id:media.id},data:{status:"VISIBLE"}}); res.json({ok:true});
+});
+app.delete("/api/guest/:token/memories/:id", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+  if(!access||access.role!=="ORGANIZER")return res.status(403).json({ok:false,message:"RÃ©servÃ© Ã  l'organisateur."});
+  if(req.body?.confirmation!=="DELETE")return res.status(400).json({ok:false,message:"Saisissez DELETE en majuscules pour confirmer."});
+  const media=await prisma.memoryMedia.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+  if(!media)return res.status(404).json({ok:false});
+  await prisma.memoryMedia.delete({where:{id:media.id}});
+  fs.unlink(path.join(MEMORIES_DIR,media.fileName),()=>{});
+  res.json({ok:true});
+});
+
+
+// ---------------- V8.3 ADMIN : Galeries LP28 Memories ----------------
+
+app.get("/api/admin/galleries", adminOnly, async (req, res) => {
+  const events = await prisma.event.findMany({
+    where: { portalEnabled: true },
+    orderBy: { eventDate: "desc" },
+    include: { memories: true }
+  });
+
+  res.json({
+    ok: true,
+    galleries: events.map(e => {
+      const active = e.memories.filter(m => !m.deletedAt);
+
+      return {
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        date: e.eventDate.toISOString().slice(0, 10),
+        portalExpiresAt: e.portalExpiresAt
+          ? e.portalExpiresAt.toISOString().slice(0, 10)
+          : null,
+        organizerToken: e.organizerToken,
+        guestToken: e.guestToken,
+        fotoshareUrl: e.fotoshareUrl,
+        total: active.length,
+        photos: active.filter(m => m.mediaType === "PHOTO").length,
+        videos: active.filter(m => m.mediaType === "VIDEO").length,
+        hidden: active.filter(m => m.status === "HIDDEN").length,
+        pending: active.filter(m => m.status === "PENDING").length
+      };
+    })
+  });
+});
+
+app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
+  const event = await prisma.event.findUnique({
+    where: { id: req.params.eventId }
+  });
+
+  if (!event) {
+    return res.status(404).json({
+      ok: false,
+      message: "Événement introuvable."
+    });
+  }
+
+  const media = await prisma.memoryMedia.findMany({
+    where: {
+      eventId: event.id,
+      deletedAt: null
+    },
+    orderBy: { createdAt: "asc" }
+  });
+
+  const mediaWithUrls = media.map(m => ({
+    ...m,
+    url: `/memories/${encodeURIComponent(m.fileName)}`
+  }));
+
+  res.json({
+    ok: true,
+    event: {
+      id: event.id,
+      name: event.name,
+      type: event.type,
+      date: event.eventDate.toISOString().slice(0, 10),
+      portalExpiresAt: event.portalExpiresAt
+        ? event.portalExpiresAt.toISOString().slice(0, 10)
+        : null,
+      organizerToken: event.organizerToken,
+      guestToken: event.guestToken,
+      fotoshareUrl: event.fotoshareUrl
+    },
+    media: mediaWithUrls
+  });
+});
+
+app.post("/api/admin/galleries/media/:id/:action", adminOnly, async (req, res) => {
+  const action = req.params.action;
+
+  if (!["hide", "show"].includes(action)) {
+    return res.status(400).json({
+      ok: false,
+      message: "Action invalide."
+    });
+  }
+
+  const media = await prisma.memoryMedia.update({
+    where: { id: req.params.id },
+    data: {
+      status: action === "hide" ? "HIDDEN" : "VISIBLE"
+    }
+  });
+
+  res.json({ ok: true, media });
+});
+
+app.delete("/api/admin/galleries/media/:id", adminOnly, async (req, res) => {
+  if (String(req.body?.confirmation || "") !== "DELETE") {
+    return res.status(400).json({
+      ok: false,
+      message: "Saisissez DELETE pour confirmer."
+    });
+  }
+
+  const media = await prisma.memoryMedia.findUnique({
+    where: { id: req.params.id }
+  });
+
+  if (!media) {
+    return res.status(404).json({
+      ok: false,
+      message: "Souvenir introuvable."
+    });
+  }
+
+  try {
+    if (media.storagePath && fs.existsSync(media.storagePath)) {
+      fs.unlinkSync(media.storagePath);
+    }
+  } catch (err) {
+    console.error("Suppression fichier Memories :", err.message);
+  }
+
+  await prisma.memoryMedia.delete({
+    where: { id: media.id }
+  });
+
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/galleries/:eventId/expiration", adminOnly, async (req, res) => {
+  const value = String(req.body?.portalExpiresAt || "").trim();
+
+  const event = await prisma.event.update({
+    where: { id: req.params.eventId },
+    data: {
+      portalExpiresAt: value
+        ? new Date(value + "T12:00:00")
+        : null
+    }
+  });
+
+  res.json({
+    ok: true,
+    portalExpiresAt: event.portalExpiresAt
+  });
+});
 const distDir = path.join(__dirname, "dist");
+
 app.use(express.static(distDir));
 
 app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false });
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ ok: false });
+  }
+
   res.sendFile(path.join(distDir, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Location Photobooth 28 Suite V6.3.1 lancé sur le port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await ensureCatalog(prisma);
+    await ensureV82Settings();
+    console.log("Catalogue LP28 vÃ©rifiÃ©.");
+  } catch (err) {
+    console.error("Catalogue LP28 :", err.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(
+      `Location Photobooth 28 Suite V8.3.0 lancÃ© sur le port ${PORT}`
+    );
+  });
+}
+
+startServer();
+

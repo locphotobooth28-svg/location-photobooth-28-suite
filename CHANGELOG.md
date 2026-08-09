@@ -1,19 +1,16 @@
 # Changelog
 
-## 6.3.1
-- Correction critique Prisma 7 : utilisation de @prisma/adapter-pg.
-- Ajout des dépendances pg et @prisma/adapter-pg.
-- Correction du démarrage PostgreSQL.
-- Le formulaire affiche désormais une erreur claire si l'API n'est pas joignable.
-- Création d'événement rétablie.
-
-
-## 6.3.0
-- Planning mensuel interactif.
-- Accès Planning dans le menu.
-- Clic sur un événement du calendrier pour le modifier.
-- Couleurs par type d'événement.
-- Mise en évidence du jour courant.
-- Détection serveur des doubles réservations de Lola, Nina et Gabin.
-- Blocage de la création/modification en cas de conflit.
-- Conservation de PostgreSQL, Prisma, QR Code, clients, événements et consommables.
+## 8.3.0 — Galeries Admin
+- Nouveau menu administrateur `📸 Galeries`.
+- Vue de toutes les galeries LP28 Memories actives.
+- Compteurs photos, vidéos et médias masqués.
+- Ouverture de chaque galerie depuis l'administration.
+- Filtres : tout, visibles, masquées, en attente.
+- Vue plein écran.
+- Masquer / réafficher depuis l'administration.
+- Suppression définitive protégée par `DELETE`.
+- Accès rapide aux portails organisateur et invité.
+- Accès FotoShare si un lien est renseigné.
+- Gestion de la date d'expiration.
+- QR Code invité affiché dans l'administration.
+- Aucun changement volontaire du moteur de réservation validé.

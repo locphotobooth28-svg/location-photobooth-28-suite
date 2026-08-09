@@ -1,32 +1,30 @@
-# Location Photobooth 28 Suite — V6.3.1
+# LP28 Suite V8.3.0 — Galeries Admin
 
-Correctif de la V6.3.
+## Migration
 
-## Important
-Conserve ton fichier `.env` actuel.
+Conserve ton `.env`.
 
-Puis lance :
-
-```bash
+```powershell
 npm install
 npx prisma generate
+npx prisma migrate deploy
 npm run build
 npm start
 ```
 
-Vérifie ensuite :
+Ne lance jamais `prisma migrate reset` sur la base réelle.
 
-`http://localhost:3000/api/health`
+## Test V8.3
+1. Ouvre le nouveau menu `📸 Galeries`.
+2. Ouvre une galerie existante.
+3. Vérifie les compteurs.
+4. Teste les filtres Visible / Masquée.
+5. Ouvre une photo en grand.
+6. Masque-la puis vérifie le portail invité.
+7. Réaffiche-la.
+8. Vérifie le QR Code invité.
+9. Teste la date d'expiration.
+10. Pour supprimer définitivement, `DELETE` reste obligatoire.
 
-Résultat attendu :
-- `ok: true`
-- `version: 6.3.1`
-- `database: ok`
-
-Puis teste la création d'un événement.
-
-## Correctifs
-- Prisma 7 + PostgreSQL avec driver adapter.
-- Création d'événement.
-- Messages d'erreur frontend plus explicites.
-- Planning et détection des conflits conservés.
+## QR Code
+La V8.3 affiche un QR Code du portail invité dans l'espace administrateur.
