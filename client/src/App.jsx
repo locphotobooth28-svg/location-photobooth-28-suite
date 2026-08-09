@@ -1930,7 +1930,6 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>setView("materialPlanning")}>📦 Planning matériel</button>
         <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>setView("inventory")}>🔐 Inventaire admin</button>
         <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
-        <button className="nav-item disabled">📸 Galeries <small>bientôt</small></button>
         <button className="nav-item disabled">📄 Documents <small>bientôt</small></button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
         <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
