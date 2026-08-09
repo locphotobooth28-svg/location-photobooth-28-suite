@@ -1391,62 +1391,59 @@ async function loadUnavailabilities(materialId){
                 <p>Aucune indisponibilité active.</p>
               </div>
             )}
-          </div>
-
-
-          <>
-  <h3>📚 Historique des indisponibilités</h3>
-
-  <div className="events-list">
-    {allUnavailabilities
-      .filter(u=>u.status!=="ACTIVE")
-      .map(u=>(
-        <article
-          key={u.id}
-          className="event-card archived"
-        >
-          <div className="event-main">
-
-            <h3>
-              📦 {u.material?.name || "Matériel"}
-            </h3>
-
-            <strong>
-              {reasonLabels[u.reason] || u.reason}
-            </strong>
-
-            <p>
-              {formatDate(u.startAt)}
-              {" → "}
-              {formatDate(u.endAt)}
-            </p>
-
-            {u.notes && (
-              <p className="muted">
-                💬 {u.notes}
-              </p>
-            )}
-
-            <span className="badge">
-              {u.status==="COMPLETED"
-                ? "✅ Terminé"
-                : "Annulé"}
-            </span>
-
-          </div>
-        </article>
-      ))}
-
-    {!allUnavailabilities.some(u=>u.status!=="ACTIVE") && (
-      <div className="empty-state">
-        <span>📚</span>
-        <p>Aucun historique pour le moment.</p>
-      </div>
-    )}
-  </div>
-</>
+                    </div>
         </>
       )}
+
+      <>
+        <h3>📚 Historique des indisponibilités</h3>
+
+        <div className="events-list">
+          {allUnavailabilities
+            .filter(u=>u.status!=="ACTIVE")
+            .map(u=>(
+              <article
+                key={u.id}
+                className="event-card archived"
+              >
+                <div className="event-main">
+                  <h3>
+                    📦 {u.material?.name || "Matériel"}
+                  </h3>
+
+                  <strong>
+                    {reasonLabels[u.reason] || u.reason}
+                  </strong>
+
+                  <p>
+                    {formatDate(u.startAt)}
+                    {" → "}
+                    {formatDate(u.endAt)}
+                  </p>
+
+                  {u.notes && (
+                    <p className="muted">
+                      💬 {u.notes}
+                    </p>
+                  )}
+
+                  <span className="badge">
+                    {u.status==="COMPLETED"
+                      ? "✅ Terminé"
+                      : "Annulé"}
+                  </span>
+                </div>
+              </article>
+            ))}
+
+          {!allUnavailabilities.some(u=>u.status!=="ACTIVE") && (
+            <div className="empty-state">
+              <span>📚</span>
+              <p>Aucun historique pour le moment.</p>
+            </div>
+          )}
+        </div>
+      </>
 
 
       <h3>🖨️ Imprimantes mutualisées</h3>
