@@ -1227,14 +1227,6 @@ async function loadUnavailabilities(materialId){
             <label>Matériel</label>
 
             <select
-              value={selectedMaterialId}
-              onChange={e=>chooseMaterial(e.target.value)}
-            >
-              <option value="">
-                Sélectionner un matériel
-              </option>
-
-              <select
   value={selectedMaterialId}
   onChange={e=>chooseMaterial(e.target.value)}
 >
@@ -1248,7 +1240,6 @@ async function loadUnavailabilities(materialId){
     </option>
   ))}
 </select>
-            </select>
           </div>
 
           <div>
