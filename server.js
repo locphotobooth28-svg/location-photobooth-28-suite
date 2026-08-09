@@ -699,7 +699,21 @@ app.post("/api/materials/:id/unavailabilities", adminOnly, async (req, res) => {
     }))
   });
 });
+app.get("/api/material-unavailabilities", adminOnly, async (req, res) => {
+  const items = await prisma.materialUnavailability.findMany({
+    include:{
+      material:true
+    },
+    orderBy:{
+      startAt:"desc"
+    }
+  });
 
+  res.json({
+    ok:true,
+    unavailabilities:items
+  });
+});
 app.patch("/api/material-unavailabilities/:id", adminOnly, async (req, res) => {
   const current = await prisma.materialUnavailability.findUnique({
     where: {

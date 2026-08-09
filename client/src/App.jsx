@@ -528,9 +528,8 @@ function GooglePanel() {
   }
 
   useEffect(()=>{
-    load();
-  },[]);
-
+  load();
+},[]);
   async function save(){
     setBusy(true);
 
@@ -911,7 +910,7 @@ function AdminInventory(){
 
   const [selectedMaterialId,setSelectedMaterialId]=useState("");
   const [unavailabilities,setUnavailabilities]=useState([]);
-
+  const [allUnavailabilities,setAllUnavailabilities]=useState([]);
   const [unavailabilityForm,setUnavailabilityForm]=useState({
     startAt:"",
     endAt:"",
@@ -938,29 +937,42 @@ function AdminInventory(){
   }
 
   useEffect(()=>{
-    load();
-  },[]);
+  load();
+  loadAllUnavailabilities();
+},[]);
+  async function loadAllUnavailabilities(){
+  const r=await fetch("/api/material-unavailabilities");
+  const d=await r.json();
 
-  async function loadUnavailabilities(materialId){
-    if(!materialId){
-      setUnavailabilities([]);
-      return;
-    }
+  if(r.ok){
+    setAllUnavailabilities(d.unavailabilities||[]);
+  }
+}
 
-    const r=await fetch(
-      `/api/materials/${materialId}/unavailabilities`
-    );
-
-    const d=await r.json();
-
-    if(!r.ok){
-      alert(d.message||"Impossible de charger les indisponibilités.");
-      return;
-    }
-
-    setUnavailabilities(d.unavailabilities||[]);
+async function loadUnavailabilities(materialId){
+  if(!materialId){
+    setUnavailabilities([]);
+    return;
   }
 
+  const r=await fetch(
+    `/api/materials/${materialId}/unavailabilities`
+  );
+
+  const d=await r.json();
+
+  if(!r.ok){
+    alert(
+      d.message ||
+      "Impossible de charger les indisponibilités."
+    );
+    return;
+  }
+
+  setUnavailabilities(
+    d.unavailabilities || []
+  );
+}
   async function chooseMaterial(materialId){
     setSelectedMaterialId(materialId);
     await loadUnavailabilities(materialId);
@@ -1222,13 +1234,20 @@ function AdminInventory(){
                 Sélectionner un matériel
               </option>
 
-              {(data.materials||[])
-                .filter(m=>m.blocksPlanning)
-                .map(m=>(
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
+              <select
+  value={selectedMaterialId}
+  onChange={e=>chooseMaterial(e.target.value)}
+>
+  <option value="">
+    Sélectionner un matériel
+  </option>
+
+  {(data.materials||[]).map(m=>(
+    <option key={m.id} value={m.id}>
+      {m.name}
+    </option>
+  ))}
+</select>
             </select>
           </div>
 
@@ -1375,44 +1394,57 @@ function AdminInventory(){
           </div>
 
 
-          {!!historyUnavailabilities.length && (
-            <>
-              <h3>📚 Historique</h3>
+          <>
+  <h3>📚 Historique des indisponibilités</h3>
 
-              <div className="events-list">
-                {historyUnavailabilities.map(u=>(
-                  <article
-                    key={u.id}
-                    className="event-card archived"
-                  >
-                    <div className="event-main">
-                      <strong>
-                        {reasonLabels[u.reason]||u.reason}
-                      </strong>
+  <div className="events-list">
+    {allUnavailabilities
+      .filter(u=>u.status!=="ACTIVE")
+      .map(u=>(
+        <article
+          key={u.id}
+          className="event-card archived"
+        >
+          <div className="event-main">
 
-                      <p>
-                        {formatDate(u.startAt)}
-                        {" → "}
-                        {formatDate(u.endAt)}
-                      </p>
+            <h3>
+              📦 {u.material?.name || "Matériel"}
+            </h3>
 
-                      {u.notes && (
-                        <p className="muted">
-                          {u.notes}
-                        </p>
-                      )}
+            <strong>
+              {reasonLabels[u.reason] || u.reason}
+            </strong>
 
-                      <span className="badge">
-                        {u.status==="COMPLETED"
-                          ? "Terminé"
-                          : "Annulé"}
-                      </span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
+            <p>
+              {formatDate(u.startAt)}
+              {" → "}
+              {formatDate(u.endAt)}
+            </p>
+
+            {u.notes && (
+              <p className="muted">
+                💬 {u.notes}
+              </p>
+            )}
+
+            <span className="badge">
+              {u.status==="COMPLETED"
+                ? "✅ Terminé"
+                : "Annulé"}
+            </span>
+
+          </div>
+        </article>
+      ))}
+
+    {!allUnavailabilities.some(u=>u.status!=="ACTIVE") && (
+      <div className="empty-state">
+        <span>📚</span>
+        <p>Aucun historique pour le moment.</p>
+      </div>
+    )}
+  </div>
+</>
         </>
       )}
 
@@ -1987,8 +2019,8 @@ function Dashboard({onLogout}) {
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>setShowForm(false)} onSaved={saved}/>}
-    {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
-  </div>
+{shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
+</div>;
 }
 
 export default function App(){
