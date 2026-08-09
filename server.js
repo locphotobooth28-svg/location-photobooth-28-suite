@@ -144,11 +144,10 @@ async function findMaterialConflicts({
   date,time,pickupDate,pickupTime,materialNames,sceneJets,excludeEventId=null
 }){
   const selected=[...new Set(
-    (Array.isArray(materialNames)?materialNames:[])
-      .map(String)
-      .filter(Boolean)
-      .filter(name=>!["Appareil photo Reflex Nikon D7200","Flash + parapluie"].includes(name))
-  )];
+  (Array.isArray(materialNames)?materialNames:[])
+    .map(String)
+    .filter(Boolean)
+)];
   if(!date || selected.length===0) return [];
 
   const requestedRange=eventRangeFromInput(date,time,pickupDate,pickupTime);
@@ -160,23 +159,26 @@ async function findMaterialConflicts({
   const blocking=materials.filter(m=>m.blocksPlanning);
   if(blocking.length===0) return [];
 
-  const unavailabilities = await prisma.materialUnavailability.findMany({
+  const allUnavailabilities = await prisma.materialUnavailability.findMany({
   where:{
     materialId:{
       in:blocking.map(m=>m.id)
     },
-    status:"ACTIVE",
-    startAt:{
-      lte:requestedRange.end
-    },
-    endAt:{
-      gte:requestedRange.start
-    }
+    status:"ACTIVE"
   },
   orderBy:{
     startAt:"asc"
   }
 });
+
+const unavailabilities = allUnavailabilities.filter(u =>
+  rangesOverlap(
+    requestedRange.start,
+    requestedRange.end,
+    new Date(u.startAt),
+    new Date(u.endAt)
+  )
+);
 
   const candidates=await prisma.event.findMany({
     where:{
@@ -218,7 +220,27 @@ async function findMaterialConflicts({
         pickupDate:event.pickupDate?.toISOString().slice(0,10)||null
       });
     }
+if(materialUnavailabilities.length){
+  conflicts.push({
+    material: material.name,
+    capacity: material.capacity,
+    alreadyReserved,
+    requested: requestedQty,
+    available: 0,
+    unavailable: true,
+    reservations,
+    unavailabilities: materialUnavailabilities.map(u => ({
+      id: u.id,
+      startAt: u.startAt,
+      endAt: u.endAt,
+      reason: u.reason,
+      notes: u.notes,
+      status: u.status
+    }))
+  });
 
+  continue;
+}
     if(alreadyReserved + requestedQty > material.capacity){
       conflicts.push({
         material:material.name,
