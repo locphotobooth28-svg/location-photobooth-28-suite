@@ -1512,7 +1512,7 @@ function AdminInventory(){
     </section>
   );
 }
-  useEffect(()=>{load()},[]);
+
 
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");
