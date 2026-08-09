@@ -130,10 +130,66 @@ function EventForm({event,onClose,onSaved}) {
 
       if(!r.ok) {
         if (d.error === "material_conflict" && d.conflicts?.length) {
-          const details = d.conflicts.map(c => `• ${c.material} — déjà réservée pour ${c.eventName}`).join("\n");
-          alert(`⚠️ Conflit de réservation\n\n${details}`);
-          return;
-        }
+
+  const reasonLabels = {
+    MAINTENANCE: "Maintenance",
+    REPAIR: "Réparation",
+    BREAKDOWN: "Panne",
+    CHECK: "Contrôle / vérification",
+    CLEANING: "Nettoyage / entretien",
+    VACATION: "Vacances / indisponibilité",
+    LOAN: "Matériel prêté / hors site",
+    WAITING_PART: "En attente de pièce",
+    OTHER: "Autre"
+  };
+
+  const formatDate = value => {
+    if(!value) return "?";
+    return new Date(value).toLocaleDateString("fr-FR");
+  };
+
+  const details = d.conflicts.map(c => {
+
+    if(c.unavailable && c.unavailabilities?.length){
+
+      return c.unavailabilities.map(u => {
+        const reason = reasonLabels[u.reason] || u.reason;
+
+        const period =
+          `${formatDate(u.startAt)} au ${formatDate(u.endAt)}`;
+
+        const comment =
+          u.notes
+            ? `\n   💬 ${u.notes}`
+            : "";
+
+        return (
+          `🔴 ${c.material} indisponible\n` +
+          `   ${reason} — du ${period}${comment}`
+        );
+      }).join("\n");
+    }
+
+    if(c.reservations?.length){
+      const reservations = c.reservations
+        .map(r => `   • ${r.eventName}`)
+        .join("\n");
+
+      return (
+        `⚠️ ${c.material} déjà réservé\n` +
+        reservations
+      );
+    }
+
+    return `⚠️ ${c.material} indisponible`;
+  }).join("\n\n");
+
+  alert(
+    `⚠️ Matériel indisponible\n\n${details}`
+  );
+
+  return;
+}
         alert(d.message || `Erreur serveur (${r.status})`);
         return;
       }
@@ -853,89 +909,610 @@ function AdminInventory(){
   const [data,setData]=useState(null);
   const [busy,setBusy]=useState(false);
 
+  const [selectedMaterialId,setSelectedMaterialId]=useState("");
+  const [unavailabilities,setUnavailabilities]=useState([]);
+
+  const [unavailabilityForm,setUnavailabilityForm]=useState({
+    startAt:"",
+    endAt:"",
+    reason:"MAINTENANCE",
+    notes:""
+  });
+
+  const reasonLabels={
+    MAINTENANCE:"Maintenance",
+    REPAIR:"Réparation",
+    BREAKDOWN:"Panne",
+    CHECK:"Contrôle / vérification",
+    CLEANING:"Nettoyage / entretien",
+    VACATION:"Vacances / indisponibilité",
+    LOAN:"Matériel prêté / hors site",
+    WAITING_PART:"En attente de pièce",
+    OTHER:"Autre"
+  };
+
   async function load(){
     const r=await fetch("/api/admin/inventory");
     const d=await r.json();
     setData(d);
   }
-  useEffect(()=>{load()},[]);
+
+  useEffect(()=>{
+    load();
+  },[]);
+
+  async function loadUnavailabilities(materialId){
+    if(!materialId){
+      setUnavailabilities([]);
+      return;
+    }
+
+    const r=await fetch(
+      `/api/materials/${materialId}/unavailabilities`
+    );
+
+    const d=await r.json();
+
+    if(!r.ok){
+      alert(d.message||"Impossible de charger les indisponibilités.");
+      return;
+    }
+
+    setUnavailabilities(d.unavailabilities||[]);
+  }
+
+  async function chooseMaterial(materialId){
+    setSelectedMaterialId(materialId);
+    await loadUnavailabilities(materialId);
+  }
+
+  async function addUnavailability(){
+    if(!selectedMaterialId){
+      return alert("Sélectionne d'abord un matériel.");
+    }
+
+    if(!unavailabilityForm.startAt || !unavailabilityForm.endAt){
+      return alert("Les dates de début et de fin sont obligatoires.");
+    }
+
+    if(
+      unavailabilityForm.reason==="OTHER" &&
+      !unavailabilityForm.notes.trim()
+    ){
+      return alert(
+        "Le commentaire est obligatoire lorsque le motif est Autre."
+      );
+    }
+
+    setBusy(true);
+
+    try{
+      const r=await fetch(
+        `/api/materials/${selectedMaterialId}/unavailabilities`,
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            startAt:`${unavailabilityForm.startAt}T00:00:00`,
+            endAt:`${unavailabilityForm.endAt}T23:59:59`,
+            reason:unavailabilityForm.reason,
+            notes:unavailabilityForm.notes
+          })
+        }
+      );
+
+      const d=await r.json();
+
+      if(!r.ok){
+        return alert(
+          d.message||"Impossible d'enregistrer l'indisponibilité."
+        );
+      }
+
+      if(d.conflicts?.length){
+        const names=d.conflicts
+          .map(e=>`• ${e.name}`)
+          .join("\n");
+
+        alert(
+          `⚠️ Indisponibilité enregistrée.\n\n` +
+          `Événement(s) déjà en conflit :\n${names}`
+        );
+      }else{
+        alert("✅ Indisponibilité enregistrée.");
+      }
+
+      setUnavailabilityForm({
+        startAt:"",
+        endAt:"",
+        reason:"MAINTENANCE",
+        notes:""
+      });
+
+      await loadUnavailabilities(selectedMaterialId);
+
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function completeUnavailability(id){
+    const r=await fetch(
+      `/api/material-unavailabilities/${id}`,
+      {
+        method:"PATCH",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          status:"COMPLETED"
+        })
+      }
+    );
+
+    const d=await r.json();
+
+    if(!r.ok){
+      return alert(
+        d.message||"Impossible de terminer l'indisponibilité."
+      );
+    }
+
+    await loadUnavailabilities(selectedMaterialId);
+  }
+
+  async function deleteUnavailability(id){
+    if(!confirm("Supprimer cette indisponibilité ?")){
+      return;
+    }
+
+    const r=await fetch(
+      `/api/material-unavailabilities/${id}`,
+      {
+        method:"DELETE"
+      }
+    );
+
+    const d=await r.json();
+
+    if(!r.ok){
+      return alert(
+        d.message||"Impossible de supprimer l'indisponibilité."
+      );
+    }
+
+    await loadUnavailabilities(selectedMaterialId);
+  }
 
   async function reloadPrinter(printer){
-    const raw=prompt(`Nouveau nombre de tirages installé dans ${printer.name} :`, String(printer.loadedCapacity||400));
+    const raw=prompt(
+      `Nouveau nombre de tirages installé dans ${printer.name} :`,
+      String(printer.loadedCapacity||400)
+    );
+
     if(raw===null)return;
+
     const capacity=Number(raw);
-    if(!capacity)return alert("Valeur incorrecte.");
+
+    if(!capacity){
+      return alert("Valeur incorrecte.");
+    }
+
     setBusy(true);
-    const r=await fetch(`/api/admin/printers/${printer.id}/reload`,{
-      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({capacity})
-    });
+
+    const r=await fetch(
+      `/api/admin/printers/${printer.id}/reload`,
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({capacity})
+      }
+    );
+
     setBusy(false);
-    if(!r.ok)return alert("Impossible de mettre à jour l'imprimante.");
+
+    if(!r.ok){
+      return alert(
+        "Impossible de mettre à jour l'imprimante."
+      );
+    }
+
     load();
   }
 
   async function registerUse(printer){
-    const raw=prompt(`Combien d'impressions ont réellement été utilisées sur ${printer.name} ?`);
+    const raw=prompt(
+      `Combien d'impressions ont réellement été utilisées sur ${printer.name} ?`
+    );
+
     if(raw===null)return;
+
     const used=Number(raw);
-    if(!used)return alert("Valeur incorrecte.");
+
+    if(!used){
+      return alert("Valeur incorrecte.");
+    }
+
     setBusy(true);
-    const r=await fetch(`/api/admin/printers/${printer.id}/use`,{
-      method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({used})
-    });
+
+    const r=await fetch(
+      `/api/admin/printers/${printer.id}/use`,
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({used})
+      }
+    );
+
     setBusy(false);
-    if(!r.ok)return alert("Impossible d'enregistrer l'utilisation.");
+
+    if(!r.ok){
+      return alert(
+        "Impossible d'enregistrer l'utilisation."
+      );
+    }
+
     load();
   }
 
-  if(!data)return <div className="empty-state"><span>📦</span><p>Chargement de l'inventaire…</p></div>;
+  if(!data){
+    return (
+      <div className="empty-state">
+        <span>📦</span>
+        <p>Chargement de l'inventaire...</p>
+      </div>
+    );
+  }
 
   const groups=(data.materials||[]).reduce((acc,m)=>{
     (acc[m.category||"Autres"] ||= []).push(m);
     return acc;
   },{});
 
-  return <section className="admin-inventory">
-    <div className="calendar-toolbar">
-      <div>
-        <div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div>
-        <h2>Inventaire & consommables</h2>
-        <p className="muted">Ces informations ne sont jamais visibles par les clients.</p>
-      </div>
-    </div>
+  const selectedMaterial=(data.materials||[])
+    .find(m=>m.id===selectedMaterialId);
 
-    <h3>🖨️ Imprimantes mutualisées</h3>
-    <div className="printer-grid">
-      {(data.printers||[]).map(p=>{
-        const pct=p.loadedCapacity?Math.round((p.remainingPrints/p.loadedCapacity)*100):0;
-        const low=p.remainingPrints<=p.warningAt;
-        return <article className={`printer-card ${low?"printer-low":""}`} key={p.id}>
-          <div className="printer-head"><strong>{p.name}</strong><span>{low?"🔴 Papier faible":"🟢 OK"}</span></div>
-          <div className="printer-number">{p.remainingPrints}</div>
-          <div className="muted">tirages restants / {p.loadedCapacity} installés</div>
-          <div className="paper-bar"><i style={{width:`${Math.max(0,Math.min(100,pct))}%`}}/></div>
-          <small>Total réalisé : {p.totalPrints} tirages</small>
-          <div className="printer-actions">
-            <button disabled={busy} onClick={()=>registerUse(p)}>− Enregistrer utilisation</button>
-            <button disabled={busy} onClick={()=>reloadPrinter(p)}>↻ Nouveau papier</button>
+  const activeUnavailabilities=unavailabilities.filter(
+    u=>u.status==="ACTIVE"
+  );
+
+  const historyUnavailabilities=unavailabilities.filter(
+    u=>u.status!=="ACTIVE"
+  );
+
+  const formatDate=value=>
+    new Date(value).toLocaleDateString("fr-FR");
+
+  return (
+    <section className="admin-inventory">
+      <div className="calendar-toolbar">
+        <div>
+          <div className="eyebrow">
+            ADMINISTRATEUR UNIQUEMENT
           </div>
-        </article>
-      })}
-    </div>
 
-    <h3>📦 Ressources</h3>
-    {Object.entries(groups).map(([category,items])=><div className="inventory-group" key={category}>
-      <h4>{category}</h4>
-      <div className="inventory-lines">
-        {items.map(m=><div className="inventory-line" key={m.id}>
-          <span>{m.name}</span>
-          <strong>×{m.capacity}</strong>
-          <small>{m.blocksPlanning?"Planning":"Interne"} · {m.resourceKind}</small>
-        </div>)}
+          <h2>Inventaire & consommables</h2>
+
+          <p className="muted">
+            Ces informations ne sont jamais visibles par les clients.
+          </p>
+        </div>
       </div>
-    </div>)}
-  </section>;
+
+
+      <h3>🔧 Indisponibilités matériel</h3>
+
+      <div className="panel">
+        <div className="form-grid">
+
+          <div>
+            <label>Matériel</label>
+
+            <select
+              value={selectedMaterialId}
+              onChange={e=>chooseMaterial(e.target.value)}
+            >
+              <option value="">
+                Sélectionner un matériel
+              </option>
+
+              {(data.materials||[])
+                .filter(m=>m.blocksPlanning)
+                .map(m=>(
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div>
+            <label>Du</label>
+            <input
+              type="date"
+              value={unavailabilityForm.startAt}
+              onChange={e=>
+                setUnavailabilityForm(v=>({
+                  ...v,
+                  startAt:e.target.value
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label>Au</label>
+            <input
+              type="date"
+              value={unavailabilityForm.endAt}
+              onChange={e=>
+                setUnavailabilityForm(v=>({
+                  ...v,
+                  endAt:e.target.value
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label>Motif</label>
+
+            <select
+              value={unavailabilityForm.reason}
+              onChange={e=>
+                setUnavailabilityForm(v=>({
+                  ...v,
+                  reason:e.target.value
+                }))
+              }
+            >
+              {Object.entries(reasonLabels).map(([value,label])=>(
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="wide">
+            <label>
+              Commentaire
+              {unavailabilityForm.reason==="OTHER"
+                ? " *"
+                : ""}
+            </label>
+
+            <textarea
+              rows="3"
+              value={unavailabilityForm.notes}
+              onChange={e=>
+                setUnavailabilityForm(v=>({
+                  ...v,
+                  notes:e.target.value
+                }))
+              }
+              placeholder={
+                unavailabilityForm.reason==="OTHER"
+                  ? "Précise obligatoirement la raison..."
+                  : "Ex : écran tactile envoyé en SAV..."
+              }
+            />
+          </div>
+        </div>
+
+        <div className="google-actions">
+          <button
+            className="danger-btn"
+            disabled={busy || !selectedMaterialId}
+            onClick={addUnavailability}
+          >
+            🔴 Mettre indisponible
+          </button>
+        </div>
+      </div>
+
+
+      {selectedMaterial && (
+        <>
+          <h3>
+            📅 Indisponibilités de {selectedMaterial.name}
+          </h3>
+
+          <div className="events-list">
+
+            {activeUnavailabilities.map(u=>(
+              <article
+                key={u.id}
+                className="event-card"
+              >
+                <div className="event-main">
+                  <h3>
+                    🔴 {reasonLabels[u.reason]||u.reason}
+                  </h3>
+
+                  <p>
+                    Du {formatDate(u.startAt)}
+                    {" "}au{" "}
+                    {formatDate(u.endAt)}
+                  </p>
+
+                  {u.notes && (
+                    <p className="muted">
+                      💬 {u.notes}
+                    </p>
+                  )}
+
+                  <div className="event-actions">
+                    <button
+                      onClick={()=>completeUnavailability(u.id)}
+                    >
+                      ✅ Terminer
+                    </button>
+
+                    <button
+                      className="danger-btn"
+                      onClick={()=>deleteUnavailability(u.id)}
+                    >
+                      🗑️ Supprimer
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+
+            {!activeUnavailabilities.length && (
+              <div className="empty-state">
+                <span>✅</span>
+                <p>Aucune indisponibilité active.</p>
+              </div>
+            )}
+          </div>
+
+
+          {!!historyUnavailabilities.length && (
+            <>
+              <h3>📚 Historique</h3>
+
+              <div className="events-list">
+                {historyUnavailabilities.map(u=>(
+                  <article
+                    key={u.id}
+                    className="event-card archived"
+                  >
+                    <div className="event-main">
+                      <strong>
+                        {reasonLabels[u.reason]||u.reason}
+                      </strong>
+
+                      <p>
+                        {formatDate(u.startAt)}
+                        {" → "}
+                        {formatDate(u.endAt)}
+                      </p>
+
+                      {u.notes && (
+                        <p className="muted">
+                          {u.notes}
+                        </p>
+                      )}
+
+                      <span className="badge">
+                        {u.status==="COMPLETED"
+                          ? "Terminé"
+                          : "Annulé"}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+
+      <h3>🖨️ Imprimantes mutualisées</h3>
+
+      <div className="printer-grid">
+        {(data.printers||[]).map(p=>{
+          const pct=p.loadedCapacity
+            ? Math.round(
+                (p.remainingPrints/p.loadedCapacity)*100
+              )
+            : 0;
+
+          const low=p.remainingPrints<=p.warningAt;
+
+          return (
+            <article
+              className={`printer-card ${low?"printer-low":""}`}
+              key={p.id}
+            >
+              <div className="printer-head">
+                <strong>{p.name}</strong>
+                <span>
+                  {low?"🔴 Papier faible":"🟢 OK"}
+                </span>
+              </div>
+
+              <div className="printer-number">
+                {p.remainingPrints}
+              </div>
+
+              <p>
+                tirages restants / {p.loadedCapacity} installés
+              </p>
+
+              <div className="stock-bar">
+                <i
+                  style={{
+                    width:
+                      `${Math.max(0,Math.min(100,pct))}%`
+                  }}
+                />
+              </div>
+
+              <p>
+                Total réalisé : {p.totalPrints} tirages
+              </p>
+
+              <div className="event-actions">
+                <button
+                  disabled={busy}
+                  onClick={()=>registerUse(p)}
+                >
+                  − Enregistrer utilisation
+                </button>
+
+                <button
+                  disabled={busy}
+                  onClick={()=>reloadPrinter(p)}
+                >
+                  ↻ Nouveau papier
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+
+      <h3>📦 Ressources</h3>
+
+      {Object.entries(groups).map(([category,items])=>(
+        <div key={category} className="material-group">
+          <h4>{category}</h4>
+
+          <div className="materials-grid">
+            {items.map(m=>(
+              <article
+                key={m.id}
+                className="material-card"
+              >
+                <span>{m.name}</span>
+                <b>×{m.capacity}</b>
+                <small>
+                  {m.blocksPlanning
+                    ? "Planning"
+                    : "Interne"}
+                  {" · "}
+                  {m.resourceKind}
+                </small>
+              </article>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
 }
+  useEffect(()=>{load()},[]);
 
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");

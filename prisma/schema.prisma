@@ -29,16 +29,16 @@ model Client {
 }
 
 model Event {
-  id            String      @id @default(uuid())
-  name          String
-  type          String?
-  eventDate     DateTime
-  installTime   String?
-  pickupDate    DateTime?
-  pickupTime    String?
-  address       String?
-  guestCount    Int?
-  status        EventStatus @default(TO_PREPARE)
+  id          String      @id @default(uuid())
+  name        String
+  type        String?
+  eventDate   DateTime
+  installTime String?
+  pickupDate  DateTime?
+  pickupTime  String?
+  address     String?
+  guestCount  Int?
+  status      EventStatus @default(TO_PREPARE)
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -47,25 +47,25 @@ model Event {
   organizerEmail String?
   organizerPhone String?
 
-  totalPrice Decimal? @db.Decimal(10,2)
-  deposit    Decimal? @db.Decimal(10,2)
-  balance    Decimal? @db.Decimal(10,2)
+  totalPrice Decimal? @db.Decimal(10, 2)
+  deposit    Decimal? @db.Decimal(10, 2)
+  balance    Decimal? @db.Decimal(10, 2)
 
   depositPaid     Boolean @default(false)
   balancePaid     Boolean @default(false)
   cautionReceived Boolean @default(false)
   cautionReturned Boolean @default(false)
 
-  bookingStatus BookingStatus @default(CONFIRMED)
-  optionUntil DateTime?
-  sceneJets Json?
-  portalEnabled Boolean @default(false)
-  guestUploadEnabled Boolean @default(false)
-  guestVideoEnabled Boolean @default(false)
-  guestUploadModerated Boolean @default(false)
-  portalExpiresAt DateTime?
-  portalPassword String?
-  fotoshareUrl String?
+  bookingStatus        BookingStatus @default(CONFIRMED)
+  optionUntil          DateTime?
+  sceneJets            Json?
+  portalEnabled        Boolean       @default(false)
+  guestUploadEnabled   Boolean       @default(false)
+  guestVideoEnabled    Boolean       @default(false)
+  guestUploadModerated Boolean       @default(false)
+  portalExpiresAt      DateTime?
+  portalPassword       String?
+  fotoshareUrl         String?
 
   frameSource FrameSource @default(NONE)
   frameStatus FrameStatus @default(NOT_REQUIRED)
@@ -88,7 +88,7 @@ model Event {
   updatedAt DateTime @updatedAt
 
   materials EventMaterial[]
-  memories MemoryMedia[]
+  memories  MemoryMedia[]
 }
 
 enum EventStatus {
@@ -101,20 +101,38 @@ enum EventStatus {
 }
 
 model Material {
-  id             String   @id @default(uuid())
-  name           String   @unique
-  category       String?
-  active         Boolean  @default(true)
+  id       String  @id @default(uuid())
+  name     String  @unique
+  category String?
+  active   Boolean @default(true)
 
   // V8 : vraie logique de stock / planning
-  capacity       Int      @default(1)
-  blocksPlanning Boolean  @default(true)
-  bookingVisible Boolean  @default(true)
-  resourceKind   String   @default("SHARED")
+  capacity       Int     @default(1)
+  blocksPlanning Boolean @default(true)
+  bookingVisible Boolean @default(true)
+  resourceKind   String  @default("SHARED")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  events    EventMaterial[]
+
+  events           EventMaterial[]
+  unavailabilities MaterialUnavailability[]
+}
+
+model MaterialUnavailability {
+  id         String @id @default(uuid())
+  materialId String
+
+  startAt DateTime
+  endAt   DateTime
+
+  reason String
+  notes  String? @db.Text
+  status String  @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  material  Material @relation(fields: [materialId], references: [id])
 }
 
 model EventMaterial {
@@ -123,19 +141,20 @@ model EventMaterial {
   quantity   Int      @default(1)
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
   @@id([eventId, materialId])
 }
 
 model Consumable {
-  id           String   @id @default(uuid())
-  name         String   @unique
+  id           String          @id @default(uuid())
+  name         String          @unique
   printer      String
   unitsPerBox  Int
-  currentUnits Int      @default(0)
-  warningAt    Int      @default(300)
-  criticalAt   Int      @default(100)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  currentUnits Int             @default(0)
+  warningAt    Int             @default(300)
+  criticalAt   Int             @default(100)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   movements    StockMovement[]
 }
 
@@ -149,19 +168,17 @@ model StockMovement {
   consumable   Consumable @relation(fields: [consumableId], references: [id], onDelete: Cascade)
 }
 
-
 model GoogleConnection {
-  id                String   @id @default("primary")
-  tokenEncrypted    String   @db.Text
-  googleEmail       String?
-  scopes            String?  @db.Text
+  id                     String   @id @default("primary")
+  tokenEncrypted         String   @db.Text
+  googleEmail            String?
+  scopes                 String?  @db.Text
   driveRootFolderId      String?
   defaultCalendarId      String?
   defaultCalendarSummary String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
-
 
 enum FrameSource {
   NONE
@@ -176,7 +193,6 @@ enum FrameStatus {
   DONE
 }
 
-
 enum BookingStatus {
   QUOTE_DRAFT
   QUOTE_SENT
@@ -187,74 +203,71 @@ enum BookingStatus {
   COMPLETED
 }
 
-
 model Printer {
-  id                String   @id @default(uuid())
-  name              String   @unique
-  model             String
-  active            Boolean  @default(true)
+  id     String  @id @default(uuid())
+  name   String  @unique
+  model  String
+  active Boolean @default(true)
 
   // Quantité réellement présente dans l'imprimante au moment du suivi.
-  loadedCapacity    Int      @default(0)
-  remainingPrints   Int      @default(0)
-  warningAt         Int      @default(100)
+  loadedCapacity  Int @default(0)
+  remainingPrints Int @default(0)
+  warningAt       Int @default(100)
 
-  totalPrints       Int      @default(0)
-  lastReloadAt      DateTime?
-  notes             String?
+  totalPrints  Int       @default(0)
+  lastReloadAt DateTime?
+  notes        String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  events Event[]
+  events    Event[]
   movements PrinterPaperMovement[]
 }
 
 model PrinterPaperMovement {
-  id          String   @id @default(uuid())
-  printerId   String
-  eventId     String?
-  quantity    Int
+  id           String   @id @default(uuid())
+  printerId    String
+  eventId      String?
+  quantity     Int
   movementType String
-  note        String?
-  createdAt   DateTime @default(now())
+  note         String?
+  createdAt    DateTime @default(now())
 
   printer Printer @relation(fields: [printerId], references: [id], onDelete: Cascade)
 }
 
-
 model AssistanceVideo {
-  id String @id @default(uuid())
-  title String
-  url String
-  active Boolean @default(true)
-  sortOrder Int @default(0)
+  id        String   @id @default(uuid())
+  title     String
+  url       String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model AppSetting {
-  key String @id
-  value String @db.Text
+  key       String   @id
+  value     String   @db.Text
   updatedAt DateTime @updatedAt
 }
 
-
 model MemoryMedia {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   eventId      String
-  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   fileName     String
   originalName String
   mimeType     String
   sizeBytes    Int
   mediaType    String
-  status       String   @default("VISIBLE")
-  source       String   @default("PORTAL")
+  status       String    @default("VISIBLE")
+  source       String    @default("PORTAL")
   deletedAt    DateTime?
-  uploadedBy   String   @default("GUEST")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  uploadedBy   String    @default("GUEST")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([eventId, status])
 }

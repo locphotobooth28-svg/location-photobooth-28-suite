@@ -160,6 +160,24 @@ async function findMaterialConflicts({
   const blocking=materials.filter(m=>m.blocksPlanning);
   if(blocking.length===0) return [];
 
+  const unavailabilities = await prisma.materialUnavailability.findMany({
+  where:{
+    materialId:{
+      in:blocking.map(m=>m.id)
+    },
+    status:"ACTIVE",
+    startAt:{
+      lte:requestedRange.end
+    },
+    endAt:{
+      gte:requestedRange.start
+    }
+  },
+  orderBy:{
+    startAt:"asc"
+  }
+});
+
   const candidates=await prisma.event.findMany({
     where:{
       archived:false,
@@ -175,6 +193,9 @@ async function findMaterialConflicts({
     const requestedQty=requestedQuantityForMaterial(material.name,sceneJets);
     let alreadyReserved=0;
     const reservations=[];
+    const materialUnavailabilities = unavailabilities.filter(
+  u=>u.materialId===material.id
+);
 
     for(const event of candidates){
       const range=eventRangeFromRecord(event);
@@ -502,6 +523,222 @@ app.get("/api/materials", adminOnly, async (req, res) => {
     orderBy: [{ category: "asc" }, { name: "asc" }]
   });
   res.json({ materials });
+});
+
+const MATERIAL_UNAVAILABILITY_REASONS = [
+  "MAINTENANCE",
+  "REPAIR",
+  "BREAKDOWN",
+  "CHECK",
+  "CLEANING",
+  "VACATION",
+  "LOAN",
+  "WAITING_PART",
+  "OTHER"
+];
+
+app.get("/api/materials/:id/unavailabilities", adminOnly, async (req, res) => {
+  const material = await prisma.material.findUnique({
+    where: { id: req.params.id }
+  });
+
+  if (!material) {
+    return res.status(404).json({
+      ok: false,
+      message: "Matériel introuvable."
+    });
+  }
+
+  const items = await prisma.materialUnavailability.findMany({
+    where: {
+      materialId: material.id
+    },
+    orderBy: {
+      startAt: "desc"
+    }
+  });
+
+  res.json({
+    ok: true,
+    material,
+    unavailabilities: items
+  });
+});
+
+app.post("/api/materials/:id/unavailabilities", adminOnly, async (req, res) => {
+  const material = await prisma.material.findUnique({
+    where: { id: req.params.id }
+  });
+
+  if (!material) {
+    return res.status(404).json({
+      ok: false,
+      message: "Matériel introuvable."
+    });
+  }
+
+  const {
+    startAt,
+    endAt,
+    reason,
+    notes
+  } = req.body || {};
+
+  if (!startAt || !endAt) {
+    return res.status(400).json({
+      ok: false,
+      message: "La date de début et la date de fin sont obligatoires."
+    });
+  }
+
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime())
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: "Période d'indisponibilité invalide."
+    });
+  }
+
+  if (end < start) {
+    return res.status(400).json({
+      ok: false,
+      message: "La date de fin doit être postérieure à la date de début."
+    });
+  }
+
+  if (!MATERIAL_UNAVAILABILITY_REASONS.includes(reason)) {
+    return res.status(400).json({
+      ok: false,
+      message: "Motif d'indisponibilité invalide."
+    });
+  }
+
+  if (
+    reason === "OTHER" &&
+    !String(notes || "").trim()
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: "Un commentaire est obligatoire pour le motif Autre."
+    });
+  }
+
+  const conflicts = await prisma.event.findMany({
+    where: {
+      archived: false,
+      materials: {
+        some: {
+          materialId: material.id
+        }
+      }
+    },
+    include: {
+      materials: true
+    },
+    orderBy: {
+      eventDate: "asc"
+    }
+  });
+
+  const conflictingEvents = conflicts.filter(event => {
+    const range = eventRangeFromRecord(event);
+
+    return rangesOverlap(
+      start,
+      end,
+      range.start,
+      range.end
+    );
+  });
+
+  const item = await prisma.materialUnavailability.create({
+    data: {
+      materialId: material.id,
+      startAt: start,
+      endAt: end,
+      reason,
+      notes: String(notes || "").trim() || null,
+      status: "ACTIVE"
+    }
+  });
+
+  res.json({
+    ok: true,
+    unavailability: item,
+    conflicts: conflictingEvents.map(event => ({
+      id: event.id,
+      name: event.name,
+      eventDate: event.eventDate
+    }))
+  });
+});
+
+app.patch("/api/material-unavailabilities/:id", adminOnly, async (req, res) => {
+  const current = await prisma.materialUnavailability.findUnique({
+    where: {
+      id: req.params.id
+    }
+  });
+
+  if (!current) {
+    return res.status(404).json({
+      ok: false,
+      message: "Indisponibilité introuvable."
+    });
+  }
+
+  const status = String(req.body?.status || "").trim();
+
+  if (!["ACTIVE", "COMPLETED", "CANCELLED"].includes(status)) {
+    return res.status(400).json({
+      ok: false,
+      message: "Statut invalide."
+    });
+  }
+
+  const updated = await prisma.materialUnavailability.update({
+    where: {
+      id: current.id
+    },
+    data: {
+      status
+    }
+  });
+
+  res.json({
+    ok: true,
+    unavailability: updated
+  });
+});
+
+app.delete("/api/material-unavailabilities/:id", adminOnly, async (req, res) => {
+  const current = await prisma.materialUnavailability.findUnique({
+    where: {
+      id: req.params.id
+    }
+  });
+
+  if (!current) {
+    return res.status(404).json({
+      ok: false,
+      message: "Indisponibilité introuvable."
+    });
+  }
+
+  await prisma.materialUnavailability.delete({
+    where: {
+      id: current.id
+    }
+  });
+
+  res.json({
+    ok: true
+  });
 });
 
 app.get("/api/consumables", adminOnly, async (req, res) => {
