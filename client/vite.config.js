@@ -7,10 +7,19 @@ export default defineConfig({
   root: "client",
   plugins: [
     react(),
-    VitePWA({
-      registerType: "autoUpdate",
-      includeAssets: ["logo.jpg"],
-      manifest: {
+VitePWA({
+  registerType: "autoUpdate",
+  includeAssets: ["logo.jpg"],
+
+  workbox: {
+    navigateFallback: "index.html",
+    navigateFallbackDenylist: [
+      /^\/api\//,
+      /^\/auth\//
+    ]
+  },
+
+  manifest: {
         name: "Location Photobooth 28 Suite",
         short_name: "LP28 Suite",
         description: "Espace événementiel Location Photobooth 28",
