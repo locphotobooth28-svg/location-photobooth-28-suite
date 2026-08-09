@@ -132,16 +132,16 @@ function EventForm({event,onClose,onSaved}) {
         if (d.error === "material_conflict" && d.conflicts?.length) {
 
   const reasonLabels = {
-    MAINTENANCE: "Maintenance",
-    REPAIR: "Réparation",
-    BREAKDOWN: "Panne",
-    CHECK: "Contrôle / vérification",
-    CLEANING: "Nettoyage / entretien",
-    VACATION: "Vacances / indisponibilité",
-    LOAN: "Matériel prêté / hors site",
-    WAITING_PART: "En attente de pièce",
-    OTHER: "Autre"
-  };
+  MAINTENANCE: "Maintenance",
+  REPAIR: "Réparation",
+  BREAKDOWN: "Panne",
+  CHECK: "Contrôle / vérification",
+  CLEANING: "Nettoyage / entretien",
+  VACATION: "Vacances / indisponibilité",
+  LOAN: "Matériel prêté / hors site",
+  WAITING_PART: "En attente de pièce",
+  OTHER: "Autre"
+};
 
   const formatDate = value => {
     if(!value) return "?";
@@ -891,10 +891,54 @@ function MaterialPlanning({onOpenEvent}) {
           {materials.map(material=><tr key={material.id}>
             <th>{material.name}</th>
             {dates.map(date=>{
-              const matches=(data.events||[]).filter(e=>e.materials?.includes(material.name)&&eventUsesDate(e,date));
-              return <td key={date} className={matches.length?"busy-cell":"free-cell"}>
-                {matches.length ? matches.map(e=><button key={e.id} onClick={()=>onOpenEvent(e)} className="resource-event">❌ {e.name}</button>) : <span>✅ Libre</span>}
-              </td>
+              const matches=(data.events||[]).filter(
+  e=>e.materials?.includes(material.name)&&eventUsesDate(e,date)
+);
+
+const unavailable=(data.unavailabilities||[]).filter(u=>{
+  if(u.materialId!==material.id) return false;
+
+  const startD=new Date(u.startAt);
+  const endD=new Date(u.endAt);
+
+  const cellStart=new Date(`${date}T00:00:00`);
+  const cellEnd=new Date(`${date}T23:59:59`);
+
+  return startD<=cellEnd && endD>=cellStart;
+});
+              return (
+  <td
+    key={date}
+    className={
+      unavailable.length
+        ? "busy-cell"
+        : matches.length
+          ? "busy-cell"
+          : "free-cell"
+    }
+  >
+    {unavailable.length ? (
+      unavailable.map(u=>(
+        <div key={u.id} className="resource-event">
+          🔴 {reasonLabels[u.reason] || u.reason}
+          {u.notes ? ` · ${u.notes}` : ""}
+        </div>
+      ))
+    ) : matches.length ? (
+      matches.map(e=>(
+        <button
+          key={e.id}
+          onClick={()=>onOpenEvent(e)}
+          className="resource-event"
+        >
+          ❌ {e.name}
+        </button>
+      ))
+    ) : (
+      <span>✅ Libre</span>
+    )}
+  </td>
+);
             })}
           </tr>)}
         </tbody>

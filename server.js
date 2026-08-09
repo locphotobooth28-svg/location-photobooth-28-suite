@@ -544,6 +544,19 @@ app.get("/api/materials", adminOnly, async (req, res) => {
     where: { active: true, bookingVisible: true },
     orderBy: [{ category: "asc" }, { name: "asc" }]
   });
+  const unavailabilities = await prisma.materialUnavailability.findMany({
+  where: {
+    status: "ACTIVE",
+    startAt: { lt: end },
+    endAt: { gte: start }
+  },
+  include: {
+    material: true
+  },
+  orderBy: {
+    startAt: "asc"
+  }
+});
   res.json({ materials });
 });
 
@@ -1168,6 +1181,7 @@ app.get("/api/material-planning", adminOnly, async (req, res) => {
     start: start.toISOString().slice(0,10),
     days,
     materials,
+    unavailabilities,
     events: relevantEvents.map(event => ({
       id: event.id,
       name: event.name,
