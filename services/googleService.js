@@ -150,13 +150,7 @@ async function callback(req, code) {
 
   console.log("GOOGLE CALLBACK: saveTokens terminé");
 
-  return { email };  try{
-    const oauth2=google.oauth2({version:"v2",auth:client});
-    const me=await oauth2.userinfo.get();
-    email=me.data.email||null;
-  }catch{}
-  await saveTokens(tokens,{googleEmail:email,scopes:SCOPES.join(" ")});
-  return {email};
+  return { email };
 }
 
 async function disconnect(){
