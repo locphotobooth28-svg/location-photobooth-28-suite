@@ -110,12 +110,47 @@ function authUrl(req){
   });
 }
 
-async function callback(req,code){
-  const client=oauthClient(req);
-  const {tokens}=await client.getToken(code);
+async function callback(req, code) {
+  console.log("GOOGLE CALLBACK: début");
+
+  const client = oauthClient(req);
+
+  console.log("GOOGLE CALLBACK: récupération tokens");
+  const { tokens } = await client.getToken(code);
+
+  console.log("GOOGLE CALLBACK: tokens reçus", {
+    access_token: Boolean(tokens.access_token),
+    refresh_token: Boolean(tokens.refresh_token)
+  });
+
   client.setCredentials(tokens);
-  let email=null;
-  try{
+
+  let email = null;
+
+  try {
+    const oauth2 = google.oauth2({
+      version: "v2",
+      auth: client
+    });
+
+    const me = await oauth2.userinfo.get();
+    email = me.data.email || null;
+
+    console.log("GOOGLE CALLBACK: email =", email);
+  } catch (err) {
+    console.error("GOOGLE CALLBACK: userinfo erreur =", err.message);
+  }
+
+  console.log("GOOGLE CALLBACK: avant saveTokens");
+
+  await saveTokens(tokens, {
+    googleEmail: email,
+    scopes: SCOPES.join(" ")
+  });
+
+  console.log("GOOGLE CALLBACK: saveTokens terminé");
+
+  return { email };  try{
     const oauth2=google.oauth2({version:"v2",auth:client});
     const me=await oauth2.userinfo.get();
     email=me.data.email||null;
