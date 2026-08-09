@@ -319,10 +319,24 @@ app.get("/api/google/status", adminOnly, async (req, res) => {
 
 app.get("/auth/google/start", adminOnly, (req, res) => {
   try {
-    res.redirect(googleService.authUrl(req));
+    console.log("GOOGLE START: route appelée");
+
+    const url = googleService.authUrl(req);
+
+    console.log("GOOGLE START: URL générée =", url.substring(0, 120));
+
+    req.session.save(err => {
+      if (err) {
+        console.error("GOOGLE START: erreur session =", err);
+        return res.status(500).send("Erreur session Google.");
+      }
+
+      console.log("GOOGLE START: session sauvegardée, redirection");
+      res.redirect(url);
+    });
   } catch (err) {
     console.error("OAuth Google :", err);
-    res.status(500).send(`Configuration Google incomplÃ¨te : ${err.message}`);
+    res.status(500).send(`Configuration Google incomplète : ${err.message}`);
   }
 });
 
