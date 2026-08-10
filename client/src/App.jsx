@@ -3278,10 +3278,39 @@ function CollaboratorPortalPage({token}) {
           )}
 
           {m.address && (
-            <p>
-              📍 {m.address}
-            </p>
-          )}
+  <div style={{marginTop:12}}>
+    <p>
+      📍 {m.address}
+    </p>
+
+    <div
+      style={{
+        display:"flex",
+        gap:8,
+        flexWrap:"wrap",
+        marginTop:8
+      }}
+    >
+      <a
+        className="primary"
+        href={`https://waze.com/ul?q=${encodeURIComponent(m.address)}&navigate=yes`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🚗 Waze
+      </a>
+
+      <a
+        className="primary"
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.address)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🗺️ Google Maps
+      </a>
+    </div>
+  </div>
+)}
         </section>
 
         {m.materials?.length>0 && (
