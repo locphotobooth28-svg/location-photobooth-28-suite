@@ -1021,10 +1021,75 @@ app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
 // SIGNATURE ELECTRONIQUE DES CONTRATS
 // ======================================================
 
-function contractHash(pdf) {
+function contractHash(event) {
+  const contractData = {
+    name: event.name || null,
+    type: event.type || null,
+
+    eventDate: event.eventDate
+      ? new Date(event.eventDate).toISOString()
+      : null,
+
+    installTime: event.installTime || null,
+
+    pickupDate: event.pickupDate
+      ? new Date(event.pickupDate).toISOString()
+      : null,
+
+    pickupTime: event.pickupTime || null,
+    address: event.address || null,
+
+    organizerName: event.organizerName || null,
+    organizerEmail: event.organizerEmail || null,
+    organizerPhone: event.organizerPhone || null,
+
+    totalPrice:
+      event.totalPrice != null
+        ? String(event.totalPrice)
+        : null,
+
+    deposit:
+      event.deposit != null
+        ? String(event.deposit)
+        : null,
+
+    balance:
+      event.balance != null
+        ? String(event.balance)
+        : null,
+
+    balancePaid: Boolean(event.balancePaid),
+
+    customPrintCount: event.customPrintCount || null,
+
+    customPrintPrice:
+      event.customPrintPrice != null
+        ? String(event.customPrintPrice)
+        : null,
+
+    client: event.client
+      ? {
+          firstName: event.client.firstName || null,
+          lastName: event.client.lastName || null,
+          address: event.client.address || null,
+          phone: event.client.phone || null,
+          email: event.client.email || null
+        }
+      : null,
+
+    materials: (event.materials || [])
+      .map(x => ({
+        name: x.material?.name || x.name || null,
+        quantity: x.quantity || 1
+      }))
+      .sort((a,b)=>
+        String(a.name).localeCompare(String(b.name))
+      )
+  };
+
   return crypto
     .createHash("sha256")
-    .update(pdf)
+    .update(JSON.stringify(contractData))
     .digest("hex");
 }
 
@@ -1056,6 +1121,22 @@ app.post("/api/events/:id/contract-signature-link", adminOnly, async (req, res) 
 
     // Un contrat déjà signé ne doit pas être remplacé silencieusement
     if (event.contractStatus === "SIGNED") {
+      const currentHash = contractHash(event);
+
+if (
+  event.contractStatus === "SENT" &&
+  event.contractToken &&
+  event.contractDocumentHash === currentHash
+) {
+  return res.json({
+    ok: true,
+    status: event.contractStatus,
+    signatureUrl:
+      `${appBaseUrl(req)}/signature/${event.contractToken}`,
+    generatedAt: event.contractGeneratedAt,
+    reused: true
+  });
+}
       return res.status(409).json({
         ok: false,
         message: "Ce contrat est déjà signé."
@@ -1063,7 +1144,7 @@ app.post("/api/events/:id/contract-signature-link", adminOnly, async (req, res) 
     }
 
     const pdf = await contractService.generateContractPdf(event);
-    const hash = contractHash(pdf);
+    const hash = contractHash(event);
 
     const token =
       event.contractToken ||
@@ -1210,7 +1291,7 @@ app.get("/api/contract-signature/:token/contract.pdf", async (req, res) => {
     }
 
     const pdf = await contractService.generateContractPdf(event);
-    const currentHash = contractHash(pdf);
+    const currentHash = contractHash(event);
 
     // Le contrat a été modifié après création du lien.
     if (
@@ -1312,8 +1393,7 @@ app.post("/api/contract-signature/:token/sign", async (req, res) => {
       });
     }
 
-    const pdf = await contractService.generateContractPdf(event);
-    const currentHash = contractHash(pdf);
+    const hash = contractHash(event);
 
     if (
       !event.contractDocumentHash ||
