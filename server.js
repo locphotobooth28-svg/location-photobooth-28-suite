@@ -2053,11 +2053,11 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
       }
     },
 
-    actions: {
-      orderBy: {
-        createdAt: "desc"
-      }
-    }
+    collaboratorActions: {
+  orderBy: {
+    createdAt: "desc"
+  }
+}
   }
 }
     }
@@ -2140,7 +2140,7 @@ try {
         }
       : null,
 
-actions: (event.actions || []).map(a => ({
+actions: (event.collaboratorActions || []).map(a => ({
   action: a.action,
   createdAt: a.createdAt
 })),
