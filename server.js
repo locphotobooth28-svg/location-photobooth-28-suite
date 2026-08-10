@@ -1170,7 +1170,19 @@ app.get("/api/material-planning", adminOnly, async (req, res) => {
     where: { active: true },
     orderBy: [{ category: "asc" }, { name: "asc" }]
   });
-
+const unavailabilities = await prisma.materialUnavailability.findMany({
+  where: {
+    status: "ACTIVE",
+    startAt: { lt: end },
+    endAt: { gte: start }
+  },
+  include: {
+    material: true
+  },
+  orderBy: {
+    startAt: "asc"
+  }
+});
   const relevantEvents = events.filter(event => {
     const range = eventRangeFromRecord(event);
     return range.end >= start && range.start < end;
