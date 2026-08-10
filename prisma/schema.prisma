@@ -93,8 +93,9 @@ model Event {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  materials EventMaterial[]
-  memories  MemoryMedia[]
+  materials            EventMaterial[]
+  memories             MemoryMedia[]
+  collaboratorAccesses CollaboratorAccess[]
 }
 
 enum EventStatus {
@@ -295,6 +296,38 @@ model Collaborator {
   installEvents     Event[] @relation("EventInstaller")
   pickupEvents      Event[] @relation("EventPickup")
 
+  accesses CollaboratorAccess[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CollaboratorAccess {
+  id             String @id @default(uuid())
+  eventId        String
+  collaboratorId String
+
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  collaborator Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+
+  token  String  @unique
+  active Boolean @default(true)
+
+  canSeeClient       Boolean @default(true)
+  canSeeContract     Boolean @default(true)
+  canSeeInvoice      Boolean @default(false)
+  canSeeBalance      Boolean @default(true)
+  canManageCaution   Boolean @default(true)
+  canSeeInstructions Boolean @default(true)
+
+  missionNotes       String?
+  collaboratorReport String?
+  status             String  @default("ASSIGNED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, collaboratorId])
+  @@index([eventId])
+  @@index([collaboratorId])
 }

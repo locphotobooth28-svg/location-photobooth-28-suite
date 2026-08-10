@@ -2534,11 +2534,241 @@ function Dashboard({onLogout}) {
 {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
 </div>;
 }
+function CollaboratorPortalPage({token}) {
+  const [data,setData]=useState(null);
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    fetch(`/api/collaborator-portal/${encodeURIComponent(token)}`)
+      .then(async r=>{
+        const d=await r.json();
+
+        if(!r.ok){
+          throw new Error(d.message||"Accès impossible.");
+        }
+
+        return d;
+      })
+      .then(setData)
+      .catch(err=>setError(err.message));
+  },[token]);
+
+  if(error){
+    return (
+      <div className="portal-page">
+        <div className="portal-card">
+          <div className="eyebrow">LOCATION PHOTOBOOTH 28</div>
+          <h1>🔐 Accès indisponible</h1>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if(!data){
+    return <div className="loading">Chargement de la prestation…</div>;
+  }
+
+  const c=data.collaborator;
+  const m=data.mission;
+
+  const date=m.date
+    ? new Date(m.date+"T12:00:00").toLocaleDateString(
+        "fr-FR",
+        {
+          weekday:"long",
+          day:"numeric",
+          month:"long",
+          year:"numeric"
+        }
+      )
+    : "";
+
+  const pickupDate=m.pickupDate
+    ? new Date(m.pickupDate+"T12:00:00").toLocaleDateString(
+        "fr-FR",
+        {
+          weekday:"long",
+          day:"numeric",
+          month:"long",
+          year:"numeric"
+        }
+      )
+    : null;
+
+  return (
+    <div className="portal-page">
+      <div className="portal-card">
+
+        <div className="eyebrow">LOCATION PHOTOBOOTH 28</div>
+
+        <h1>Bonjour {c.firstName} 👋</h1>
+
+        <div className="portal-role">
+          👷 Espace collaborateur
+        </div>
+
+        <section className="portal-section">
+          <h2>📸 Ta prestation</h2>
+
+          <h3>{m.name}</h3>
+
+          {m.type && <p><strong>Type :</strong> {m.type}</p>}
+
+          <p>
+            📅 <strong>{date}</strong>
+          </p>
+
+          {m.installTime && (
+            <p>
+              🚚 Installation : <strong>{m.installTime}</strong>
+            </p>
+          )}
+
+          {pickupDate && (
+            <p>
+              ↩️ Reprise : <strong>{pickupDate}</strong>
+              {m.pickupTime ? ` à ${m.pickupTime}` : ""}
+            </p>
+          )}
+
+          {m.address && (
+            <p>
+              📍 {m.address}
+            </p>
+          )}
+        </section>
+
+        {m.materials?.length>0 && (
+          <section className="portal-section">
+            <h2>📦 Matériel</h2>
+
+            {m.materials.map((material,index)=>(
+              <p key={index}>
+                ✓ {material.name}
+                {material.quantity>1
+                  ? ` × ${material.quantity}`
+                  : ""}
+              </p>
+            ))}
+          </section>
+        )}
+
+        {data.client && (
+          <section className="portal-section">
+            <h2>👤 Contact client</h2>
+
+            {data.client.name && (
+              <p><strong>{data.client.name}</strong></p>
+            )}
+
+            {data.client.phone && (
+              <p>
+                📞{" "}
+                <a href={`tel:${data.client.phone}`}>
+                  {data.client.phone}
+                </a>
+              </p>
+            )}
+
+            {data.client.email && (
+              <p>
+                ✉️{" "}
+                <a href={`mailto:${data.client.email}`}>
+                  {data.client.email}
+                </a>
+              </p>
+            )}
+          </section>
+        )}
+
+        {data.permissions.balance && (
+          <section className="portal-section">
+            <h2>💶 Règlement</h2>
+
+            <p>
+              Reste à régler :{" "}
+              <strong>
+                {data.balance!=null
+                  ? `${data.balance} €`
+                  : "Non renseigné"}
+              </strong>
+            </p>
+          </section>
+        )}
+
+        {data.caution && (
+          <section className="portal-section">
+            <h2>🛡️ Caution</h2>
+
+            <p>
+              Caution récupérée :{" "}
+              <strong>
+                {data.caution.received ? "✅ Oui" : "❌ Non"}
+              </strong>
+            </p>
+
+            <p>
+              Caution rendue :{" "}
+              <strong>
+                {data.caution.returned ? "✅ Oui" : "❌ Non"}
+              </strong>
+            </p>
+          </section>
+        )}
+
+        {data.instructions && (
+          <section className="portal-section">
+            <h2>📝 Consignes</h2>
+            <p>{data.instructions}</p>
+          </section>
+        )}
+
+        {(data.permissions.contract || data.permissions.invoice) && (
+          <section className="portal-section">
+            <h2>📄 Documents</h2>
+
+            {data.permissions.contract && (
+              <p>📑 Contrat autorisé</p>
+            )}
+
+            {data.permissions.invoice && (
+              <p>🧾 Facture autorisée</p>
+            )}
+          </section>
+        )}
+
+        <section className="portal-section">
+          <p className="muted">
+            🔐 Cet espace est personnel et réservé au collaborateur affecté à cette prestation.
+          </p>
+        </section>
+
+      </div>
+    </div>
+  );
+}
 
 export default function App(){
   const path=window.location.pathname;
-  const portalMatch=path.match(/^\/(?:invites|organisateur)\/[^/]+\/([^/]+)$/);
-  if(portalMatch)return <PortalPage token={portalMatch[1]}/>;
+
+  const collaboratorMatch=
+    path.match(/^\/collaborateur\/([^/]+)$/);
+
+  if(collaboratorMatch){
+    return (
+      <CollaboratorPortalPage
+        token={collaboratorMatch[1]}
+      />
+    );
+  }
+
+  const portalMatch=
+    path.match(/^\/(?:invites|organisateur)\/[^/]+\/([^/]+)$/);
+
+  if(portalMatch){
+    return <PortalPage token={portalMatch[1]}/>;
+  }
 
   const [loading,setLoading]=useState(true),[auth,setAuth]=useState(false);
   useEffect(()=>{fetch("/api/session").then(r=>r.json()).then(d=>setAuth(!!d.authenticated)).finally(()=>setLoading(false))},[]);
