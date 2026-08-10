@@ -1930,6 +1930,22 @@ function AdminGalleries(){
 function CollaboratorsPanel(){
   const [collaborators,setCollaborators]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [editing,setEditing]=useState(null);
+
+  const emptyForm={
+    firstName:"",
+    lastName:"",
+    phone:"",
+    email:"",
+    active:true,
+    isDefault:false,
+    canManage:true,
+    canInstall:true,
+    canPickup:true
+  };
+
+  const [form,setForm]=useState(emptyForm);
 
   async function load(){
     try{
@@ -1956,10 +1972,73 @@ function CollaboratorsPanel(){
     load();
   },[]);
 
+  function resetForm(){
+    setEditing(null);
+    setForm(emptyForm);
+  }
+
+  function editCollaborator(c){
+    setEditing(c);
+
+    setForm({
+      firstName:c.firstName||"",
+      lastName:c.lastName||"",
+      phone:c.phone||"",
+      email:c.email||"",
+      active:c.active!==false,
+      isDefault:Boolean(c.isDefault),
+      canManage:c.canManage!==false,
+      canInstall:c.canInstall!==false,
+      canPickup:c.canPickup!==false
+    });
+  }
+
+  async function saveCollaborator(){
+    if(!form.firstName.trim()){
+      return alert("Le prénom est obligatoire.");
+    }
+
+    setBusy(true);
+
+    try{
+      const r=await fetch(
+        editing
+          ? `/api/collaborators/${editing.id}`
+          : "/api/collaborators",
+        {
+          method:editing ? "PATCH" : "POST",
+          credentials:"include",
+          headers:{
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify(form)
+        }
+      );
+
+      const d=await r.json();
+
+      if(!r.ok){
+        return alert(
+          d.message||
+          "Impossible d'enregistrer le collaborateur."
+        );
+      }
+
+      resetForm();
+      await load();
+
+    }catch(e){
+      console.error(e);
+      alert("Impossible de joindre le serveur.");
+    }finally{
+      setBusy(false);
+    }
+  }
+
   if(loading){
     return (
       <div className="empty-state">
-        <span>??</span>
+        <span>👷</span>
         <p>Chargement des collaborateurs...</p>
       </div>
     );
@@ -1969,34 +2048,258 @@ function CollaboratorsPanel(){
     <section>
       <div className="calendar-toolbar">
         <div>
-          <div className="eyebrow">GESTION DE L'�QUIPE</div>
-          <h2>?? Collaborateurs</h2>
+          <div className="eyebrow">
+            GESTION DE L'ÉQUIPE
+          </div>
+
+          <h2>👷 Collaborateurs</h2>
+
           <p className="muted">
-            G�re les personnes qui peuvent assurer les prestations,
-            installations et r�cup�rations.
+            Gère les personnes qui peuvent assurer les prestations,
+            installations et récupérations.
           </p>
         </div>
       </div>
 
-      <div className="events-list">
-        {collaborators.map(c=>(
-          <article className="event-card" key={c.id}>
-            <div className="event-main">
-              <h3>?? {c.firstName} {c.lastName||""}</h3>
+      <div className="panel">
+        <h3>
+          {editing
+            ? `✏️ Modifier ${editing.firstName}`
+            : "＋ Ajouter un collaborateur"}
+        </h3>
 
-              {c.isDefault && (
-                <span className="booking-status status-confirmed">
-                  ? Par d�faut
-                </span>
-              )}
+        <div className="form-grid">
+
+          <div>
+            <label>Prénom *</label>
+            <input
+              value={form.firstName}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  firstName:e.target.value
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label>Nom</label>
+            <input
+              value={form.lastName}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  lastName:e.target.value
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label>Téléphone</label>
+            <input
+              value={form.phone}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  phone:e.target.value
+                }))
+              }
+              placeholder="06 ..."
+            />
+          </div>
+
+          <div>
+            <label>E-mail</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  email:e.target.value
+                }))
+              }
+            />
+          </div>
+
+        </div>
+
+        <div className="check-grid">
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.canManage}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  canManage:e.target.checked
+                }))
+              }
+            />
+            ✅ Peut gérer la prestation
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.canInstall}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  canInstall:e.target.checked
+                }))
+              }
+            />
+            🚚 Peut installer
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.canPickup}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  canPickup:e.target.checked
+                }))
+              }
+            />
+            ↩️ Peut récupérer
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.active}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  active:e.target.checked
+                }))
+              }
+            />
+            🟢 Collaborateur actif
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.isDefault}
+              onChange={e=>
+                setForm(v=>({
+                  ...v,
+                  isDefault:e.target.checked
+                }))
+              }
+            />
+            ⭐ Collaborateur par défaut
+          </label>
+
+        </div>
+
+        <div className="google-actions">
+
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={saveCollaborator}
+          >
+            {busy
+              ? "Enregistrement..."
+              : editing
+                ? "Enregistrer les modifications"
+                : "Ajouter le collaborateur"}
+          </button>
+
+          {editing && (
+            <button
+              className="secondary-btn"
+              onClick={resetForm}
+            >
+              Annuler
+            </button>
+          )}
+
+        </div>
+      </div>
+
+      <h3>👥 Équipe</h3>
+
+      <div className="events-list">
+
+        {collaborators.map(c=>(
+          <article
+            className="event-card"
+            key={c.id}
+          >
+            <div className="event-main">
+
+              <div className="event-title-row">
+
+                <h3>
+                  👤 {c.firstName} {c.lastName||""}
+                </h3>
+
+                {c.isDefault && (
+                  <span className="booking-status status-confirmed">
+                    ⭐ Par défaut
+                  </span>
+                )}
+
+              </div>
 
               <div className="event-meta">
-                {c.phone && <span>?? {c.phone}</span>}
-                {c.email && <span>?? {c.email}</span>}
+
+                {c.phone && (
+                  <span>📞 {c.phone}</span>
+                )}
+
+                {c.email && (
+                  <span>✉️ {c.email}</span>
+                )}
+
               </div>
+
+              <div className="event-meta">
+
+                {c.canManage && (
+                  <span>✅ Prestation</span>
+                )}
+
+                {c.canInstall && (
+                  <span>🚚 Installation</span>
+                )}
+
+                {c.canPickup && (
+                  <span>↩️ Récupération</span>
+                )}
+
+              </div>
+
+              <div className="event-actions">
+
+                <button
+                  onClick={()=>editCollaborator(c)}
+                >
+                  ✏️ Modifier
+                </button>
+
+              </div>
+
             </div>
           </article>
         ))}
+
+        {!collaborators.length && (
+          <div className="empty-state">
+            <span>👷</span>
+            <p>Aucun collaborateur.</p>
+          </div>
+        )}
+
       </div>
     </section>
   );
