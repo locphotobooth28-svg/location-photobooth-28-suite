@@ -864,14 +864,14 @@ app.get("/api/events", adminOnly, async (req, res) => {
     }
   },
 
-  actions: {
-    include: {
-      collaborator: true
-    },
-    orderBy: {
-      createdAt: "desc"
-    }
+  collaboratorActions: {
+  include: {
+    collaborator: true
+  },
+  orderBy: {
+    createdAt: "desc"
   }
+}
 },
     orderBy: { eventDate: "desc" }
   });
@@ -915,7 +915,7 @@ customPrintPrice:
 installerCollaboratorId: e.installerCollaboratorId,
 pickupCollaboratorId: e.pickupCollaboratorId,
 
-collaboratorActions: (e.actions || []).map(a => ({
+collaboratorActions: (e.collaboratorActions || []).map(a => ({
   id: a.id,
   action: a.action,
   createdAt: a.createdAt,
