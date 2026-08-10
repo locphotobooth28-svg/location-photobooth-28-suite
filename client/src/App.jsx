@@ -961,6 +961,18 @@ function MaterialPlanning({onOpenEvent}) {
 
   const materials=(data.materials||[]).filter(m=>m.category!=="Impressions");
 
+  const reasonLabels = {
+  MAINTENANCE: "Maintenance",
+  REPAIR: "Réparation",
+  BREAKDOWN: "Panne",
+  CHECK: "Contrôle / vérification",
+  CLEANING: "Nettoyage / entretien",
+  VACATION: "Vacances / indisponibilité",
+  LOAN: "Matériel prêté / hors site",
+  WAITING_PART: "En attente de pièce",
+  OTHER: "Autre"
+};
+
   return <section className="material-planning">
     <div className="calendar-toolbar">
       <div><div className="eyebrow">PLANNING MATÉRIEL</div><h2>Disponibilités</h2></div>
