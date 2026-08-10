@@ -159,9 +159,7 @@ useEffect(()=>{
 
   const set=(key,val)=>setForm(f=>({...f,[key]:val}));
 
-async function searchAddress(value){
-  set("address",value);
-
+  async function searchAddress(value){
   if(value.trim().length < 3){
     setAddressSuggestions([]);
     return;
@@ -170,19 +168,27 @@ async function searchAddress(value){
   setAddressLoading(true);
 
   try{
-    const r=await fetch(
-      `https://data.geopf.fr/geocodage/completion/?text=${encodeURIComponent(value)}&type=StreetAddress&maximumResponses=6`
-    );
+    const url =
+      `https://data.geopf.fr/geocodage/completion/?text=${encodeURIComponent(value)}&type=StreetAddress&maximumResponses=6`;
 
-    const d=await r.json();
+    const r = await fetch(url);
 
-    setAddressSuggestions(
-      Array.isArray(d.results)
-        ? d.results
-        : []
-    );
+    console.log("ADRESSE STATUS =", r.status);
+
+    const d = await r.json();
+
+    console.log("ADRESSE REPONSE =", d);
+
+    const results =
+      Array.isArray(d.results) ? d.results :
+      Array.isArray(d.features) ? d.features :
+      Array.isArray(d) ? d :
+      [];
+
+    setAddressSuggestions(results);
+
   }catch(err){
-    console.error("Recherche adresse :",err);
+    console.error("ERREUR ADRESSE =",err);
     setAddressSuggestions([]);
   }finally{
     setAddressLoading(false);
@@ -574,8 +580,14 @@ Johan — Location Photobooth 28`;
   <input
   value={form.address || ""}
   onChange={e=>{
-  console.log("ADRESSE TAPEE :", e.target.value);
-  setForm(f=>({...f,address:e.target.value}));
+  const value=e.target.value;
+
+  setForm(f=>({
+    ...f,
+    address:value
+  }));
+
+  searchAddress(value);
 }}
   placeholder="Commence à saisir une adresse..."
   autoComplete="off"
