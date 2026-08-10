@@ -58,6 +58,11 @@ model Event {
   balance                 Decimal?      @db.Decimal(10, 2)
   customPrintCount        Int?
   customPrintPrice        Decimal?      @db.Decimal(10, 2)
+  // Remise commerciale sur l'ensemble de la prestation
+  // PERCENT | FIXED
+  globalDiscountType      String?
+  globalDiscountValue     Decimal?      @db.Decimal(10, 2)
+  globalDiscountReason    String?
 
   depositPaid     Boolean @default(false)
   balancePaid     Boolean @default(false)
@@ -117,10 +122,11 @@ model Material {
   active   Boolean @default(true)
 
   // V8 : vraie logique de stock / planning
-  capacity       Int     @default(1)
-  blocksPlanning Boolean @default(true)
-  bookingVisible Boolean @default(true)
-  resourceKind   String  @default("SHARED")
+  capacity       Int      @default(1)
+  blocksPlanning Boolean  @default(true)
+  bookingVisible Boolean  @default(true)
+  resourceKind   String   @default("SHARED")
+  defaultPrice   Decimal? @db.Decimal(10, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -148,9 +154,22 @@ model MaterialUnavailability {
 model EventMaterial {
   eventId    String
   materialId String
-  quantity   Int      @default(1)
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity   Int    @default(1)
+
+  // Prix réellement appliqué lors de cette prestation
+  unitPrice Decimal? @db.Decimal(10, 2)
+
+  // STANDARD | DISCOUNTED | OFFERED | HIDDEN
+  pricingMode String @default("STANDARD")
+
+  // Remise éventuelle sur cette ligne
+  // PERCENT | FIXED
+  discountType   String?
+  discountValue  Decimal? @db.Decimal(10, 2)
+  discountReason String?
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@id([eventId, materialId])
 }
