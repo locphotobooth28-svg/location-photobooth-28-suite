@@ -3606,8 +3606,9 @@ export default function App(){
     );
   }
 
-  const portalMatch=
-    path.match(/^\/(?:invites|organisateur)\/[^/]+\/([^/]+)$/);
+  const portalMatch =
+  path.match(/^\/portal\/([^/]+)$/) ||
+  path.match(/^\/(?:invites|organisateur)\/[^/]+\/([^/]+)$/);
 
   if(portalMatch){
     return <PortalPage token={portalMatch[1]}/>;

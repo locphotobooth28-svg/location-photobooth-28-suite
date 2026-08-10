@@ -1320,8 +1320,10 @@ app.get("/api/events/:id/share", adminOnly, async (req, res) => {
   if (!event) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
 
   const base = appBaseUrl(req);
-  const guestUrl = `${base}/invites/${event.id}/${event.guestToken}`;
-  const organizerUrl = `${base}/organisateur/${event.id}/${event.organizerToken}`;
+
+  const guestUrl = `${base}/portal/${event.guestToken}`;
+  const organizerUrl = `${base}/portal/${event.organizerToken}`;
+  
   const qrDataUrl = await QRCode.toDataURL(guestUrl, { width: 700, margin: 2 });
 
   res.json({ ok: true, guestUrl, organizerUrl, qrDataUrl });
