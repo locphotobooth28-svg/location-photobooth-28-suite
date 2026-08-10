@@ -30,7 +30,12 @@ const MATERIALS = [
 const EMPTY_EVENT = {
   name:"", type:"Mariage", date:"", time:"", pickupDate:"", pickupTime:"", address:"", guestCount:"",
   organizerName:"", organizerPhone:"", organizerEmail:"",
-  materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",
+
+responsibleCollaboratorId:"",
+installerCollaboratorId:"",
+pickupCollaboratorId:"",
+
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",
   payments:{depositPaid:false,balancePaid:false,cautionReceived:false,cautionReturned:false}
 };
 
@@ -63,6 +68,33 @@ function EventForm({event,onClose,onSaved}) {
   const [googleStatus,setGoogleStatus]=useState(null);
   const [googleCalendars,setGoogleCalendars]=useState([]);
 
+  const [collaborators,setCollaborators]=useState([]);
+
+useEffect(()=>{
+  fetch("/api/collaborators",{credentials:"include"})
+    .then(r=>r.json())
+    .then(d=>{
+      const list=d.collaborators||[];
+      setCollaborators(list);
+
+      if(!event){
+        const def=list.find(c=>c.isDefault);
+
+        if(def){
+          setForm(f=>({
+            ...f,
+            responsibleCollaboratorId:
+              f.responsibleCollaboratorId||def.id,
+            installerCollaboratorId:
+              f.installerCollaboratorId||def.id,
+            pickupCollaboratorId:
+              f.pickupCollaboratorId||def.id
+          }));
+        }
+      }
+    })
+    .catch(console.error);
+},[]);
   useEffect(()=>{
     let cancelled=false;
 

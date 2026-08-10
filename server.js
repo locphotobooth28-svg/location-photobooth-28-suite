@@ -866,6 +866,11 @@ app.get("/api/events", adminOnly, async (req, res) => {
       organizerName: e.organizerName,
       organizerPhone: e.organizerPhone,
       organizerEmail: e.organizerEmail,
+
+      responsibleCollaboratorId: e.responsibleCollaboratorId,
+installerCollaboratorId: e.installerCollaboratorId,
+pickupCollaboratorId: e.pickupCollaboratorId,
+
       materials: e.materials.map(x => x.material.name),
       payments: {
         depositPaid: e.depositPaid,
@@ -977,6 +982,14 @@ app.post("/api/events", adminOnly, async (req, res) => {
       organizerName: organizerName || null,
       organizerEmail: String(b.organizerEmail || "").trim() || null,
       organizerPhone: String(b.organizerPhone || "").trim() || null,
+      responsibleCollaboratorId:
+  String(b.responsibleCollaboratorId || "").trim() || null,
+
+installerCollaboratorId:
+  String(b.installerCollaboratorId || "").trim() || null,
+
+pickupCollaboratorId:
+  String(b.pickupCollaboratorId || "").trim() || null,
       bookingStatus: ["QUOTE_DRAFT","QUOTE_SENT","OPTION","CONFIRMED","CANCELLED","DECLINED","COMPLETED"].includes(b.bookingStatus) ? b.bookingStatus : "CONFIRMED",
       optionUntil: b.optionUntil ? new Date(`${b.optionUntil}T12:00:00`) : null,
       sceneJets: b.sceneJets || null,
@@ -1074,6 +1087,14 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
         organizerName: String(b.organizerName || "").trim() || null,
         organizerEmail: String(b.organizerEmail || "").trim() || null,
         organizerPhone: String(b.organizerPhone || "").trim() || null,
+        responsibleCollaboratorId:
+  String(b.responsibleCollaboratorId || "").trim() || null,
+
+installerCollaboratorId:
+  String(b.installerCollaboratorId || "").trim() || null,
+
+pickupCollaboratorId:
+  String(b.pickupCollaboratorId || "").trim() || null,
         bookingStatus: ["QUOTE_DRAFT","QUOTE_SENT","OPTION","CONFIRMED","CANCELLED","DECLINED","COMPLETED"].includes(b.bookingStatus) ? b.bookingStatus : "CONFIRMED",
         optionUntil: b.optionUntil ? new Date(`${b.optionUntil}T12:00:00`) : null,
         sceneJets: b.sceneJets || null,
