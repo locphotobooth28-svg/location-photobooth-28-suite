@@ -68,6 +68,15 @@ function EventForm({event,onClose,onSaved}) {
   const [googleStatus,setGoogleStatus]=useState(null);
   const [googleCalendars,setGoogleCalendars]=useState([]);
 
+const [collaboratorPermissions,setCollaboratorPermissions]=useState({
+  canSeeClient:true,
+  canSeeContract:true,
+  canSeeInvoice:false,
+  canSeeBalance:true,
+  canManageCaution:true,
+  canSeeInstructions:true
+});
+
   const [collaborators,setCollaborators]=useState([]);
 
 useEffect(()=>{
@@ -237,6 +246,149 @@ useEffect(()=>{
       setBusy(false);
     }
   }
+async function sendCollaboratorMission(collaboratorId){
+  if(!event?.id){
+    return alert(
+      "Enregistre d'abord l'événement avant d'envoyer la mission."
+    );
+  }
+
+  const collaborator=collaborators.find(
+    c=>c.id===collaboratorId
+  );
+
+  if(!collaborator){
+    return alert("Collaborateur introuvable.");
+  }
+
+  if(!collaborator.phone){
+    return alert(
+      `${collaborator.firstName} n'a pas de numéro de téléphone renseigné.`
+    );
+  }
+
+  try{
+    const r=await fetch(
+      `/api/events/${event.id}/collaborator-access`,
+      {
+        method:"POST",
+        credentials:"include",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+  collaboratorId,
+
+  canSeeClient:collaboratorPermissions.canSeeClient,
+  canSeeContract:collaboratorPermissions.canSeeContract,
+  canSeeInvoice:collaboratorPermissions.canSeeInvoice,
+  canSeeBalance:collaboratorPermissions.canSeeBalance,
+  canManageCaution:collaboratorPermissions.canManageCaution,
+  canSeeInstructions:collaboratorPermissions.canSeeInstructions,
+
+  missionNotes:form.notes||""
+})
+      }
+    );
+
+    const d=await r.json();
+
+    if(!r.ok){
+      return alert(
+        d.message||
+        "Impossible de créer l'accès collaborateur."
+      );
+    }
+
+    const roles=[];
+
+    if(form.responsibleCollaboratorId===collaboratorId){
+      roles.push("Responsable de la prestation");
+    }
+
+    if(form.installerCollaboratorId===collaboratorId){
+      roles.push("Installation");
+    }
+
+    if(form.pickupCollaboratorId===collaboratorId){
+      roles.push("Récupération");
+    }
+
+    const formattedDate=form.date
+      ? new Date(form.date+"T12:00:00")
+          .toLocaleDateString("fr-FR",{
+            weekday:"long",
+            day:"numeric",
+            month:"long",
+            year:"numeric"
+          })
+      : "";
+
+    let message=
+`Bonjour ${collaborator.firstName} 👋
+
+Une prestation Location Photobooth 28 t'a été attribuée.
+
+📸 ${form.name}
+📅 ${formattedDate}`;
+
+    if(roles.length){
+      message+=`\n👷 Mission : ${roles.join(" / ")}`;
+    }
+
+    if(form.time){
+      message+=`\n🚚 Installation : ${form.time}`;
+    }
+
+    if(form.pickupDate){
+      const pickupDate=new Date(
+        form.pickupDate+"T12:00:00"
+      ).toLocaleDateString("fr-FR");
+
+      message+=`\n↩️ Récupération : ${pickupDate}`;
+
+      if(form.pickupTime){
+        message+=` à ${form.pickupTime}`;
+      }
+    }
+
+    if(form.address){
+      message+=`\n📍 ${form.address}`;
+    }
+
+    if(form.materials?.length){
+      message+=`\n📦 Matériel : ${form.materials.join(", ")}`;
+    }
+
+    message+=`
+
+🔐 Voici ta fiche de prestation :
+${d.accessUrl}
+
+Merci ${collaborator.firstName} 👍
+Johan — Location Photobooth 28`;
+
+    let phone=String(collaborator.phone)
+      .replace(/\D/g,"");
+
+    if(phone.startsWith("0")){
+      phone="33"+phone.substring(1);
+    }
+
+    const whatsapp=
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+    window.open(
+      whatsapp,
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+  }catch(err){
+    console.error(err);
+    alert("Impossible de joindre le serveur.");
+  }
+}
 
   const groups=[...new Set(MATERIALS.map(m=>m.group))];
   return <div className="modal-backdrop"><div className="event-modal">
@@ -317,6 +469,125 @@ useEffect(()=>{
     </select>
   </label>
 </div>
+{event?.id && (
+  <div className="google-actions">
+
+    {[...new Set([
+      form.responsibleCollaboratorId,
+      form.installerCollaboratorId,
+      form.pickupCollaboratorId
+    ].filter(Boolean))].map(collaboratorId=>{
+
+      const c=collaborators.find(
+        x=>x.id===collaboratorId
+      );
+
+      if(!c)return null;
+
+      return (
+        <button
+          key={collaboratorId}
+          type="button"
+          className="primary"
+          onClick={()=>
+            sendCollaboratorMission(collaboratorId)
+          }
+        >
+          📲 Envoyer la mission à {c.firstName}
+        </button>
+      );
+    })}
+
+  </div>
+)}
+{event?.id && (
+  <div className="card" style={{marginTop:16}}>
+    <div className="eyebrow">ACCÈS COLLABORATEUR</div>
+
+    <h3>🔐 Informations autorisées</h3>
+
+    <p className="muted">
+      Choisis ce que le collaborateur pourra consulter
+      dans sa fiche de prestation.
+    </p>
+
+    <div className="check-grid">
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canSeeClient}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canSeeClient:e.target.checked
+          }))}
+        />
+        👤 Coordonnées du client
+      </label>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canSeeContract}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canSeeContract:e.target.checked
+          }))}
+        />
+        📑 Contrat
+      </label>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canSeeInvoice}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canSeeInvoice:e.target.checked
+          }))}
+        />
+        🧾 Facture
+      </label>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canSeeBalance}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canSeeBalance:e.target.checked
+          }))}
+        />
+        💶 Reste à régler
+      </label>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canManageCaution}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canManageCaution:e.target.checked
+          }))}
+        />
+        🛡️ Gestion de la caution
+      </label>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={collaboratorPermissions.canSeeInstructions}
+          onChange={e=>setCollaboratorPermissions(p=>({
+            ...p,
+            canSeeInstructions:e.target.checked
+          }))}
+        />
+        📝 Consignes de prestation
+      </label>
+
+    </div>
+  </div>
+)}
       {googleStatus?.connected && (
         <>
           <h3>Google Agenda</h3>
