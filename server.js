@@ -846,9 +846,23 @@ app.post("/api/events/check-conflicts", adminOnly, async (req, res) => {
 app.get("/api/events", adminOnly, async (req, res) => {
   const events = await prisma.event.findMany({
     include: {
-      client: true,
-      materials: { include: { material: true } }
+  client: true,
+
+  materials: {
+    include: {
+      material: true
+    }
+  },
+
+  actions: {
+    include: {
+      collaborator: true
     },
+    orderBy: {
+      createdAt: "desc"
+    }
+  }
+},
     orderBy: { eventDate: "desc" }
   });
 
@@ -880,6 +894,18 @@ balance: e.balance != null
       responsibleCollaboratorId: e.responsibleCollaboratorId,
 installerCollaboratorId: e.installerCollaboratorId,
 pickupCollaboratorId: e.pickupCollaboratorId,
+
+collaboratorActions: (e.actions || []).map(a => ({
+  id: a.id,
+  action: a.action,
+  createdAt: a.createdAt,
+  collaborator: a.collaborator
+    ? {
+        firstName: a.collaborator.firstName,
+        lastName: a.collaborator.lastName
+      }
+    : null
+})),
 
       materials: e.materials.map(x => x.material.name),
       payments: {
@@ -1980,14 +2006,20 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
     include: {
       collaborator: true,
       event: {
-        include: {
-          materials: {
-            include: {
-              material: true
-            }
-          }
-        }
+  include: {
+    materials: {
+      include: {
+        material: true
       }
+    },
+
+    actions: {
+      orderBy: {
+        createdAt: "desc"
+      }
+    }
+  }
+}
     }
   });
 
@@ -2046,13 +2078,18 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
       balancePaid: access.canSeeBalance
   ? event.balancePaid
   : null,
-  
+
     caution: access.canManageCaution
       ? {
           received: event.cautionReceived,
           returned: event.cautionReturned
         }
       : null,
+
+actions: (event.actions || []).map(a => ({
+  action: a.action,
+  createdAt: a.createdAt
+})),
 
     instructions: access.canSeeInstructions
       ? access.missionNotes
@@ -2068,8 +2105,179 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
     }
   });
 });
+app.post("/api/collaborator-portal/:token/caution-received", async (req, res) => {
+  const access = await prisma.collaboratorAccess.findUnique({
+    where: { token: req.params.token },
+    include: {
+      collaborator: true,
+      event: true
+    }
+  });
 
+  if (!access || !access.active) {
+    return res.status(404).json({
+      ok: false,
+      message: "Accès invalide ou expiré."
+    });
+  }
+
+  if (!access.canManageCaution) {
+    return res.status(403).json({
+      ok: false,
+      message: "Gestion de la caution non autorisée."
+    });
+  }
+
+  const result = await prisma.$transaction(async tx => {
+    const event = await tx.event.update({
+      where: { id: access.eventId },
+      data: {
+        cautionReceived: true
+      }
+    });
+
+    const action = await tx.collaboratorAction.create({
+      data: {
+        eventId: access.eventId,
+        collaboratorId: access.collaboratorId,
+        action: "CAUTION_RECEIVED"
+      }
+    });
+
+    return { event, action };
+  });
+
+  res.json({
+    ok: true,
+    cautionReceived: true,
+    action: {
+      createdAt: result.action.createdAt,
+      collaborator: {
+        firstName: access.collaborator.firstName,
+        lastName: access.collaborator.lastName
+      }
+    }
+  });
+});
+app.post("/api/collaborator-portal/:token/caution-returned", async (req, res) => {
+  const access = await prisma.collaboratorAccess.findUnique({
+    where: { token: req.params.token },
+    include: {
+      collaborator: true,
+      event: true
+    }
+  });
+
+  if (!access || !access.active) {
+    return res.status(404).json({
+      ok: false,
+      message: "Accès invalide ou expiré."
+    });
+  }
+
+  if (!access.canManageCaution) {
+    return res.status(403).json({
+      ok: false,
+      message: "Gestion de la caution non autorisée."
+    });
+  }
+
+  const result = await prisma.$transaction(async tx => {
+    const event = await tx.event.update({
+      where: { id: access.eventId },
+      data: {
+        cautionReturned: true
+      }
+    });
+
+    const action = await tx.collaboratorAction.create({
+      data: {
+        eventId: access.eventId,
+        collaboratorId: access.collaboratorId,
+        action: "CAUTION_RETURNED"
+      }
+    });
+
+    return { event, action };
+  });
+
+  res.json({
+    ok: true,
+    cautionReturned: true,
+    action: {
+      createdAt: result.action.createdAt,
+      collaborator: {
+        firstName: access.collaborator.firstName,
+        lastName: access.collaborator.lastName
+      }
+    }
+  });
+});
 const distDir = path.join(__dirname, "dist");
+
+app.post("/api/collaborator-portal/:token/payment-received", async (req, res) => {
+  const access = await prisma.collaboratorAccess.findUnique({
+    where: { token: req.params.token },
+    include: {
+      collaborator: true,
+      event: true
+    }
+  });
+
+  if (!access || !access.active) {
+    return res.status(404).json({
+      ok: false,
+      message: "Accès invalide ou expiré."
+    });
+  }
+
+  if (!access.canSeeBalance) {
+    return res.status(403).json({
+      ok: false,
+      message: "Gestion du règlement non autorisée."
+    });
+  }
+
+  if (access.event.balancePaid) {
+    return res.status(400).json({
+      ok: false,
+      message: "La prestation est déjà indiquée comme réglée."
+    });
+  }
+
+  const result = await prisma.$transaction(async tx => {
+    const event = await tx.event.update({
+      where: { id: access.eventId },
+      data: {
+        balancePaid: true,
+        balance: 0
+      }
+    });
+
+    const action = await tx.collaboratorAction.create({
+      data: {
+        eventId: access.eventId,
+        collaboratorId: access.collaboratorId,
+        action: "PAYMENT_RECEIVED"
+      }
+    });
+
+    return { event, action };
+  });
+
+  res.json({
+    ok: true,
+    balancePaid: true,
+    balance: 0,
+    action: {
+      createdAt: result.action.createdAt,
+      collaborator: {
+        firstName: access.collaborator.firstName,
+        lastName: access.collaborator.lastName
+      }
+    }
+  });
+});
 
 app.use(express.static(distDir));
 app.get("*", (req, res) => {

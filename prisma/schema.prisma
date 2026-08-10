@@ -96,6 +96,7 @@ model Event {
   materials            EventMaterial[]
   memories             MemoryMedia[]
   collaboratorAccesses CollaboratorAccess[]
+  collaboratorActions  CollaboratorAction[]
 }
 
 enum EventStatus {
@@ -297,6 +298,7 @@ model Collaborator {
   pickupEvents      Event[] @relation("EventPickup")
 
   accesses CollaboratorAccess[]
+  actions  CollaboratorAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -330,4 +332,21 @@ model CollaboratorAccess {
   @@unique([eventId, collaboratorId])
   @@index([eventId])
   @@index([collaboratorId])
+}
+
+model CollaboratorAction {
+  id             String  @id @default(uuid())
+  eventId        String
+  collaboratorId String?
+  action         String
+  notes          String?
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  collaborator Collaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([collaboratorId])
+  @@index([eventId, action])
 }

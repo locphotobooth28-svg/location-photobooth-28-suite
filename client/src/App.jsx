@@ -751,7 +751,38 @@ Johan — Location Photobooth 28`;
           <label className={`status-check ${form.payments[key]?"checked":""}`} key={key}><input type="checkbox" checked={form.payments[key]} onChange={()=>togglePayment(key)}/><span>{form.payments[key]?"✓":"○"} {label}</span></label>
         )}
       </div>
+{event?.collaboratorActions?.length>0 && (
+  <div className="card" style={{marginTop:16}}>
+    <div className="eyebrow">HISTORIQUE TERRAIN</div>
+    <h3>🕒 Actions collaborateur</h3>
 
+    {event.collaboratorActions
+      .filter(a=>
+  a.action==="CAUTION_RECEIVED" ||
+  a.action==="CAUTION_RETURNED" ||
+  a.action==="PAYMENT_RECEIVED"
+)
+      .map(a=>(
+        <p key={a.id}>
+          {a.action==="CAUTION_RECEIVED"
+  ? "🛡️ Caution reçue"
+  : a.action==="CAUTION_RETURNED"
+    ? "✅ Caution rendue"
+    : "💶 Paiement récupéré"}
+          {" — "}
+          {new Date(a.createdAt).toLocaleString("fr-FR")}
+          {a.collaborator && (
+            <>
+              {" — "}
+              <strong>
+                {a.collaborator.firstName} {a.collaborator.lastName||""}
+              </strong>
+            </>
+          )}
+        </p>
+      ))}
+  </div>
+)}
       <label>Notes privées</label><textarea value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Visible uniquement par l'administrateur..."/>
 
       <div className="modal-actions"><button type="button" className="secondary-btn" onClick={onClose}>Annuler</button><button className="primary" disabled={busy}>{busy?"Enregistrement...":event?"Enregistrer":"Créer l'événement"}</button></div>
@@ -3018,78 +3049,199 @@ function CollaboratorPortalPage({token}) {
           </section>
         )}
 
-        {data.permissions.balance && (
-          <section className="portal-section">
-            <h2>💶 Règlement</h2>
+       {data.permissions.balance && (
+  <section className="portal-section">
+    <h2>💶 Règlement</h2>
 
-            <p>
-              {data.balancePaid ? (
-  <p>
-    ✅ <strong>Prestation réglée</strong>
-  </p>
-) : (
-  <p>
-    Reste à régler :{" "}
-    <strong>
-      {data.balance!=null
-        ? `${data.balance} €`
-        : "Non renseigné"}
-    </strong>
-  </p>
+    {data.balancePaid ? (
+      <p>
+        ✅ <strong>Prestation réglée</strong>
+      </p>
+    ) : (
+      <>
+        <p>
+          Reste à régler :{" "}
+          <strong>
+            {data.balance != null
+              ? `${data.balance} €`
+              : "Non renseigné"}
+          </strong>
+        </p>
+
+        {data.balance != null && Number(data.balance) > 0 && (
+          <button
+            className="primary"
+            onClick={async () => {
+              const ok = confirm(
+                `Confirmer avoir récupéré le règlement de ${data.balance} € ?`
+              );
+
+              if (!ok) return;
+
+              const r = await fetch(
+                `/api/collaborator-portal/${encodeURIComponent(token)}/payment-received`,
+                {
+                  method: "POST"
+                }
+              );
+
+              const d = await r.json();
+
+              if (!r.ok) {
+                return alert(
+                  d.message ||
+                  "Impossible d'enregistrer le règlement."
+                );
+              }
+
+              window.location.reload();
+            }}
+          >
+            ✅ Confirmer le règlement reçu
+          </button>
+        )}
+      </>
+    )}
+
+    {data.actions
+      ?.filter(a => a.action === "PAYMENT_RECEIVED")
+      .map((a, index) => (
+        <p key={index} className="muted">
+          🕒 Paiement confirmé le{" "}
+          {new Date(a.createdAt).toLocaleString("fr-FR")}
+        </p>
+      ))}
+  </section>
 )}
-            </p>
-          </section>
-        )}
 
-        {data.caution && (
-          <section className="portal-section">
-            <h2>🛡️ Caution</h2>
+{data.caution && (
+  <section className="portal-section">
+    <h2>🛡️ Caution</h2>
 
-            <p>
-              Caution récupérée :{" "}
-              <strong>
-                {data.caution.received ? "✅ Oui" : "❌ Non"}
-              </strong>
-            </p>
+    {!data.caution.received ? (
+      <button
+        className="primary"
+        onClick={async () => {
+          if (!confirm("Confirmer la réception de la caution ?")) {
+            return;
+          }
 
-            <p>
-              Caution rendue :{" "}
-              <strong>
-                {data.caution.returned ? "✅ Oui" : "❌ Non"}
-              </strong>
+          const r = await fetch(
+            `/api/collaborator-portal/${encodeURIComponent(token)}/caution-received`,
+            {
+              method: "POST"
+            }
+          );
+
+          const d = await r.json();
+
+          if (!r.ok) {
+            return alert(
+              d.message ||
+              "Impossible d'enregistrer la réception de la caution."
+            );
+          }
+
+          window.location.reload();
+        }}
+      >
+        🛡️ Confirmer la réception de la caution
+      </button>
+    ) : (
+      <p>
+        ✅ <strong>Caution reçue</strong>
+      </p>
+    )}
+
+    {data.caution.received && !data.caution.returned && (
+      <button
+        className="primary"
+        onClick={async () => {
+          if (!confirm("Confirmer la restitution de la caution ?")) {
+            return;
+          }
+
+          const r = await fetch(
+            `/api/collaborator-portal/${encodeURIComponent(token)}/caution-returned`,
+            {
+              method: "POST"
+            }
+          );
+
+          const d = await r.json();
+
+          if (!r.ok) {
+            return alert(
+              d.message ||
+              "Impossible d'enregistrer la restitution de la caution."
+            );
+          }
+
+          window.location.reload();
+        }}
+      >
+        ✅ Confirmer la restitution de la caution
+      </button>
+    )}
+
+    {data.caution.returned && (
+      <p>
+        ✅ <strong>Caution rendue</strong>
+      </p>
+    )}
+
+    {data.actions?.length > 0 && (
+      <div style={{ marginTop: 16 }}>
+        <h3>🕒 Historique</h3>
+
+        {data.actions
+          .filter(a =>
+            a.action === "CAUTION_RECEIVED" ||
+            a.action === "CAUTION_RETURNED"
+          )
+          .map((a, index) => (
+            <p key={index}>
+              {a.action === "CAUTION_RECEIVED"
+                ? "🛡️ Caution reçue"
+                : "✅ Caution rendue"}
+              {" — "}
+              {new Date(a.createdAt).toLocaleString("fr-FR")}
             </p>
-          </section>
-        )}
+          ))}
+      </div>
+    )}
+  </section>
+)}
 
         {data.instructions && (
-          <section className="portal-section">
-            <h2>📝 Consignes</h2>
-            <p>{data.instructions}</p>
-          </section>
-        )}
+  <section className="portal-section">
+    <h2>📝 Consignes</h2>
+    <p>{data.instructions}</p>
+  </section>
+)}
 
-        {(data.permissions.contract || data.permissions.invoice) && (
-          <section className="portal-section">
-            <h2>📄 Documents</h2>
+{(data.permissions.contract || data.permissions.invoice) && (
+  <section className="portal-section">
+    <h2>📄 Documents</h2>
 
-            {data.permissions.contract && (
-              <p>📑 Contrat autorisé</p>
-            )}
+    {data.permissions.contract && (
+      <p>📑 Contrat autorisé</p>
+    )}
 
-            {data.permissions.invoice && (
-              <p>🧾 Facture autorisée</p>
-            )}
-          </section>
-        )}
+    {data.permissions.invoice && (
+      <p>🧾 Facture autorisée</p>
+    )}
+  </section>
+)}
 
-        <section className="portal-section">
-          <p className="muted">
-            🔐 Cet espace est personnel et réservé au collaborateur affecté à cette prestation.
-          </p>
-        </section>
+<section className="portal-section">
+  <p className="muted">
+    🔐 Cet espace est personnel et réservé au collaborateur affecté à cette prestation.
+  </p>
+</section>
 
       </div>
-    </div>
+        </div>
   );
 }
 
