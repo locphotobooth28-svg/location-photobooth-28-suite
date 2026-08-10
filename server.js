@@ -125,11 +125,21 @@ const PHOTOBOOTHS = [
   "Borne Photobooth Gabin"
 ];
 
-function plannedPrints(materialNames){
+function plannedPrints(materialNames, customPrintCount = 0){
   for(const name of materialNames || []){
-    const m=String(name).match(/Forfait\s+(\d+)\s+impressions/i);
-    if(m) return Number(m[1]);
+    if(name === "Forfait impressions personnalisé"){
+      return Math.max(Number(customPrintCount || 0), 0);
+    }
+
+    const m = String(name).match(
+      /Forfait\s+(\d+)\s+impressions/i
+    );
+
+    if(m){
+      return Number(m[1]);
+    }
   }
+
   return 0;
 }
 
@@ -891,6 +901,16 @@ deposit: e.deposit != null
 balance: e.balance != null
   ? Number(e.balance)
   : "",
+customPrintCount:
+  e.customPrintCount != null
+    ? Number(e.customPrintCount)
+    : "",
+
+customPrintPrice:
+  e.customPrintPrice != null
+    ? Number(e.customPrintPrice)
+    : "",
+
       responsibleCollaboratorId: e.responsibleCollaboratorId,
 installerCollaboratorId: e.installerCollaboratorId,
 pickupCollaboratorId: e.pickupCollaboratorId,
@@ -992,7 +1012,10 @@ app.post("/api/events", adminOnly, async (req, res) => {
 
   const materials = await ensureSelectedMaterials(prisma, selected);
 
-  const printCount = plannedPrints(selected);
+  const printCount = plannedPrints(
+  selected,
+  b.customPrintCount
+);
   const printerChoice = await choosePrinterForEvent({
     date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,planned:printCount
   });
@@ -1053,6 +1076,15 @@ deposit:
 balance:
   b.balance !== "" && b.balance != null
     ? Number(b.balance)
+    : null,
+    customPrintCount:
+  b.customPrintCount !== "" && b.customPrintCount != null
+    ? Number(b.customPrintCount)
+    : null,
+
+customPrintPrice:
+  b.customPrintPrice !== "" && b.customPrintPrice != null
+    ? Number(b.customPrintPrice)
     : null,
       depositPaid: Boolean(b.payments?.depositPaid),
       balancePaid: Boolean(b.payments?.balancePaid),
@@ -1174,7 +1206,15 @@ balance:
   b.balance !== "" && b.balance != null
     ? Number(b.balance)
     : null,
+customPrintCount:
+  b.customPrintCount !== "" && b.customPrintCount != null
+    ? Number(b.customPrintCount)
+    : null,
 
+customPrintPrice:
+  b.customPrintPrice !== "" && b.customPrintPrice != null
+    ? Number(b.customPrintPrice)
+    : null,
 googleCalendarId: String(b.googleCalendarId || "").trim() || null,
         printerId: printCount > 0 ? (printerChoice.printer?.id || null) : null,
         depositPaid: Boolean(b.payments?.depositPaid),
@@ -2031,7 +2071,21 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
   }
 
   const event = access.event;
+let driveDocuments = [];
 
+try {
+  const driveResult = await googleService.listEventDocuments(
+    req,
+    event.id
+  );
+
+  driveDocuments = driveResult.documents || [];
+} catch (err) {
+  console.error(
+    "Documents collaborateur :",
+    err.message
+  );
+}
   res.json({
     ok: true,
 
@@ -2094,7 +2148,19 @@ actions: (event.actions || []).map(a => ({
     instructions: access.canSeeInstructions
       ? access.missionNotes
       : null,
+documents: {
+  contract: access.canSeeContract
+    ? driveDocuments.find(f =>
+        /contrat/i.test(f.name)
+      ) || null
+    : null,
 
+  invoice: access.canSeeInvoice
+    ? driveDocuments.find(f =>
+        /facture|invoice/i.test(f.name)
+      ) || null
+    : null
+},
     permissions: {
       contract: access.canSeeContract,
       invoice: access.canSeeInvoice,

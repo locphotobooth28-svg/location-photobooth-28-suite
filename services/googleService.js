@@ -584,9 +584,66 @@ async function deleteCalendarEvent(req,event){
     if(e?.code!==404) console.warn("Suppression Google Calendar :",e.message);
   }
 }
+async function listEventDocuments(req,eventId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    return {
+      connected:false,
+      documents:[]
+    };
+  }
+
+  const event = await prisma.event.findUnique({
+    where:{id:eventId}
+  });
+
+  if(!event){
+    throw new Error("Événement introuvable.");
+  }
+
+  if(!event.googleDriveFolderId){
+    return {
+      connected:true,
+      documents:[]
+    };
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const folders = await drive.files.list({
+    q:`'${event.googleDriveFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields:"files(id,name)"
+  });
+
+  const documentsFolder = (folders.data.files||[])
+    .find(f=>f.name==="Documents");
+
+  if(!documentsFolder){
+    return {
+      connected:true,
+      documents:[]
+    };
+  }
+
+  const files = await drive.files.list({
+    q:`'${documentsFolder.id}' in parents and trashed=false`,
+    fields:"files(id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime)",
+    orderBy:"name"
+  });
+
+  return {
+    connected:true,
+    folderId:documentsFolder.id,
+    documents:files.data.files||[]
+  };
+}
 
 module.exports={
   configured,connection,authUrl,callback,disconnect,
   listCalendars,listDriveFolders,saveSettings,
-  syncEvent,deleteCalendarEvent
+  syncEvent,deleteCalendarEvent,listEventDocuments
 };

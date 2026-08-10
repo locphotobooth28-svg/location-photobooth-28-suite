@@ -16,6 +16,7 @@ const MATERIALS = [
   {group:"Impressions", icon:"🖨️", name:"Forfait 300 impressions"},
   {group:"Impressions", icon:"🖨️", name:"Forfait 400 impressions"},
   {group:"Impressions", icon:"🖨️", name:"Forfait 700 impressions"},
+  {group:"Impressions", icon:"⚙️", name:"Forfait impressions personnalisé"},
   {group:"Options", icon:"☎️", name:"Location livre d'or audio"},
   {group:"Options", icon:"🍹", name:"Location Fontaine + 1 ou 2 contenant de 30L"},
   {group:"Options", icon:"🔊", name:"Location enceinte LG 1000w + 2 micros"},
@@ -38,7 +39,8 @@ pickupCollaboratorId:"",
 materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
-  payments:{depositPaid:false,balancePaid:false,cautionReceived:false,cautionReturned:false}
+  customPrintCount:"",
+customPrintPrice:"",payments:{depositPaid:false,balancePaid:false,cautionReceived:false,cautionReturned:false}
 };
 
 function Login({ onLogin }) {
@@ -69,6 +71,8 @@ function EventForm({event,onClose,onSaved}) {
   const [busy,setBusy]=useState(false);
   const [googleStatus,setGoogleStatus]=useState(null);
   const [googleCalendars,setGoogleCalendars]=useState([]);
+const [addressSuggestions,setAddressSuggestions]=useState([]);
+const [addressLoading,setAddressLoading]=useState(false);
 
 const [collaboratorPermissions,setCollaboratorPermissions]=useState({
   canSeeClient:true,
@@ -118,6 +122,35 @@ useEffect(()=>{
             setGoogleStatus(null);
             setGoogleCalendars([]);
           }
+          async function searchAddress(value){
+  set("address",value);
+
+  if(value.trim().length < 3){
+    setAddressSuggestions([]);
+    return;
+  }
+
+  setAddressLoading(true);
+
+  try{
+    const r=await fetch(
+      `https://data.geopf.fr/geocodage/completion/?text=${encodeURIComponent(value)}&type=StreetAddress&maximumResponses=6`
+    );
+
+    const d=await r.json();
+
+    setAddressSuggestions(
+      Array.isArray(d.results)
+        ? d.results
+        : []
+    );
+  }catch(err){
+    console.error("Recherche adresse :",err);
+    setAddressSuggestions([]);
+  }finally{
+    setAddressLoading(false);
+  }
+}
           return;
         }
 
@@ -153,7 +186,136 @@ useEffect(()=>{
   },[]);
 
   const set=(key,val)=>setForm(f=>({...f,[key]:val}));
-  const toggleMaterial=(name)=>setForm(f=>({...f,materials:f.materials.includes(name)?f.materials.filter(x=>x!==name):[...f.materials,name]}));
+  const PRINT_PACKS = {
+  "Forfait sans aucune impression": {
+    lola: 200,
+    other: 150
+  },
+  "Forfait 100 impressions": {
+    lola: 250,
+    other: 200
+  },
+  "Forfait 200 impressions": {
+    lola: 300,
+    other: 250
+  },
+  "Forfait 300 impressions": {
+    lola: 350,
+    other: 300
+  },
+  "Forfait 400 impressions": {
+    lola: 400,
+    other: 350
+  },
+  "Forfait 700 impressions": {
+    lola: 550,
+    other: 500
+  }
+};
+
+const PRINT_MATERIALS = [
+  "Forfait sans aucune impression",
+  "Forfait 100 impressions",
+  "Forfait 200 impressions",
+  "Forfait 300 impressions",
+  "Forfait 400 impressions",
+  "Forfait 700 impressions",
+  "Forfait impressions personnalisé"
+];
+
+const toggleMaterial = (name) => {
+  setForm(f => {
+    const alreadySelected = f.materials.includes(name);
+
+    let materials = [...f.materials];
+
+    const isPrintPack = PRINT_MATERIALS.includes(name);
+
+    if (isPrintPack) {
+      materials = materials.filter(
+        x => !PRINT_MATERIALS.includes(x)
+      );
+
+      if (!alreadySelected) {
+        materials.push(name);
+      }
+    } else {
+      if (alreadySelected) {
+        materials = materials.filter(x => x !== name);
+      } else {
+        materials.push(name);
+      }
+    }
+
+    let totalPrice = f.totalPrice;
+    let balance = f.balance;
+
+    const hasLola = materials.includes(
+      "Borne Photobooth Miroir Lola"
+    );
+
+    const hasNinaOrGabin =
+      materials.includes("Borne Photobooth Nina") ||
+      materials.includes("Borne Photobooth Gabin");
+const selectedPrintPack = materials.find(
+  x => PRINT_PACKS[x]
+);
+    if (
+      isPrintPack &&
+      name !== "Forfait impressions personnalisé" &&
+      !alreadySelected
+    ) {
+      const pack = PRINT_PACKS[name];
+
+      if (pack) {
+        const price = hasLola
+          ? pack.lola
+          : hasNinaOrGabin
+            ? pack.other
+            : pack.lola;
+
+        totalPrice = String(price);
+
+        balance = Math.max(
+          Number(price) - Number(f.deposit || 0),
+          0
+        ).toFixed(2);
+      }
+    }
+const isBoothChange =
+  name === "Borne Photobooth Miroir Lola" ||
+  name === "Borne Photobooth Nina" ||
+  name === "Borne Photobooth Gabin";
+
+if (
+  isBoothChange &&
+  selectedPrintPack
+) {
+  const pack = PRINT_PACKS[selectedPrintPack];
+
+  if (pack) {
+    const price = hasLola
+      ? pack.lola
+      : hasNinaOrGabin
+        ? pack.other
+        : pack.lola;
+
+    totalPrice = String(price);
+
+    balance = Math.max(
+      Number(price) - Number(f.deposit || 0),
+      0
+    ).toFixed(2);
+  }
+}
+    return {
+      ...f,
+      materials,
+      totalPrice,
+      balance
+    };
+  });
+};
   const togglePayment=(key)=>setForm(f=>({...f,payments:{...f.payments,[key]:!f.payments[key]}}));
 
   async function save(e){
@@ -404,7 +566,60 @@ Johan — Location Photobooth 28`;
         <div><label>Heure d'installation</label><input type="time" value={form.time} onChange={e=>set("time",e.target.value)}/></div>
         <div><label>Date de reprise</label><input type="date" value={form.pickupDate||form.date||""} onChange={e=>set("pickupDate",e.target.value)}/></div>
         <div><label>Heure de reprise</label><input type="time" value={form.pickupTime||""} onChange={e=>set("pickupTime",e.target.value)}/></div>
-        <div className="wide"><label>Adresse</label><input value={form.address} onChange={e=>set("address",e.target.value)}/></div>
+        <div className="wide">
+  <label>📍 Adresse de la prestation</label>
+
+  <input
+    value={form.address}
+    onChange={e=>searchAddress(e.target.value)}
+    placeholder="Commence à saisir une adresse..."
+    autoComplete="off"
+  />
+
+  {addressLoading && (
+    <p className="muted">Recherche de l'adresse...</p>
+  )}
+
+  {addressSuggestions.length>0 && (
+    <div className="address-suggestions">
+      {addressSuggestions.map((a,index)=>(
+        <button
+          type="button"
+          key={index}
+          onClick={()=>{
+            const label=a.fulltext || a.label || a.text || "";
+            set("address",label);
+            setAddressSuggestions([]);
+          }}
+        >
+          📍 {a.fulltext || a.label || a.text}
+        </button>
+      ))}
+    </div>
+  )}
+
+  {form.address && (
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+      <a
+        className="primary"
+        href={`https://waze.com/ul?q=${encodeURIComponent(form.address)}&navigate=yes`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🚗 Waze
+      </a>
+
+      <a
+        className="primary"
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.address)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        🗺️ Google Maps
+      </a>
+    </div>
+  )}
+</div>
         <div><label>Nombre d'invités</label><input type="number" min="0" value={form.guestCount} onChange={e=>set("guestCount",e.target.value)}/></div>
       </div>
 
@@ -632,6 +847,52 @@ Johan — Location Photobooth 28`;
           <span className="material-icon">{m.icon}</span><span>{m.name}</span><b>{form.materials.includes(m.name)?"✓":"+"}</b>
         </button>)}
       </div></div>)}
+
+{form.materials.includes("Forfait impressions personnalisé") && (
+  <div className="card" style={{marginTop:16}}>
+    <div className="eyebrow">FORFAIT PERSONNALISÉ</div>
+
+    <div className="form-grid">
+      <div>
+        <label>🖨️ Nombre d'impressions</label>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={form.customPrintCount||""}
+          onChange={e=>set("customPrintCount",e.target.value)}
+          placeholder="Ex : 4200"
+        />
+      </div>
+
+      <div>
+        <label>💶 Prix convenu TTC</label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.customPrintPrice||""}
+          onChange={e=>{
+            const price=e.target.value;
+
+            setForm(f=>({
+              ...f,
+              customPrintPrice:price,
+              totalPrice:price,
+              balance:price
+                ? Math.max(
+                    Number(price)-Number(f.deposit||0),
+                    0
+                  ).toFixed(2)
+                : ""
+            }));
+          }}
+          placeholder="Ex : 2500"
+        />
+      </div>
+    </div>
+  </div>
+)}
 
       <h3>🎨 Cadre photo</h3>
       <div className="form-grid">
@@ -3225,11 +3486,41 @@ function CollaboratorPortalPage({token}) {
     <h2>📄 Documents</h2>
 
     {data.permissions.contract && (
-      <p>📑 Contrat autorisé</p>
+      <div style={{marginBottom:12}}>
+        {data.documents?.contract ? (
+          <a
+            className="primary"
+            href={data.documents.contract.webViewLink}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            📑 Voir le contrat
+          </a>
+        ) : (
+          <p className="muted">
+            📑 Contrat autorisé — document non disponible
+          </p>
+        )}
+      </div>
     )}
 
     {data.permissions.invoice && (
-      <p>🧾 Facture autorisée</p>
+      <div style={{marginBottom:12}}>
+        {data.documents?.invoice ? (
+          <a
+            className="primary"
+            href={data.documents.invoice.webViewLink}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            🧾 Voir la facture
+          </a>
+        ) : (
+          <p className="muted">
+            🧾 Facture autorisée — document non disponible
+          </p>
+        )}
+      </div>
     )}
   </section>
 )}

@@ -56,6 +56,8 @@ model Event {
   totalPrice              Decimal?      @db.Decimal(10, 2)
   deposit                 Decimal?      @db.Decimal(10, 2)
   balance                 Decimal?      @db.Decimal(10, 2)
+  customPrintCount        Int?
+  customPrintPrice        Decimal?      @db.Decimal(10, 2)
 
   depositPaid     Boolean @default(false)
   balancePaid     Boolean @default(false)
