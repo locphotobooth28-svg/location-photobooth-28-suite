@@ -1927,6 +1927,80 @@ function AdminGalleries(){
   </section>;
 }
 
+function CollaboratorsPanel(){
+  const [collaborators,setCollaborators]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  async function load(){
+    try{
+      const r=await fetch("/api/collaborators",{
+        credentials:"include"
+      });
+
+      const d=await r.json();
+
+      if(!r.ok){
+        alert(d.message||"Impossible de charger les collaborateurs.");
+        return;
+      }
+
+      setCollaborators(d.collaborators||[]);
+    }catch(e){
+      console.error(e);
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  useEffect(()=>{
+    load();
+  },[]);
+
+  if(loading){
+    return (
+      <div className="empty-state">
+        <span>??</span>
+        <p>Chargement des collaborateurs...</p>
+      </div>
+    );
+  }
+
+  return (
+    <section>
+      <div className="calendar-toolbar">
+        <div>
+          <div className="eyebrow">GESTION DE L'�QUIPE</div>
+          <h2>?? Collaborateurs</h2>
+          <p className="muted">
+            G�re les personnes qui peuvent assurer les prestations,
+            installations et r�cup�rations.
+          </p>
+        </div>
+      </div>
+
+      <div className="events-list">
+        {collaborators.map(c=>(
+          <article className="event-card" key={c.id}>
+            <div className="event-main">
+              <h3>?? {c.firstName} {c.lastName||""}</h3>
+
+              {c.isDefault && (
+                <span className="booking-status status-confirmed">
+                  ? Par d�faut
+                </span>
+              )}
+
+              <div className="event-meta">
+                {c.phone && <span>?? {c.phone}</span>}
+                {c.email && <span>?? {c.email}</span>}
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
@@ -1975,8 +2049,11 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>setView("inventory")}>🔐 Inventaire admin</button>
         <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
         <button className="nav-item disabled">📄 Documents <small>bientôt</small></button>
-        <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
+        <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>setView("planning")}>🗓️ Planning</button>
         <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
+        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")} >👷 Collaborateurs</button>
+        <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
+        
         <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>setView("assistance")}>🆘 Assistance</button>
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
@@ -1984,7 +2061,7 @@ function Dashboard({onLogout}) {
 
     <main className="content">
       <header className="topbar">
-        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="galleries"?"Galeries":view==="assistance"?"Assistance":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
+        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="galleries"?"Galeries":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         <button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>
       </header>
 
@@ -2041,12 +2118,14 @@ function Dashboard({onLogout}) {
       </> : view==="longPlanning" ? <>
         <LongRangePlanning />
       </> : view==="galleries" ? <>
-        <AdminGalleries />
-      </> : view==="assistance" ? <>
-        <AssistanceCenter />
-      </> : <>
-        <GooglePanel />
-      </>}
+  <AdminGalleries />
+</> : view==="collaborators" ? <>
+  <CollaboratorsPanel />
+</> : view==="assistance" ? <>
+  <AssistanceCenter />
+</> : <>
+  <GooglePanel />
+</>}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>setShowForm(false)} onSaved={saved}/>}
@@ -2065,3 +2144,4 @@ export default function App(){
   if(loading)return <div className="loading">Chargement…</div>;
   return auth?<Dashboard onLogout={logout}/>:<Login onLogin={()=>setAuth(true)}/>;
 }
+

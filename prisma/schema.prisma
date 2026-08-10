@@ -273,18 +273,52 @@ model MemoryMedia {
 }
 
 model Collaborator {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   firstName String
   lastName  String?
   phone     String?
   email     String?
-  active    Boolean @default(true)
-  isDefault Boolean @default(false)
+  active    Boolean  @default(true)
+  isDefault Boolean  @default(false)
 
   canInstall Boolean @default(true)
   canPickup  Boolean @default(true)
   canManage  Boolean @default(true)
 
+  responsibleEvents Event[] @relation("EventResponsible")
+  installEvents     Event[] @relation("EventInstaller")
+  pickupEvents      Event[] @relation("EventPickup")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+organizerName  String?
+organizerEmail String?
+organizerPhone String?
+responsibleCollaboratorId String?
+installerCollaboratorId   String?
+pickupCollaboratorId      String?
+
+responsibleCollaborator Collaborator? @relation(
+  "EventResponsible",
+  fields: [responsibleCollaboratorId],
+  references: [id],
+  onDelete: SetNull
+)
+
+installerCollaborator Collaborator? @relation(
+  "EventInstaller",
+  fields: [installerCollaboratorId],
+  references: [id],
+  onDelete: SetNull
+)
+
+pickupCollaborator Collaborator? @relation(
+  "EventPickup",
+  fields: [pickupCollaboratorId],
+  references: [id],
+  onDelete: SetNull
+)
+responsibleCollaborator Collaborator? @relation("EventResponsible", fields: [responsibleCollaboratorId], references: [id], onDelete: SetNull)
+installerCollaborator   Collaborator? @relation("EventInstaller", fields: [installerCollaboratorId], references: [id], onDelete: SetNull)
+pickupCollaborator      Collaborator? @relation("EventPickup", fields: [pickupCollaboratorId], references: [id], onDelete: SetNull)

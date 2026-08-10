@@ -1682,3 +1682,20 @@ async function startServer() {
 
 startServer();
 
+app.get("/api/collaborators", adminOnly, async (req, res) => {
+  const collaborators = await prisma.collaborator.findMany({
+    where: {
+      active: true
+    },
+    orderBy: [
+      { isDefault: "desc" },
+      { firstName: "asc" },
+      { lastName: "asc" }
+    ]
+  });
+
+  res.json({
+    ok: true,
+    collaborators
+  });
+});
