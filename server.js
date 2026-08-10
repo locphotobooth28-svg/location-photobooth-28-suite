@@ -1655,7 +1655,23 @@ app.post("/api/admin/galleries/:eventId/expiration", adminOnly, async (req, res)
 const distDir = path.join(__dirname, "dist");
 
 app.use(express.static(distDir));
+app.get("/api/collaborators", adminOnly, async (req, res) => {
+  const collaborators = await prisma.collaborator.findMany({
+    where: {
+      active: true
+    },
+    orderBy: [
+      { isDefault: "desc" },
+      { firstName: "asc" },
+      { lastName: "asc" }
+    ]
+  });
 
+  res.json({
+    ok: true,
+    collaborators
+  });
+});
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ ok: false });
@@ -1681,21 +1697,4 @@ async function startServer() {
 }
 
 startServer();
-
-app.get("/api/collaborators", adminOnly, async (req, res) => {
-  const collaborators = await prisma.collaborator.findMany({
-    where: {
-      active: true
-    },
-    orderBy: [
-      { isDefault: "desc" },
-      { firstName: "asc" },
-      { lastName: "asc" }
-    ]
-  });
-
-  res.json({
-    ok: true,
-    collaborators
-  });
-});
+ 
