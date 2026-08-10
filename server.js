@@ -1392,12 +1392,12 @@ app.post("/api/contract-signature/:token/sign", async (req, res) => {
       });
     }
 
-    const hash = contractHash(event);
+    const currentHash = contractHash(event);
 
-    if (
-      !event.contractDocumentHash ||
-      currentHash !== event.contractDocumentHash
-    ) {
+if (
+  !event.contractDocumentHash ||
+  currentHash !== event.contractDocumentHash
+) {
       return res.status(409).json({
         ok: false,
         message:
