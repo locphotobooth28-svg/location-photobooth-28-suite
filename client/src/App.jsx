@@ -260,7 +260,63 @@ useEffect(()=>{
         <div><label>Téléphone</label><input value={form.organizerPhone} onChange={e=>set("organizerPhone",e.target.value)}/></div>
         <div><label>E-mail</label><input type="email" value={form.organizerEmail} onChange={e=>set("organizerEmail",e.target.value)}/></div>
       </div>
+<h3>👷 Équipe affectée</h3>
 
+<div className="form-grid">
+  <label>
+    Responsable de la prestation
+    <select
+      value={form.responsibleCollaboratorId||""}
+      onChange={e=>set("responsibleCollaboratorId",e.target.value)}
+    >
+      <option value="">Aucun</option>
+      {collaborators
+        .filter(c=>c.active && c.canManage)
+        .map(c=>(
+          <option key={c.id} value={c.id}>
+            {c.firstName} {c.lastName||""}
+            {c.isDefault ? " ⭐" : ""}
+          </option>
+        ))}
+    </select>
+  </label>
+
+  <label>
+    🚚 Installation
+    <select
+      value={form.installerCollaboratorId||""}
+      onChange={e=>set("installerCollaboratorId",e.target.value)}
+    >
+      <option value="">Aucun / à définir</option>
+      {collaborators
+        .filter(c=>c.active && c.canInstall)
+        .map(c=>(
+          <option key={c.id} value={c.id}>
+            {c.firstName} {c.lastName||""}
+            {c.isDefault ? " ⭐" : ""}
+          </option>
+        ))}
+    </select>
+  </label>
+
+  <label>
+    ↩️ Récupération
+    <select
+      value={form.pickupCollaboratorId||""}
+      onChange={e=>set("pickupCollaboratorId",e.target.value)}
+    >
+      <option value="">Aucun / à définir</option>
+      {collaborators
+        .filter(c=>c.active && c.canPickup)
+        .map(c=>(
+          <option key={c.id} value={c.id}>
+            {c.firstName} {c.lastName||""}
+            {c.isDefault ? " ⭐" : ""}
+          </option>
+        ))}
+    </select>
+  </label>
+</div>
       {googleStatus?.connected && (
         <>
           <h3>Google Agenda</h3>
@@ -2384,7 +2440,6 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>setView("inventory")}>🔐 Inventaire admin</button>
         <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
         <button className="nav-item disabled">📄 Documents <small>bientôt</small></button>
-        <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>setView("planning")}>🗓️ Planning</button>
         <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
         <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")} >👷 Collaborateurs</button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
