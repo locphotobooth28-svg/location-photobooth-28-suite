@@ -3137,7 +3137,17 @@ function Dashboard({onLogout}) {
                    event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
                 </span><p>{event.type}{event.organizerName?` · ${event.organizerName}`:""}</p></div>{event.archived&&<span className="badge">Archivé</span>}</div>
               <div className="event-meta"><span>📍 {event.address||"Adresse non renseignée"}</span><span>📦 {event.materials?.length||0} sélection(s)</span>{event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}<span>👥 {event.guestCount||0} invité(s)</span>{event.pickupDate&&<span>↩️ Reprise {new Date(event.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{event.pickupTime?` ${event.pickupTime}`:""}</span>}{event.frameSource&&event.frameSource!=="NONE"&&<span className={`frame-badge frame-${event.frameStatus?.toLowerCase()}`}>🎨 {event.frameSource==="CLIENT"?"Client":"LP28"} · {event.frameStatus==="DONE"?"Terminé":event.frameStatus==="IN_PROGRESS"?"En cours":"À faire"}</span>}{event.googleCalendarEventId&&<span className="google-mini-ok">📅 Agenda ✓</span>}{event.googleDriveFolderId&&<span className="google-mini-ok">☁️ Drive ✓</span>}</div>
-              <div className="event-actions"><button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button><button onClick={()=>setShareEvent(event)}>📱 Partager</button><button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button><button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button></div>
+              <div className="event-actions"><button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button><button onClick={()=>setShareEvent(event)}>📱 Partager<button
+  onClick={()=>
+    window.open(
+      `/api/events/${event.id}/contract.pdf`,
+      "_blank",
+      "noopener,noreferrer"
+    )
+  }
+>
+  📄 Voir le contrat
+</button></button><button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button><button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button></div>
             </div>
           </article>)}
         </div>

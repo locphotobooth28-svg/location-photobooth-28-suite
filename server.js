@@ -9,6 +9,7 @@ const fs = require("fs");
 const multer = require("multer");
 const prisma = require("./lib/prisma");
 const googleService = require("./services/googleService");
+const contractService = require("./services/contractService");
 const { ensureCatalog, ensureSelectedMaterials } = require("./lib/catalog");
 
 const app = express();
@@ -963,7 +964,59 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
     }))
   });
 });
+app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
+  try {
+    const event = await prisma.event.findUnique({
+      where: {
+        id: req.params.id
+      },
+      include: {
+        client: true,
+        materials: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
 
+    if (!event) {
+      return res.status(404).json({
+        ok: false,
+        message: "Événement introuvable."
+      });
+    }
+
+    const pdf = await contractService.generateContractPdf(event);
+
+    const safeName = String(event.name || "contrat")
+      .replace(/[^a-z0-9_-]+/gi, "_")
+      .replace(/^_+|_+$/g, "");
+
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="Contrat_${safeName || "evenement"}.pdf"`
+    );
+
+    res.send(pdf);
+
+  } catch (err) {
+    console.error(
+      "Génération contrat PDF :",
+      err
+    );
+
+    res.status(500).json({
+      ok: false,
+      message: "Impossible de générer le contrat."
+    });
+  }
+});
 app.post("/api/events", adminOnly, async (req, res) => {
   const b = req.body || {};
   if (!String(b.name || "").trim() || !b.date) {
