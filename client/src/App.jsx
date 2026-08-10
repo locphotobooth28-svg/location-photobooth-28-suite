@@ -3147,6 +3147,41 @@ function Dashboard({onLogout}) {
   }
 >
   📄 Voir le contrat
+</button><button
+  onClick={async ()=>{
+    try {
+      const r = await fetch(
+        `/api/events/${event.id}/contract-signature-link`,
+        { method:"POST" }
+      );
+
+      const d = await r.json();
+
+      if(!r.ok){
+        return alert(
+          d.message || "Impossible de préparer le contrat à signer."
+        );
+      }
+
+      try {
+        await navigator.clipboard.writeText(d.signatureUrl);
+        alert(
+          `✅ Lien de signature créé et copié !\n\n${d.signatureUrl}`
+        );
+      } catch {
+        prompt(
+          "Copie ce lien et envoie-le au client :",
+          d.signatureUrl
+        );
+      }
+
+    } catch(err) {
+      console.error(err);
+      alert("Erreur lors de la création du lien de signature.");
+    }
+  }}
+>
+  ✍️ Faire signer
 </button></button><button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button><button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button></div>
             </div>
           </article>)}
@@ -3591,9 +3626,507 @@ function CollaboratorPortalPage({token}) {
         </div>
   );
 }
+function ContractSignaturePage({token}){
+  const [data,setData]=useState(null);
+  const [error,setError]=useState("");
+  const [signerName,setSignerName]=useState("");
+  const [signerEmail,setSignerEmail]=useState("");
+  const [accepted,setAccepted]=useState(false);
+  const [sending,setSending]=useState(false);
+  const [signed,setSigned]=useState(false);
+
+  const canvasRef=useRef(null);
+  const drawingRef=useRef(false);
+  const hasSignatureRef=useRef(false);
+
+  useEffect(()=>{
+    fetch(`/api/contract-signature/${encodeURIComponent(token)}`)
+      .then(async r=>{
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok){
+          throw new Error(
+            d.message || "Contrat indisponible."
+          );
+        }
+        return d;
+      })
+      .then(d=>{
+        setData(d);
+
+        setSignerName(
+          d.signerName ||
+          d.event?.organizerName ||
+          ""
+        );
+
+        setSignerEmail(
+          d.event?.organizerEmail ||
+          ""
+        );
+
+        if(d.status==="SIGNED"){
+          setSigned(true);
+        }
+      })
+      .catch(err=>setError(err.message));
+  },[token]);
+
+  useEffect(()=>{
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+
+    function resizeCanvas(){
+      const rect=canvas.getBoundingClientRect();
+
+      if(!rect.width)return;
+
+      const ratio=window.devicePixelRatio || 1;
+
+      canvas.width=Math.floor(rect.width*ratio);
+      canvas.height=Math.floor(220*ratio);
+
+      const ctx=canvas.getContext("2d");
+
+      ctx.setTransform(ratio,0,0,ratio,0,0);
+      ctx.lineWidth=3;
+      ctx.lineCap="round";
+      ctx.lineJoin="round";
+      ctx.strokeStyle="#111";
+    }
+
+    resizeCanvas();
+
+    window.addEventListener("resize",resizeCanvas);
+
+    return ()=>{
+      window.removeEventListener("resize",resizeCanvas);
+    };
+  },[data,signed]);
+
+  function pointFromEvent(e){
+    const canvas=canvasRef.current;
+    const rect=canvas.getBoundingClientRect();
+
+    return {
+      x:e.clientX-rect.left,
+      y:e.clientY-rect.top
+    };
+  }
+
+  function startDrawing(e){
+    if(signed)return;
+
+    const canvas=canvasRef.current;
+    const ctx=canvas.getContext("2d");
+    const p=pointFromEvent(e);
+
+    drawingRef.current=true;
+
+    try{
+      canvas.setPointerCapture(e.pointerId);
+    }catch{}
+
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+  }
+
+  function draw(e){
+    if(!drawingRef.current || signed)return;
+
+    const canvas=canvasRef.current;
+    const ctx=canvas.getContext("2d");
+    const p=pointFromEvent(e);
+
+    ctx.lineTo(p.x,p.y);
+    ctx.stroke();
+
+    hasSignatureRef.current=true;
+  }
+
+  function stopDrawing(e){
+    drawingRef.current=false;
+
+    try{
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }catch{}
+  }
+
+  function clearSignature(){
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+
+    const ctx=canvas.getContext("2d");
+
+    ctx.clearRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    hasSignatureRef.current=false;
+  }
+
+  async function signContract(){
+    if(!signerName.trim()){
+      return alert(
+        "Merci d'indiquer le nom du signataire."
+      );
+    }
+
+    if(!accepted){
+      return alert(
+        "Vous devez accepter le contrat avant de le signer."
+      );
+    }
+
+    if(!hasSignatureRef.current){
+      return alert(
+        "Merci de signer dans le cadre prévu."
+      );
+    }
+
+    const canvas=canvasRef.current;
+
+    const signatureData=
+      canvas.toDataURL("image/png");
+
+    setSending(true);
+
+    try{
+      const r=await fetch(
+        `/api/contract-signature/${encodeURIComponent(token)}/sign`,
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            signerName:signerName.trim(),
+            signerEmail:signerEmail.trim(),
+            signatureData
+          })
+        }
+      );
+
+      const d=await r.json().catch(()=>({}));
+
+      if(!r.ok){
+        return alert(
+          d.message ||
+          "Impossible d'enregistrer la signature."
+        );
+      }
+
+      setSigned(true);
+
+      alert(
+        "✅ Contrat signé avec succès."
+      );
+
+    }catch(err){
+      console.error(err);
+
+      alert(
+        "Erreur lors de l'enregistrement de la signature."
+      );
+
+    }finally{
+      setSending(false);
+    }
+  }
+
+  if(error){
+    return (
+      <div className="portal-shell">
+        <main className="portal-card">
+          <img
+            className="portal-logo"
+            src="/logo.jpg"
+            alt="Location Photobooth 28"
+          />
+
+          <h1>Contrat indisponible</h1>
+
+          <p>{error}</p>
+        </main>
+      </div>
+    );
+  }
+
+  if(!data){
+    return (
+      <div className="portal-shell">
+        <main className="portal-card">
+          <p>Chargement de votre contrat…</p>
+        </main>
+      </div>
+    );
+  }
+
+  const event=data.event || {};
+
+  if(signed || data.status==="SIGNED"){
+    return (
+      <div className="portal-shell">
+        <main className="portal-card">
+
+          <img
+            className="portal-logo"
+            src="/logo.jpg"
+            alt="Location Photobooth 28"
+          />
+
+          <div className="eyebrow">
+            LOCATION PHOTOBOOTH 28
+          </div>
+
+          <h1>✅ Contrat signé</h1>
+
+          <p>
+            Merci {data.signerName || signerName || ""}.
+          </p>
+
+          <p>
+            Votre contrat a bien été enregistré.
+          </p>
+
+          {data.signedAt && (
+            <p className="muted">
+              Signature enregistrée le{" "}
+              {new Date(data.signedAt)
+                .toLocaleString("fr-FR")}
+            </p>
+          )}
+
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="portal-shell">
+      <main
+        className="portal-card"
+        style={{maxWidth:760}}
+      >
+
+        <img
+          className="portal-logo"
+          src="/logo.jpg"
+          alt="Location Photobooth 28"
+        />
+
+        <div className="eyebrow">
+          LOCATION PHOTOBOOTH 28
+        </div>
+
+        <h1>✍️ Signature du contrat</h1>
+
+        <section className="portal-section">
+
+          <h2>{event.name}</h2>
+
+          {event.type && (
+            <p>
+              <strong>Type :</strong>{" "}
+              {event.type}
+            </p>
+          )}
+
+          {event.date && (
+            <p>
+              📅{" "}
+              {new Date(event.date)
+                .toLocaleDateString(
+                  "fr-FR",
+                  {
+                    day:"2-digit",
+                    month:"2-digit",
+                    year:"numeric"
+                  }
+                )}
+            </p>
+          )}
+
+          {event.address && (
+            <p>
+              📍 {event.address}
+            </p>
+          )}
+
+          {event.totalPrice != null && (
+            <p>
+              💶 Montant de la prestation :{" "}
+              <strong>
+                {Number(event.totalPrice)
+                  .toFixed(2)
+                  .replace(".",",")} €
+              </strong>
+            </p>
+          )}
+
+        </section>
+
+        <section className="portal-section">
+
+          <h2>📄 Votre contrat</h2>
+
+          <p>
+            Consultez le contrat complet avant de signer.
+          </p>
+
+          <a
+            className="portal-action primary"
+            href={data.contractPdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            📄 Lire le contrat PDF
+          </a>
+
+        </section>
+
+        <section className="portal-section">
+
+          <h2>👤 Signataire</h2>
+
+          <label>
+            Nom et prénom
+          </label>
+
+          <input
+            value={signerName}
+            onChange={e=>
+              setSignerName(e.target.value)
+            }
+            placeholder="Nom et prénom"
+          />
+
+          <label>
+            Adresse e-mail
+          </label>
+
+          <input
+            type="email"
+            value={signerEmail}
+            onChange={e=>
+              setSignerEmail(e.target.value)
+            }
+            placeholder="adresse@email.fr"
+          />
+
+        </section>
+
+        <section className="portal-section">
+
+          <h2>✍️ Signature</h2>
+
+          <p className="muted">
+            Signez dans le cadre ci-dessous avec votre doigt
+            ou votre souris.
+          </p>
+
+          <canvas
+            ref={canvasRef}
+            onPointerDown={startDrawing}
+            onPointerMove={draw}
+            onPointerUp={stopDrawing}
+            onPointerCancel={stopDrawing}
+            onPointerLeave={stopDrawing}
+            style={{
+              display:"block",
+              width:"100%",
+              height:220,
+              background:"#fff",
+              border:"2px solid #ccc",
+              borderRadius:12,
+              touchAction:"none",
+              cursor:"crosshair"
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={clearSignature}
+            style={{marginTop:10}}
+          >
+            🧽 Effacer la signature
+          </button>
+
+        </section>
+
+        <section className="portal-section">
+
+          <label
+            style={{
+              display:"flex",
+              alignItems:"flex-start",
+              gap:10
+            }}
+          >
+
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={e=>
+                setAccepted(e.target.checked)
+              }
+            />
+
+            <span>
+              Je reconnais avoir pris connaissance du
+              contrat et j'accepte ses conditions.
+            </span>
+
+          </label>
+
+        </section>
+
+        <button
+          className="primary"
+          disabled={sending}
+          onClick={signContract}
+          style={{
+            width:"100%",
+            padding:"16px",
+            fontSize:"17px"
+          }}
+        >
+          {sending
+            ? "Enregistrement…"
+            : "✍️ Signer définitivement le contrat"}
+        </button>
+
+        <p
+          className="muted"
+          style={{
+            textAlign:"center",
+            marginTop:14
+          }}
+        >
+          La date et l'heure de signature sont
+          enregistrées automatiquement par le serveur.
+        </p>
+
+      </main>
+    </div>
+  );
+}
 
 export default function App(){
   const path=window.location.pathname;
+
+  const signatureMatch =
+  path.match(/^\/signature\/([^/]+)$/);
+
+if(signatureMatch){
+  return (
+    <ContractSignaturePage
+      token={signatureMatch[1]}
+    />
+  );
+}
 
   const collaboratorMatch=
     path.match(/^\/collaborateur\/([^/]+)$/);

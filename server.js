@@ -1017,6 +1017,348 @@ app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
     });
   }
 });
+// ======================================================
+// SIGNATURE ELECTRONIQUE DES CONTRATS
+// ======================================================
+
+function contractHash(pdf) {
+  return crypto
+    .createHash("sha256")
+    .update(pdf)
+    .digest("hex");
+}
+
+
+// Générer / récupérer le lien sécurisé de signature
+app.post("/api/events/:id/contract-signature-link", adminOnly, async (req, res) => {
+  try {
+
+    const event = await prisma.event.findUnique({
+      where: {
+        id: req.params.id
+      },
+      include: {
+        client: true,
+        materials: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        ok: false,
+        message: "Événement introuvable."
+      });
+    }
+
+    // Un contrat déjà signé ne doit pas être remplacé silencieusement
+    if (event.contractStatus === "SIGNED") {
+      return res.status(409).json({
+        ok: false,
+        message: "Ce contrat est déjà signé."
+      });
+    }
+
+    const pdf = await contractService.generateContractPdf(event);
+    const hash = contractHash(pdf);
+
+    const token =
+      event.contractToken ||
+      crypto.randomBytes(24).toString("hex");
+
+    const updated = await prisma.event.update({
+      where: {
+        id: event.id
+      },
+      data: {
+        contractToken: token,
+        contractStatus: "SENT",
+        contractGeneratedAt: new Date(),
+        contractDocumentHash: hash,
+
+        // Une nouvelle génération annule une éventuelle
+        // signature incomplète précédente.
+        contractSignedAt: null,
+        contractSignerName: null,
+        contractSignerEmail: null,
+        contractSignatureData: null
+      }
+    });
+
+    const signatureUrl =
+      `${appBaseUrl(req)}/signature/${updated.contractToken}`;
+
+    res.json({
+      ok: true,
+      status: updated.contractStatus,
+      signatureUrl,
+      generatedAt: updated.contractGeneratedAt
+    });
+
+  } catch (err) {
+
+    console.error("Création lien signature contrat :", err);
+
+    res.status(500).json({
+      ok: false,
+      message: "Impossible de préparer le contrat à signer."
+    });
+  }
+});
+
+
+// Informations publiques du contrat à signer
+app.get("/api/contract-signature/:token", async (req, res) => {
+  try {
+
+    const event = await prisma.event.findUnique({
+      where: {
+        contractToken: req.params.token
+      },
+      include: {
+        client: true,
+        materials: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        ok: false,
+        message: "Lien de signature invalide."
+      });
+    }
+
+    res.json({
+      ok: true,
+
+      status: event.contractStatus,
+
+      event: {
+        name: event.name,
+        type: event.type,
+        date: event.eventDate,
+        address: event.address,
+
+        organizerName:
+          event.organizerName ||
+          [
+            event.client?.firstName,
+            event.client?.lastName
+          ].filter(Boolean).join(" "),
+
+        organizerEmail:
+          event.organizerEmail ||
+          event.client?.email ||
+          "",
+
+        totalPrice:
+          event.totalPrice != null
+            ? Number(event.totalPrice)
+            : null
+      },
+
+      generatedAt: event.contractGeneratedAt,
+      signedAt: event.contractSignedAt,
+      signerName: event.contractSignerName,
+
+      contractPdfUrl:
+        `/api/contract-signature/${encodeURIComponent(req.params.token)}/contract.pdf`
+    });
+
+  } catch (err) {
+
+    console.error("Lecture contrat signature :", err);
+
+    res.status(500).json({
+      ok: false,
+      message: "Impossible d'ouvrir le contrat."
+    });
+  }
+});
+
+
+// PDF correspondant exactement au contrat préparé
+app.get("/api/contract-signature/:token/contract.pdf", async (req, res) => {
+  try {
+
+    const event = await prisma.event.findUnique({
+      where: {
+        contractToken: req.params.token
+      },
+      include: {
+        client: true,
+        materials: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        ok: false,
+        message: "Contrat introuvable."
+      });
+    }
+
+    const pdf = await contractService.generateContractPdf(event);
+    const currentHash = contractHash(pdf);
+
+    // Le contrat a été modifié après création du lien.
+    if (
+      event.contractDocumentHash &&
+      currentHash !== event.contractDocumentHash
+    ) {
+      return res.status(409).json({
+        ok: false,
+        message:
+          "Le contrat a été modifié depuis la création du lien. " +
+          "Un nouveau lien de signature doit être généré."
+      });
+    }
+
+    res.setHeader(
+      "Content-Type",
+      "application/pdf"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      'inline; filename="Contrat_a_signer.pdf"'
+    );
+
+    res.send(pdf);
+
+  } catch (err) {
+
+    console.error("PDF signature contrat :", err);
+
+    res.status(500).json({
+      ok: false,
+      message: "Impossible d'afficher le contrat."
+    });
+  }
+});
+
+
+// Enregistrement de la signature
+app.post("/api/contract-signature/:token/sign", async (req, res) => {
+  try {
+
+    const signerName =
+      String(req.body?.signerName || "").trim();
+
+    const signerEmail =
+      String(req.body?.signerEmail || "").trim();
+
+    const signatureData =
+      String(req.body?.signatureData || "");
+
+    if (!signerName) {
+      return res.status(400).json({
+        ok: false,
+        message: "Le nom du signataire est obligatoire."
+      });
+    }
+
+    if (!signatureData.startsWith("data:image/")) {
+      return res.status(400).json({
+        ok: false,
+        message: "Signature invalide."
+      });
+    }
+
+    // Protection contre des données anormalement volumineuses
+    if (signatureData.length > 1500000) {
+      return res.status(413).json({
+        ok: false,
+        message: "La signature est trop volumineuse."
+      });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: {
+        contractToken: req.params.token
+      },
+      include: {
+        client: true,
+        materials: {
+          include: {
+            material: true
+          }
+        }
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        ok: false,
+        message: "Lien de signature invalide."
+      });
+    }
+
+    if (event.contractStatus === "SIGNED") {
+      return res.status(409).json({
+        ok: false,
+        message: "Ce contrat a déjà été signé."
+      });
+    }
+
+    const pdf = await contractService.generateContractPdf(event);
+    const currentHash = contractHash(pdf);
+
+    if (
+      !event.contractDocumentHash ||
+      currentHash !== event.contractDocumentHash
+    ) {
+      return res.status(409).json({
+        ok: false,
+        message:
+          "Le contrat a été modifié. Un nouveau lien de signature est nécessaire."
+      });
+    }
+
+    // HORODATAGE SERVEUR
+    const signedAt = new Date();
+
+    await prisma.event.update({
+      where: {
+        id: event.id
+      },
+      data: {
+        contractStatus: "SIGNED",
+        contractSignedAt: signedAt,
+        contractSignerName: signerName,
+        contractSignerEmail: signerEmail || null,
+        contractSignatureData: signatureData
+      }
+    });
+
+    res.json({
+      ok: true,
+      status: "SIGNED",
+      signedAt
+    });
+
+  } catch (err) {
+
+    console.error("Signature contrat :", err);
+
+    res.status(500).json({
+      ok: false,
+      message: "Impossible d'enregistrer la signature."
+    });
+  }
+});
+
 app.post("/api/events", adminOnly, async (req, res) => {
   const b = req.body || {};
   if (!String(b.name || "").trim() || !b.date) {
@@ -1323,7 +1665,7 @@ app.get("/api/events/:id/share", adminOnly, async (req, res) => {
 
   const guestUrl = `${base}/portal/${event.guestToken}`;
   const organizerUrl = `${base}/portal/${event.organizerToken}`;
-  
+
   const qrDataUrl = await QRCode.toDataURL(guestUrl, { width: 700, margin: 2 });
 
   res.json({ ok: true, guestUrl, organizerUrl, qrDataUrl });
