@@ -1290,7 +1290,6 @@ app.get("/api/contract-signature/:token/contract.pdf", async (req, res) => {
       });
     }
 
-    const pdf = await contractService.generateContractPdf(event);
     const currentHash = contractHash(event);
 
     // Le contrat a été modifié après création du lien.
