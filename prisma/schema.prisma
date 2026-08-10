@@ -96,6 +96,16 @@ model Event {
   organizerToken String? @unique
   guestToken     String? @unique
 
+  // Signature électronique du contrat
+  contractToken         String?   @unique
+  contractStatus        String    @default("NOT_SENT")
+  contractGeneratedAt   DateTime?
+  contractSignedAt      DateTime?
+  contractSignerName    String?
+  contractSignerEmail   String?
+  contractSignatureData String?
+  contractDocumentHash  String?
+
   archived  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
