@@ -866,7 +866,17 @@ app.get("/api/events", adminOnly, async (req, res) => {
       organizerName: e.organizerName,
       organizerPhone: e.organizerPhone,
       organizerEmail: e.organizerEmail,
+totalPrice: e.totalPrice != null
+  ? Number(e.totalPrice)
+  : "",
 
+deposit: e.deposit != null
+  ? Number(e.deposit)
+  : "",
+
+balance: e.balance != null
+  ? Number(e.balance)
+  : "",
       responsibleCollaboratorId: e.responsibleCollaboratorId,
 installerCollaboratorId: e.installerCollaboratorId,
 pickupCollaboratorId: e.pickupCollaboratorId,
@@ -1004,6 +1014,20 @@ pickupCollaboratorId:
       frameStatus: ["NOT_REQUIRED","TO_DO","IN_PROGRESS","DONE"].includes(b.frameStatus) ? b.frameStatus : "NOT_REQUIRED",
       preparation: b.preparation || defaultPreparation(selected),
       notes: String(b.notes || "").trim() || null,
+      totalPrice:
+  b.totalPrice !== "" && b.totalPrice != null
+    ? Number(b.totalPrice)
+    : null,
+
+deposit:
+  b.deposit !== "" && b.deposit != null
+    ? Number(b.deposit)
+    : null,
+
+balance:
+  b.balance !== "" && b.balance != null
+    ? Number(b.balance)
+    : null,
       depositPaid: Boolean(b.payments?.depositPaid),
       balancePaid: Boolean(b.payments?.balancePaid),
       cautionReceived: Boolean(b.payments?.cautionReceived),
@@ -1108,8 +1132,24 @@ pickupCollaboratorId:
         frameSource: ["NONE","CLIENT","LP28"].includes(b.frameSource) ? b.frameSource : "NONE",
         frameStatus: ["NOT_REQUIRED","TO_DO","IN_PROGRESS","DONE"].includes(b.frameStatus) ? b.frameStatus : "NOT_REQUIRED",
         preparation: b.preparation || defaultPreparation(selected),
-        notes: String(b.notes || "").trim() || null,
-        googleCalendarId: String(b.googleCalendarId || "").trim() || null,
+notes: String(b.notes || "").trim() || null,
+
+totalPrice:
+  b.totalPrice !== "" && b.totalPrice != null
+    ? Number(b.totalPrice)
+    : null,
+
+deposit:
+  b.deposit !== "" && b.deposit != null
+    ? Number(b.deposit)
+    : null,
+
+balance:
+  b.balance !== "" && b.balance != null
+    ? Number(b.balance)
+    : null,
+
+googleCalendarId: String(b.googleCalendarId || "").trim() || null,
         printerId: printCount > 0 ? (printerChoice.printer?.id || null) : null,
         depositPaid: Boolean(b.payments?.depositPaid),
         balancePaid: Boolean(b.payments?.balancePaid),
@@ -2003,6 +2043,10 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
       ? event.balance
       : null,
 
+      balancePaid: access.canSeeBalance
+  ? event.balancePaid
+  : null,
+  
     caution: access.canManageCaution
       ? {
           received: event.cautionReceived,

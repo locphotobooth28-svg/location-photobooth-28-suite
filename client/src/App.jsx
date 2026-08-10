@@ -35,7 +35,9 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",totalPrice:"",
+deposit:"",
+balance:"",
   payments:{depositPaid:false,balancePaid:false,cautionReceived:false,cautionReturned:false}
 };
 
@@ -680,9 +682,72 @@ Johan — Location Photobooth 28`;
         </div></div>
       </details>
 
-      <h3>Paiement et caution</h3>
+      <h3>Paiement et caution</h3><div className="form-grid">
+
+  <div>
+    <label>💰 Montant total de la prestation</label>
+    <input
+      type="number"
+      min="0"
+      step="0.01"
+      value={form.totalPrice||""}
+      onChange={e=>{
+        const total=e.target.value;
+        const deposit=form.deposit||0;
+
+        setForm(f=>({
+          ...f,
+          totalPrice:total,
+          balance:total
+            ? Math.max(
+                Number(total)-Number(deposit||0),
+                0
+              ).toFixed(2)
+            : ""
+        }));
+      }}
+      placeholder="Ex : 350"
+    />
+  </div>
+
+  <div>
+    <label>💳 Montant de l'acompte</label>
+    <input
+      type="number"
+      min="0"
+      step="0.01"
+      value={form.deposit||""}
+      onChange={e=>{
+        const deposit=e.target.value;
+        const total=form.totalPrice||0;
+
+        setForm(f=>({
+          ...f,
+          deposit,
+          balance:form.totalPrice
+            ? Math.max(
+                Number(total)-Number(deposit||0),
+                0
+              ).toFixed(2)
+            : ""
+        }));
+      }}
+      placeholder="Ex : 100"
+    />
+  </div>
+
+  <div>
+    <label>💶 Reste à régler</label>
+    <input
+      type="number"
+      value={form.balance||""}
+      readOnly
+    />
+  </div>
+
+</div>
       <div className="checks-grid">
-        {[["depositPaid","Acompte reçu"],["balancePaid","Solde payé"],["cautionReceived","Caution reçue"],["cautionReturned","Caution rendue"]].map(([key,label])=>
+        {[["depositPaid","Acompte reçu"],["balancePaid","Prestation réglée"],["cautionReceived","Caution reçue"],["cautionReturned","Caution rendue"]].map(([key,label])=>
           <label className={`status-check ${form.payments[key]?"checked":""}`} key={key}><input type="checkbox" checked={form.payments[key]} onChange={()=>togglePayment(key)}/><span>{form.payments[key]?"✓":"○"} {label}</span></label>
         )}
       </div>
@@ -2958,12 +3023,20 @@ function CollaboratorPortalPage({token}) {
             <h2>💶 Règlement</h2>
 
             <p>
-              Reste à régler :{" "}
-              <strong>
-                {data.balance!=null
-                  ? `${data.balance} €`
-                  : "Non renseigné"}
-              </strong>
+              {data.balancePaid ? (
+  <p>
+    ✅ <strong>Prestation réglée</strong>
+  </p>
+) : (
+  <p>
+    Reste à régler :{" "}
+    <strong>
+      {data.balance!=null
+        ? `${data.balance} €`
+        : "Non renseigné"}
+    </strong>
+  </p>
+)}
             </p>
           </section>
         )}
