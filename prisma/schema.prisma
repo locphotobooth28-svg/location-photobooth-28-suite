@@ -271,3 +271,20 @@ model MemoryMedia {
 
   @@index([eventId, status])
 }
+
+model Collaborator {
+  id        String  @id @default(uuid())
+  firstName String
+  lastName  String?
+  phone     String?
+  email     String?
+  active    Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  canInstall Boolean @default(true)
+  canPickup  Boolean @default(true)
+  canManage  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
