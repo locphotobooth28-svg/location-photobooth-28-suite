@@ -122,35 +122,7 @@ useEffect(()=>{
             setGoogleStatus(null);
             setGoogleCalendars([]);
           }
-          async function searchAddress(value){
-  set("address",value);
 
-  if(value.trim().length < 3){
-    setAddressSuggestions([]);
-    return;
-  }
-
-  setAddressLoading(true);
-
-  try{
-    const r=await fetch(
-      `https://data.geopf.fr/geocodage/completion/?text=${encodeURIComponent(value)}&type=StreetAddress&maximumResponses=6`
-    );
-
-    const d=await r.json();
-
-    setAddressSuggestions(
-      Array.isArray(d.results)
-        ? d.results
-        : []
-    );
-  }catch(err){
-    console.error("Recherche adresse :",err);
-    setAddressSuggestions([]);
-  }finally{
-    setAddressLoading(false);
-  }
-}
           return;
         }
 
@@ -186,7 +158,37 @@ useEffect(()=>{
   },[]);
 
   const set=(key,val)=>setForm(f=>({...f,[key]:val}));
-  const PRINT_PACKS = {
+
+async function searchAddress(value){
+  set("address",value);
+
+  if(value.trim().length < 3){
+    setAddressSuggestions([]);
+    return;
+  }
+
+  setAddressLoading(true);
+
+  try{
+    const r=await fetch(
+      `https://data.geopf.fr/geocodage/completion/?text=${encodeURIComponent(value)}&type=StreetAddress&maximumResponses=6`
+    );
+
+    const d=await r.json();
+
+    setAddressSuggestions(
+      Array.isArray(d.results)
+        ? d.results
+        : []
+    );
+  }catch(err){
+    console.error("Recherche adresse :",err);
+    setAddressSuggestions([]);
+  }finally{
+    setAddressLoading(false);
+  }
+}
+const PRINT_PACKS = {
   "Forfait sans aucune impression": {
     lola: 200,
     other: 150
@@ -570,11 +572,14 @@ Johan — Location Photobooth 28`;
   <label>📍 Adresse de la prestation</label>
 
   <input
-    value={form.address}
-    onChange={e=>searchAddress(e.target.value)}
-    placeholder="Commence à saisir une adresse..."
-    autoComplete="off"
-  />
+  value={form.address || ""}
+  onChange={e=>{
+  console.log("ADRESSE TAPEE :", e.target.value);
+  setForm(f=>({...f,address:e.target.value}));
+}}
+  placeholder="Commence à saisir une adresse..."
+  autoComplete="off"
+/>
 
   {addressLoading && (
     <p className="muted">Recherche de l'adresse...</p>
