@@ -1652,6 +1652,109 @@ app.post("/api/admin/galleries/:eventId/expiration", adminOnly, async (req, res)
     portalExpiresAt: event.portalExpiresAt
   });
 });
+app.post("/api/collaborators", adminOnly, async (req, res) => {
+  const b = req.body || {};
+
+  const firstName = String(b.firstName || "").trim();
+  const lastName = String(b.lastName || "").trim() || null;
+  const phone = String(b.phone || "").trim() || null;
+  const email = String(b.email || "").trim() || null;
+
+  if (!firstName) {
+    return res.status(400).json({
+      ok: false,
+      message: "Le prénom est obligatoire."
+    });
+  }
+
+  if (b.isDefault) {
+    await prisma.collaborator.updateMany({
+      data: { isDefault: false }
+    });
+  }
+
+  const collaborator = await prisma.collaborator.create({
+    data: {
+      firstName,
+      lastName,
+      phone,
+      email,
+      active: b.active !== false,
+      isDefault: Boolean(b.isDefault),
+      canInstall: b.canInstall !== false,
+      canPickup: b.canPickup !== false,
+      canManage: b.canManage !== false
+    }
+  });
+
+  res.json({
+    ok: true,
+    collaborator
+  });
+});
+app.patch("/api/collaborators/:id", adminOnly, async (req, res) => {
+  const b = req.body || {};
+
+  const current = await prisma.collaborator.findUnique({
+    where: { id: req.params.id }
+  });
+
+  if (!current) {
+    return res.status(404).json({
+      ok: false,
+      message: "Collaborateur introuvable."
+    });
+  }
+
+  if (b.isDefault === true) {
+    await prisma.collaborator.updateMany({
+      where: {
+        id: { not: req.params.id }
+      },
+      data: {
+        isDefault: false
+      }
+    });
+  }
+
+  const collaborator = await prisma.collaborator.update({
+    where: { id: req.params.id },
+    data: {
+      ...(b.firstName !== undefined
+        ? { firstName: String(b.firstName).trim() }
+        : {}),
+      ...(b.lastName !== undefined
+        ? { lastName: String(b.lastName).trim() || null }
+        : {}),
+      ...(b.phone !== undefined
+        ? { phone: String(b.phone).trim() || null }
+        : {}),
+      ...(b.email !== undefined
+        ? { email: String(b.email).trim() || null }
+        : {}),
+      ...(b.active !== undefined
+        ? { active: Boolean(b.active) }
+        : {}),
+      ...(b.isDefault !== undefined
+        ? { isDefault: Boolean(b.isDefault) }
+        : {}),
+      ...(b.canInstall !== undefined
+        ? { canInstall: Boolean(b.canInstall) }
+        : {}),
+      ...(b.canPickup !== undefined
+        ? { canPickup: Boolean(b.canPickup) }
+        : {}),
+      ...(b.canManage !== undefined
+        ? { canManage: Boolean(b.canManage) }
+        : {})
+    }
+  });
+
+  res.json({
+    ok: true,
+    collaborator
+  });
+});
 const distDir = path.join(__dirname, "dist");
 
 app.use(express.static(distDir));
@@ -1666,7 +1769,109 @@ app.get("/api/collaborators", adminOnly, async (req, res) => {
       { lastName: "asc" }
     ]
   });
+app.post("/api/collaborators", adminOnly, async (req, res) => {
+  const b = req.body || {};
 
+  const firstName = String(b.firstName || "").trim();
+  const lastName = String(b.lastName || "").trim() || null;
+  const phone = String(b.phone || "").trim() || null;
+  const email = String(b.email || "").trim() || null;
+
+  if (!firstName) {
+    return res.status(400).json({
+      ok: false,
+      message: "Le prénom est obligatoire."
+    });
+  }
+
+  if (b.isDefault) {
+    await prisma.collaborator.updateMany({
+      data: { isDefault: false }
+    });
+  }
+
+  const collaborator = await prisma.collaborator.create({
+    data: {
+      firstName,
+      lastName,
+      phone,
+      email,
+      active: b.active !== false,
+      isDefault: Boolean(b.isDefault),
+      canInstall: b.canInstall !== false,
+      canPickup: b.canPickup !== false,
+      canManage: b.canManage !== false
+    }
+  });
+
+  res.json({
+    ok: true,
+    collaborator
+  });
+});
+app.patch("/api/collaborators/:id", adminOnly, async (req, res) => {
+  const b = req.body || {};
+
+  const current = await prisma.collaborator.findUnique({
+    where: { id: req.params.id }
+  });
+
+  if (!current) {
+    return res.status(404).json({
+      ok: false,
+      message: "Collaborateur introuvable."
+    });
+  }
+
+  if (b.isDefault === true) {
+    await prisma.collaborator.updateMany({
+      where: {
+        id: { not: req.params.id }
+      },
+      data: {
+        isDefault: false
+      }
+    });
+  }
+
+  const collaborator = await prisma.collaborator.update({
+    where: { id: req.params.id },
+    data: {
+      ...(b.firstName !== undefined
+        ? { firstName: String(b.firstName).trim() }
+        : {}),
+      ...(b.lastName !== undefined
+        ? { lastName: String(b.lastName).trim() || null }
+        : {}),
+      ...(b.phone !== undefined
+        ? { phone: String(b.phone).trim() || null }
+        : {}),
+      ...(b.email !== undefined
+        ? { email: String(b.email).trim() || null }
+        : {}),
+      ...(b.active !== undefined
+        ? { active: Boolean(b.active) }
+        : {}),
+      ...(b.isDefault !== undefined
+        ? { isDefault: Boolean(b.isDefault) }
+        : {}),
+      ...(b.canInstall !== undefined
+        ? { canInstall: Boolean(b.canInstall) }
+        : {}),
+      ...(b.canPickup !== undefined
+        ? { canPickup: Boolean(b.canPickup) }
+        : {}),
+      ...(b.canManage !== undefined
+        ? { canManage: Boolean(b.canManage) }
+        : {})
+    }
+  });
+
+  res.json({
+    ok: true,
+    collaborator
+  });
+});
   res.json({
     ok: true,
     collaborators
