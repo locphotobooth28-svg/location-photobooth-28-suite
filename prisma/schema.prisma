@@ -293,22 +293,30 @@ model AppSetting {
 }
 
 model MemoryMedia {
-  id           String    @id @default(uuid())
-  eventId      String
-  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   fileName     String
   originalName String
   mimeType     String
   sizeBytes    Int
   mediaType    String
-  status       String    @default("VISIBLE")
-  source       String    @default("PORTAL")
-  deletedAt    DateTime?
-  uploadedBy   String    @default("GUEST")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+
+  driveFileId String?
+  driveUrl    String?
+  storageType String  @default("LOCAL")
+
+  status     String    @default("VISIBLE")
+  source     String    @default("PORTAL")
+  deletedAt  DateTime?
+  uploadedBy String    @default("GUEST")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([eventId, status])
+  @@index([driveFileId])
 }
 
 model Collaborator {

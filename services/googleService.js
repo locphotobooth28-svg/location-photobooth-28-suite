@@ -466,6 +466,97 @@ async function ensureDrive(client,event){
   });
   return parent.id;
 }
+async function uploadMemoryToDrive(req,event,file){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const parentId = await ensureDrive(client,event);
+
+  const folders = await drive.files.list({
+    q:`'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields:"files(id,name)"
+  });
+
+  let galleryFolder = (folders.data.files || [])
+    .find(f => f.name === "Galerie");
+
+  if(!galleryFolder){
+    galleryFolder = await createFolder(
+      drive,
+      "Galerie",
+      parentId
+    );
+  }
+
+  const fs = require("fs");
+
+  const uploaded = await drive.files.create({
+    requestBody:{
+      name:file.originalname || file.filename,
+      parents:[galleryFolder.id]
+    },
+    media:{
+      mimeType:file.mimetype,
+      body:fs.createReadStream(file.path)
+    },
+    fields:"id,name,mimeType,webViewLink,webContentLink"
+  });
+
+  return {
+    id: uploaded.data.id,
+    webViewLink: uploaded.data.webViewLink || null,
+    webContentLink: uploaded.data.webContentLink || null
+  };
+}
+async function getMemoryFromDrive(req,fileId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const response = await drive.files.get(
+    {
+      fileId,
+      alt:"media"
+    },
+    {
+      responseType:"stream"
+    }
+  );
+
+  return response.data;
+}
+
+async function deleteMemoryFromDrive(req,fileId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  await drive.files.delete({
+    fileId
+  });
+}
 
 async function syncCalendar(client,event){
   const c=await connection("calendar");
@@ -642,8 +733,50 @@ async function listEventDocuments(req,eventId){
   };
 }
 
+async function uploadEventDocument(req,eventId,file){
+  const client = await auth(req,"drive");
+  if(!client) throw new Error("Compte Google Drive non connecté.");
+
+  const event = await prisma.event.findUnique({where:{id:eventId}});
+  if(!event) throw new Error("Événement introuvable.");
+
+  const drive = google.drive({version:"v3",auth:client});
+  const parentId = await ensureDrive(client,event);
+  const folders = await drive.files.list({
+    q:`'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields:"files(id,name)"
+  });
+
+  let documentsFolder=(folders.data.files||[]).find(f=>f.name==="Documents");
+  if(!documentsFolder) documentsFolder=await createFolder(drive,"Documents",parentId);
+
+  const {Readable}=require("stream");
+  const uploaded=await drive.files.create({
+    requestBody:{
+      name:file.originalname || `Facture-${Date.now()}.pdf`,
+      parents:[documentsFolder.id]
+    },
+    media:{
+      mimeType:file.mimetype || "application/pdf",
+      body:Readable.from(file.buffer)
+    },
+    fields:"id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime"
+  });
+  return uploaded.data;
+}
+
+async function deleteEventDocument(req,fileId){
+  const client=await auth(req,"drive");
+  if(!client) throw new Error("Compte Google Drive non connecté.");
+  const drive=google.drive({version:"v3",auth:client});
+  await drive.files.delete({fileId});
+}
+
 module.exports={
   configured,connection,authUrl,callback,disconnect,
   listCalendars,listDriveFolders,saveSettings,
-  syncEvent,deleteCalendarEvent,listEventDocuments
+  syncEvent,deleteCalendarEvent,listEventDocuments,uploadEventDocument,deleteEventDocument,
+  uploadMemoryToDrive,
+  getMemoryFromDrive,
+  deleteMemoryFromDrive
 };

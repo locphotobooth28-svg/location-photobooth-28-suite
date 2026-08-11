@@ -2393,9 +2393,6 @@ function PortalPage({token}){
   },[token]);
 
   const organizer=data?.role==="ORGANIZER";
-  const organizerDocuments=data?.documents||null;
-const contract=organizerDocuments?.contract||null;
-const invoices=organizerDocuments?.invoices||[];
   const galleryMedia=organizer ? media : media.filter(m=>m.status==="VISIBLE");
   const photoMedia=galleryMedia.filter(m=>m.mediaType==="PHOTO");
 
@@ -2473,136 +2470,7 @@ const invoices=organizerDocuments?.invoices||[];
     <img className="portal-logo" src="/logo.jpg"/>
     <div className="eyebrow">LOCATION PHOTOBOOTH 28</div>
     <h1>{e.name}</h1>
-    <p className="portal-date">
-  {new Date(e.date+"T12:00:00").toLocaleDateString("fr-FR")}
-  {e.type ? ` • ${e.type}` : ""}
-</p>
-
-{organizer&&(
-  <section className="portal-section">
-
-    <h2>📄 Mes documents</h2>
-
-    <div style={{
-      display:"grid",
-      gap:14
-    }}>
-
-      <div className="portal-document-card">
-
-        <h3>📄 Contrat</h3>
-
-        {contract?.signed ? (
-          <>
-            <p>
-              ✅ <strong>Contrat signé</strong>
-            </p>
-
-            {contract.signerName&&(
-              <p className="muted">
-                Signataire : {contract.signerName}
-              </p>
-            )}
-
-            {contract.signedAt&&(
-              <p className="muted">
-                Signé le{" "}
-                {new Date(contract.signedAt)
-                  .toLocaleString("fr-FR")}
-              </p>
-            )}
-
-            {contract.signerEmail&&(
-              <p className="muted">
-                E-mail : {contract.signerEmail}
-              </p>
-            )}
-
-            {contract.signatureData&&(
-              <div style={{margin:"12px 0"}}>
-                <div className="muted" style={{marginBottom:6}}>Signature enregistrée :</div>
-                <img
-                  src={contract.signatureData}
-                  alt="Signature du client"
-                  style={{maxWidth:360,width:"100%",height:120,objectFit:"contain",background:"#fff",border:"1px solid #ddd",borderRadius:10}}
-                />
-              </div>
-            )}
-
-            {contract.pdfUrl&&(
-              <a
-                className="portal-action"
-                href={contract.pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                📄 Voir le contrat
-              </a>
-            )}
-          </>
-        ) : (
-          <>
-            <p>
-              ⏳ Contrat en attente de signature
-            </p>
-
-            {contract?.pdfUrl&&(
-              <a
-                className="portal-action"
-                href={contract.pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                📄 Lire le contrat
-              </a>
-            )}
-
-            {contract?.signatureUrl&&(
-              <a
-                className="portal-action primary"
-                href={contract.signatureUrl}
-              >
-                ✍️ Signer le contrat
-              </a>
-            )}
-          </>
-        )}
-
-      </div>
-
-      <div className="portal-document-card">
-
-        <h3>🧾 Factures</h3>
-
-        {invoices.length ? (
-          <div style={{
-            display:"grid",
-            gap:10
-          }}>
-            {invoices.map((invoice,index)=>(
-              <a
-                key={invoice.id}
-                className="portal-action"
-                href={invoice.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                🧾 {invoice.name || `Facture ${index+1}`}
-              </a>
-            ))}
-          </div>
-        ) : (
-          <p className="muted">
-            Aucune facture disponible pour le moment.
-          </p>
-        )}
-
-      </div>
-
-    </div>
-
-  </section>
-)}
+    <p className="portal-date">{new Date(e.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
     {organizer&&<div className="portal-role">🔐 Espace organisateur</div>}
 
     {e.fotoshareUrl&&<a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos de la borne</a>}
@@ -3181,78 +3049,6 @@ function CollaboratorsPanel(){
     </section>
   );
 }
-function EventDocumentsModal({event,onClose}){
-  const [data,setData]=useState(null);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState("");
-  const fileRef=useRef(null);
-
-  async function load(){
-    setError("");
-    const r=await fetch(`/api/events/${event.id}/documents`,{credentials:"include"});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok){setError(d.message||"Impossible de charger les documents.");return;}
-    setData(d);
-  }
-
-  useEffect(()=>{load()},[event.id]);
-
-  async function uploadInvoice(e){
-    const file=e.target.files?.[0];
-    if(!file)return;
-    setBusy(true);setError("");
-    try{
-      const fd=new FormData();fd.append("file",file);
-      const r=await fetch(`/api/events/${event.id}/documents/invoices`,{method:"POST",credentials:"include",body:fd});
-      const d=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(d.message||"Ajout impossible.");
-      await load();
-    }catch(err){setError(err.message)}
-    finally{setBusy(false);e.target.value="";}
-  }
-
-  async function removeInvoice(invoice){
-    if(!confirm(`Supprimer la facture « ${invoice.name} » ?`))return;
-    const r=await fetch(`/api/events/${event.id}/documents/${encodeURIComponent(invoice.id)}`,{method:"DELETE",credentials:"include"});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)return alert(d.message||"Suppression impossible.");
-    await load();
-  }
-
-  const contract=data?.contract;
-  return <div className="modal-backdrop"><div className="event-modal" style={{maxWidth:850}}>
-    <div className="modal-head"><div><div className="eyebrow">FICHE CLIENT · DOCUMENTS</div><h2>{event.name}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
-    {error&&<div className="alert">{error}</div>}
-    {!data?<p>Chargement…</p>:<>
-      <section className="panel" style={{marginBottom:16}}>
-        <h3>✍️ Preuve de signature du contrat</h3>
-        {contract?.signed?<>
-          <p><strong>✅ Contrat signé</strong></p>
-          <p className="muted">Signataire : {contract.signerName||"Non renseigné"}{contract.signerEmail?` · ${contract.signerEmail}`:""}</p>
-          <p className="muted">Horodatage serveur : {contract.signedAt?new Date(contract.signedAt).toLocaleString("fr-FR"):"Non disponible"}</p>
-          {contract.signatureData&&<img src={contract.signatureData} alt="Signature du client" style={{maxWidth:420,width:"100%",height:150,objectFit:"contain",background:"#fff",border:"1px solid #ddd",borderRadius:12,padding:8}}/>}
-          <div style={{marginTop:12}}><button onClick={()=>window.open(contract.pdfUrl,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button></div>
-        </>:<p className="muted">Le contrat n'est pas encore signé. La preuve apparaîtra ici après signature.</p>}
-      </section>
-
-      <section className="panel">
-        <h3>🧾 Factures accessibles au client</h3>
-        <p className="muted">Dépose une ou plusieurs factures PDF. Elles seront rangées dans le dossier Documents de l'événement sur Google Drive et visibles dans la session organisateur.</p>
-        <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={uploadInvoice} style={{display:"none"}}/>
-        <button className="primary" disabled={busy} onClick={()=>fileRef.current?.click()}>{busy?"Envoi…":"➕ Ajouter une facture PDF"}</button>
-        {!data.driveConnected&&<p className="alert" style={{marginTop:10}}>Google Drive doit être connecté pour déposer des factures.</p>}
-        <div style={{display:"grid",gap:10,marginTop:14}}>
-          {(data.invoices||[]).map(invoice=><div key={invoice.id} style={{display:"flex",gap:8,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
-            <strong>🧾 {invoice.name}</strong>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>window.open(invoice.url,"_blank","noopener,noreferrer")}>Voir</button><button className="danger-btn" onClick={()=>removeInvoice(invoice)}>Supprimer</button></div>
-          </div>)}
-          {!data.invoices?.length&&<p className="muted">Aucune facture déposée.</p>}
-        </div>
-      </section>
-    </>}
-  </div></div>;
-}
-
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
@@ -3260,27 +3056,14 @@ function Dashboard({onLogout}) {
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
-  const [documentsEvent,setDocumentsEvent]=useState(null);
   const [search,setSearch]=useState("");
 
   async function load(){
-    const [e,d]=await Promise.all([
-      fetch("/api/events").then(r=>r.json()),
-      fetch("/api/dashboard").then(r=>r.json())
-    ]);
-    setEvents(e.events||[]);
-    setStats(d.stats||{events:0,upcoming:0,signedContracts:0,activeGalleries:0});
+    const [e,d]=await Promise.all([fetch("/api/events").then(r=>r.json()),fetch("/api/dashboard").then(r=>r.json())]);
+    setEvents(e.events||[]); setStats(d.stats||stats);
   }
-
   useEffect(()=>{load()},[]);
 
-  async function completeEvent(event){
-    if(!confirm(`Confirmer que la prestation "${event.name}" est terminée ?`)) return;
-    const r=await fetch(`/api/events/${event.id}/complete`,{method:"PATCH"});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok) return alert(d.message||"Impossible de terminer la prestation.");
-    await load();
-  }
 
   async function syncGoogle(event){
     const r=await fetch(`/api/events/${event.id}/google-sync`,{method:"POST"});
@@ -3294,21 +3077,14 @@ function Dashboard({onLogout}) {
 
   async function remove(event){
     if(!confirm(`Supprimer définitivement "${event.name}" ?`)) return;
-    await fetch(`/api/events/${event.id}`,{method:"DELETE"});
-    load();
+    await fetch(`/api/events/${event.id}`,{method:"DELETE"}); load();
   }
-
   async function archive(event){
-    await fetch(`/api/events/${event.id}/archive`,{method:"POST"});
-    load();
+    await fetch(`/api/events/${event.id}/archive`,{method:"POST"}); load();
   }
-
   function saved(){setShowForm(false);setFormEvent(undefined);load();}
 
-  const filtered=useMemo(
-    ()=>events.filter(e=>(e.name+" "+e.organizerName+" "+e.type).toLowerCase().includes(search.toLowerCase())),
-    [events,search]
-  );
+  const filtered=useMemo(()=>events.filter(e=>(e.name+" "+e.organizerName+" "+e.type).toLowerCase().includes(search.toLowerCase())),[events,search]);
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -3320,10 +3096,11 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>setView("materialPlanning")}>📦 Planning matériel</button>
         <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>setView("inventory")}>🔐 Inventaire admin</button>
         <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
-        <button className={`nav-item ${view==="documents"?"active":""}`} onClick={()=>setView("documents")}>📄 Documents</button>
+        <button className="nav-item disabled">📄 Documents <small>bientôt</small></button>
         <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
-        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")}>👷 Collaborateurs</button>
+        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")} >👷 Collaborateurs</button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
+        
         <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>setView("assistance")}>🆘 Assistance</button>
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
@@ -3331,7 +3108,7 @@ function Dashboard({onLogout}) {
 
     <main className="content">
       <header className="topbar">
-        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
+        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="galleries"?"Galeries":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         <button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>
       </header>
 
@@ -3349,77 +3126,138 @@ function Dashboard({onLogout}) {
           {filtered.length===0 && <div className="empty-state"><span>📅</span><h2>Aucun événement</h2><p>Crée ton premier événement.</p></div>}
           {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id}>
             <div className="event-date"><strong>{event.date?.slice(8,10)||"--"}</strong><span>{new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{month:"short"})}</span></div>
-            <div className="event-content">
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <strong>{event.name}</strong>
-                {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
-                {event.status==="COMPLETED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>✅ Prestation terminée</span>}
+            <div className="event-main"><div className="event-title-row"><div><h3>{event.name}</h3>
                 <span className={`booking-status status-${(event.bookingStatus||"CONFIRMED").toLowerCase()}`}>
-                  {event.bookingStatus==="OPTION"?"🟠 Option":event.bookingStatus==="QUOTE_SENT"?"📤 Devis envoyé":event.bookingStatus==="QUOTE_DRAFT"?"📝 Devis":event.bookingStatus==="CONFIRMED"?"🟢 Confirmé":event.bookingStatus==="COMPLETED"?"🔵 Terminé":event.bookingStatus==="DECLINED"?"⚪ Refusé":event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
-                </span>
-              </div>
-              <div className="event-meta">
-                <span>{event.type}{event.organizerName?` · ${event.organizerName}`:""}{event.archived?" · Archivé":""}</span>
-                <span>📍 {event.address||"Adresse non renseignée"}</span>
-                <span>📦 {event.materials?.length||0} sélection(s)</span>
-                {event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}
-                <span>👥 {event.guestCount||0} invité(s)</span>
-                {event.pickupDate&&<span>↩️ Reprise {new Date(event.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{event.pickupTime?` ${event.pickupTime}`:""}</span>}
-                {event.frameSource&&event.frameSource!=="NONE"&&<span className={`frame-badge frame-${event.frameStatus?.toLowerCase()}`}>🎨 {event.frameSource==="CLIENT"?"Client":"LP28"} · {event.frameStatus==="DONE"?"Terminé":event.frameStatus==="IN_PROGRESS"?"En cours":"À faire"}</span>}
-                {event.googleCalendarEventId&&<span>📅 Agenda ✓</span>}
-                {event.googleDriveFolderId&&<span>☁️ Drive ✓</span>}
-              </div>
-              <div className="event-actions">
-                <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
-                <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
-                <button onClick={()=>setDocumentsEvent(event)}>📁 Documents client</button>
-                <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
-                <button onClick={async()=>{
-                  try{
-                    const r=await fetch(`/api/events/${event.id}/contract-signature-link`,{method:"POST"});
-                    const d=await r.json().catch(()=>({}));
-                    if(!r.ok)return alert(d.message||"Impossible de préparer le contrat à signer.");
-                    try{await navigator.clipboard.writeText(d.signatureUrl);alert(`✅ Lien de signature créé et copié !\n\n${d.signatureUrl}`)}
-                    catch{prompt("Copie ce lien et envoie-le au client :",d.signatureUrl)}
-                  }catch(err){console.error(err);alert("Erreur lors de la création du lien de signature.")}
-                }}>✍️ Faire signer</button>
-                {event.status!=="COMPLETED"&&<button onClick={()=>completeEvent(event)}>✅ Prestation terminée</button>}
-                <button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button>
-                <button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button>
-                <button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>
-              </div>
+                  {event.bookingStatus==="OPTION"?"🟠 Option":
+                   event.bookingStatus==="QUOTE_SENT"?"📤 Devis envoyé":
+                   event.bookingStatus==="QUOTE_DRAFT"?"📝 Devis":
+                   event.bookingStatus==="CONFIRMED"?"🟢 Confirmé":
+                   event.bookingStatus==="COMPLETED"?"🔵 Terminé":
+                   event.bookingStatus==="DECLINED"?"⚪ Refusé":
+                   event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
+                </span><p>{event.type}{event.organizerName?` · ${event.organizerName}`:""}</p></div>{event.archived&&<span className="badge">Archivé</span>}</div>
+              <div className="event-meta"><span>📍 {event.address||"Adresse non renseignée"}</span><span>📦 {event.materials?.length||0} sélection(s)</span>{event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}<span>👥 {event.guestCount||0} invité(s)</span>{event.pickupDate&&<span>↩️ Reprise {new Date(event.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{event.pickupTime?` ${event.pickupTime}`:""}</span>}{event.frameSource&&event.frameSource!=="NONE"&&<span className={`frame-badge frame-${event.frameStatus?.toLowerCase()}`}>🎨 {event.frameSource==="CLIENT"?"Client":"LP28"} · {event.frameStatus==="DONE"?"Terminé":event.frameStatus==="IN_PROGRESS"?"En cours":"À faire"}</span>}{event.googleCalendarEventId&&<span className="google-mini-ok">📅 Agenda ✓</span>}{event.googleDriveFolderId&&<span className="google-mini-ok">☁️ Drive ✓</span>}</div>
+              <div className="event-actions"><button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button><button onClick={()=>setShareEvent(event)}>📱 Partager<button
+  onClick={()=>
+    window.open(
+      `/api/events/${event.id}/contract.pdf`,
+      "_blank",
+      "noopener,noreferrer"
+    )
+  }
+>
+  📄 Voir le contrat
+</button><button
+  onClick={async ()=>{
+    try {
+      const r = await fetch(
+        `/api/events/${event.id}/contract-signature-link`,
+        { method:"POST" }
+      );
+
+      const d = await r.json();
+
+      if(!r.ok){
+        return alert(
+          d.message || "Impossible de préparer le contrat à signer."
+        );
+      }
+
+      try {
+        await navigator.clipboard.writeText(d.signatureUrl);
+        alert(
+          `✅ Lien de signature créé et copié !\n\n${d.signatureUrl}`
+        );
+      } catch {
+        prompt(
+          "Copie ce lien et envoie-le au client :",
+          d.signatureUrl
+        );
+      }
+
+    } catch(err) {
+      console.error(err);
+      alert("Erreur lors de la création du lien de signature.");
+    }
+  }}
+>
+  ✍️ Faire signer
+</button></button><button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button><button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button></div>
             </div>
           </article>)}
         </div>
       </> : view==="planning" ? <>
-        <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}}/>
-        <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <section className="panel"><h2>📄 Documents</h2><p className="muted">Les contrats sont accessibles depuis chaque événement et depuis l'espace organisateur.</p></section> : null}
+        <CalendarView
+          events={events}
+          onOpenEvent={(event)=>{setFormEvent(event);setShowForm(true)}}
+        />
+        <section className="planning-legend">
+          <span><i className="dot dot-marriage"></i>Mariage</span>
+          <span><i className="dot dot-birthday"></i>Anniversaire</span>
+          <span><i className="dot dot-company"></i>Entreprise</span>
+          <span><i className="dot dot-baptism"></i>Baptême</span>
+          <span><i className="dot dot-other"></i>Autre</span>
+        </section>
+      </> : view==="inventory" ? <>
+        <AdminInventory />
+      </> : view==="materialPlanning" ? <>
+        <MaterialPlanning
+          onOpenEvent={(event)=>{
+            const full=events.find(e=>e.id===event.id);
+            if(full){setFormEvent(full);setShowForm(true)}
+          }}
+        />
+      </> : view==="longPlanning" ? <>
+        <LongRangePlanning />
+      </> : view==="galleries" ? <>
+  <AdminGalleries />
+</> : view==="collaborators" ? <>
+  <CollaboratorsPanel />
+</> : view==="assistance" ? <>
+  <AssistanceCenter />
+</> : <>
+  <GooglePanel />
+</>}
     </main>
 
-    {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
-    {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
-    {documentsEvent&&<EventDocumentsModal event={documentsEvent} onClose={()=>setDocumentsEvent(null)}/>}
-  </div>;
+    {showForm&&<EventForm event={formEvent} onClose={()=>setShowForm(false)} onSaved={saved}/>}
+{shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
+</div>;
 }
-
-function CollaboratorPortalPage({token}){
+function CollaboratorPortalPage({token}) {
   const [data,setData]=useState(null);
   const [error,setError]=useState("");
 
   useEffect(()=>{
     fetch(`/api/collaborator-portal/${encodeURIComponent(token)}`)
       .then(async r=>{
-        const d=await r.json().catch(()=>({}));
-        if(!r.ok)throw new Error(d.message||"Accès collaborateur indisponible.");
+        const d=await r.json();
+
+        if(!r.ok){
+          throw new Error(d.message||"Accès impossible.");
+        }
+
         return d;
       })
       .then(setData)
-      .catch(e=>setError(e.message));
+      .catch(err=>setError(err.message));
   },[token]);
 
-  if(error)return <div className="portal-page"><div className="portal-card"><h1>Accès indisponible</h1><p>{error}</p></div></div>;
-  if(!data)return <div className="portal-page"><div className="portal-card"><p>Chargement…</p></div></div>;
+  if(error){
+    return (
+      <div className="portal-page">
+        <div className="portal-card">
+          <div className="eyebrow">LOCATION PHOTOBOOTH 28</div>
+          <h1>🔐 Accès indisponible</h1>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if(!data){
+    return <div className="loading">Chargement de la prestation…</div>;
+  }
 
   const c=data.collaborator;
   const m=data.mission;

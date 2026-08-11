@@ -1,4 +1,4 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 
 const express = require("express");
 const session = require("express-session");
@@ -29,6 +29,15 @@ const memoriesUpload = multer({
   fileFilter:(req,file,cb)=>{
     const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif","video/mp4","video/quicktime"].includes(file.mimetype);
     cb(ok?null:new Error("Format non autorisÃ©."),ok);
+  }
+});
+
+const invoiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  fileFilter: (req,file,cb) => {
+    const ok = file.mimetype === "application/pdf" || /\.pdf$/i.test(file.originalname || "");
+    cb(ok ? null : new Error("Seuls les fichiers PDF sont autorisés."), ok);
   }
 });
 
@@ -453,39 +462,49 @@ app.get("/auth/google/callback", adminOnly, async (req, res) => {
 });
 
 app.post("/api/google/disconnect/:kind", adminOnly, async (req, res) => {
-  const kind = req.params.kind;
+  try {
+    const kind = req.params.kind;
 
-  if(kind !== "calendar" && kind !== "drive"){
-    return res.status(400).json({
+    if(kind !== "calendar" && kind !== "drive"){
+      return res.status(400).json({
+        ok:false,
+        message:"Type de connexion Google invalide."
+      });
+    }
+
+    await googleService.disconnect(kind);
+
+    res.json({
+      ok:true,
+      kind
+    });
+
+  } catch (err) {
+    console.error("Déconnexion Google :", err);
+
+    res.status(500).json({
       ok:false,
-      message:"Type de connexion Google invalide."
+      message:"Impossible de déconnecter Google."
     });
   }
-app.post("/api/google/disconnect/:kind", adminOnly, async (req, res) => {
-  const kind = req.params.kind;
-
-  if(kind !== "calendar" && kind !== "drive"){
-    return res.status(400).json({
-      ok:false,
-      message:"Type de connexion Google invalide."
-    });
-  }
-
-  await googleService.disconnect(kind);
-
-  res.json({
-    ok:true,
-    kind
-  });
 });
 
 app.post("/api/google/disconnect", adminOnly, async (req, res) => {
-  await googleService.disconnect();
+  try {
+    await googleService.disconnect();
 
-  res.json({
-    ok:true
-  });
-});
+    res.json({
+      ok:true
+    });
+
+  } catch (err) {
+    console.error("Déconnexion Google :", err);
+
+    res.status(500).json({
+      ok:false,
+      message:"Impossible de déconnecter Google."
+    });
+  }
 });
 
 app.get("/api/google/calendars", adminOnly, async (req, res) => {
@@ -949,11 +968,25 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
       frameStatus: e.frameStatus,
       preparation: e.preparation,
       notes: e.notes,
-      archived: e.archived,
-      status: e.status,
-      googleCalendarEventId: e.googleCalendarEventId,
-      googleCalendarId: e.googleCalendarId,
-      googleDriveFolderId: e.googleDriveFolderId,
+archived: e.archived,
+status: e.status,
+
+contractStatus: e.contractStatus,
+contractSignedAt: e.contractSignedAt,
+contractSignerName: e.contractSignerName,
+contractSignerEmail: e.contractSignerEmail,
+
+client: e.client ? {
+  id: e.client.id,
+  firstName: e.client.firstName,
+  lastName: e.client.lastName,
+  email: e.client.email,
+  phone: e.client.phone
+} : null,
+
+googleCalendarEventId: e.googleCalendarEventId,
+googleCalendarId: e.googleCalendarId,
+googleDriveFolderId: e.googleDriveFolderId,
       printer: e.printer ? {
         id: e.printer.id,
         name: e.printer.name,
@@ -963,6 +996,43 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
       } : null
     }))
   });
+});
+app.patch("/api/events/:id/complete", adminOnly, async (req,res)=>{
+  try{
+    const event = await prisma.event.findUnique({
+      where:{id:req.params.id}
+    });
+
+    if(!event){
+      return res.status(404).json({
+        ok:false,
+        message:"Événement introuvable."
+      });
+    }
+
+    const updated = await prisma.event.update({
+      where:{id:event.id},
+      data:{
+        status:"COMPLETED",
+        bookingStatus:"COMPLETED"
+      }
+    });
+
+    res.json({
+      ok:true,
+      id:updated.id,
+      status:updated.status,
+      bookingStatus:updated.bookingStatus
+    });
+
+  }catch(err){
+    console.error("Fin de prestation :",err);
+
+    res.status(500).json({
+      ok:false,
+      message:"Impossible de terminer la prestation."
+    });
+  }
 });
 app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
   try {
@@ -1119,32 +1189,36 @@ app.post("/api/events/:id/contract-signature-link", adminOnly, async (req, res) 
       });
     }
 
-    // Un contrat déjà signé ne doit pas être remplacé silencieusement
-    if (event.contractStatus === "SIGNED") {
-      const currentHash = contractHash(event);
+    const currentHash = contractHash(event);
 
-if (
-  event.contractStatus === "SENT" &&
-  event.contractToken &&
-  event.contractDocumentHash === currentHash
-) {
-  return res.json({
-    ok: true,
-    status: event.contractStatus,
-    signatureUrl:
-      `${appBaseUrl(req)}/signature/${event.contractToken}`,
-    generatedAt: event.contractGeneratedAt,
-    reused: true
-  });
-}
+    // Un contrat déjà signé ne doit pas être remplacé silencieusement.
+    if (event.contractStatus === "SIGNED") {
       return res.status(409).json({
         ok: false,
         message: "Ce contrat est déjà signé."
       });
     }
 
-    const pdf = await contractService.generateContractPdf(event);
-    const hash = contractHash(event);
+    // Si le contrat envoyé correspond toujours aux données actuelles,
+    // on réutilise le même lien au lieu d'en créer un nouveau.
+    if (
+      event.contractStatus === "SENT" &&
+      event.contractToken &&
+      event.contractDocumentHash === currentHash
+    ) {
+      return res.json({
+        ok: true,
+        status: event.contractStatus,
+        signatureUrl:
+          `${appBaseUrl(req)}/signature/${event.contractToken}`,
+        generatedAt: event.contractGeneratedAt,
+        reused: true
+      });
+    }
+
+    // Vérifie aussi que le PDF peut bien être généré avant de créer le lien.
+    await contractService.generateContractPdf(event);
+    const hash = currentHash;
 
     const token =
       event.contractToken ||
@@ -1304,6 +1378,8 @@ app.get("/api/contract-signature/:token/contract.pdf", async (req, res) => {
           "Un nouveau lien de signature doit être généré."
       });
     }
+
+    const pdf = await contractService.generateContractPdf(event);
 
     res.setHeader(
       "Content-Type",
@@ -2008,46 +2084,438 @@ async function portalAccess(token){
   if(!event)return null;
   return {event,role:event.organizerToken===token?"ORGANIZER":"GUEST"};
 }
-function safeMedia(m){
-  return {id:m.id,url:`/memories/${encodeURIComponent(m.fileName)}`,originalName:m.originalName,mimeType:m.mimeType,mediaType:m.mediaType,status:m.status,createdAt:m.createdAt};
+function safeMedia(m,token){
+  return {
+    id:m.id,
+    url:`/api/guest/${encodeURIComponent(token)}/memories/${m.id}/file`,
+    originalName:m.originalName,
+    mimeType:m.mimeType,
+    mediaType:m.mediaType,
+    status:m.status,
+    createdAt:m.createdAt
+  };
 }
 
 // Endpoint public limitÃ© au portail organisateur/invitÃ©.
 // Aucun lien d'administration, inventaire ou stock n'est exposÃ© ici.
-app.get("/api/guest/:token/portal", async (req,res)=>{
-  await ensureV82Settings();
-  const access=await portalAccess(req.params.token);
-  const event=access?.event;
-  if(!event||!event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
-  if(event.portalExpiresAt&&event.portalExpiresAt<new Date())return res.status(410).json({ok:false,message:"Portail expirÃ©."});
+ app.get("/api/guest/:token/portal", async (req,res)=>{
+  try{
+    await ensureV82Settings();
 
-  const [videos,settingsRows]=await Promise.all([
-    prisma.assistanceVideo.findMany({where:{active:true},orderBy:[{sortOrder:"asc"},{createdAt:"asc"}]}),
-    prisma.appSetting.findMany({where:{key:{in:["supportPhone","whatsappUrl","googleReviewUrl"]}}})
-  ]);
-  const safeSettings=Object.fromEntries(settingsRows.map(x=>[x.key,x.value]));
+    const access=await portalAccess(req.params.token);
+    const event=access?.event;
 
-  res.json({
-    ok:true,
-    event:{
-      name:event.name,
-      type:event.type,
-      date:event.eventDate.toISOString().slice(0,10),
-      guestUploadEnabled:event.guestUploadEnabled,
-      guestVideoEnabled:event.guestVideoEnabled,
-      guestUploadModerated:event.guestUploadModerated,
-      fotoshareUrl:event.fotoshareUrl
-    },
-    assistanceVideos:videos.map(v=>({id:v.id,title:v.title,url:v.url})),
-    role:access.role,
-    support:{
-      phone:safeSettings.supportPhone||"",
-      whatsappUrl:safeSettings.whatsappUrl||"",
-      googleReviewUrl:safeSettings.googleReviewUrl||""
+    if(!event || !event.portalEnabled){
+      return res.status(404).json({
+        ok:false,
+        message:"Portail indisponible."
+      });
     }
-  });
+
+    if(
+      event.portalExpiresAt &&
+      event.portalExpiresAt < new Date()
+    ){
+      return res.status(410).json({
+        ok:false,
+        message:"Portail expiré."
+      });
+    }
+
+    const [videos,settingsRows]=await Promise.all([
+      prisma.assistanceVideo.findMany({
+        where:{active:true},
+        orderBy:[
+          {sortOrder:"asc"},
+          {createdAt:"asc"}
+        ]
+      }),
+
+      prisma.appSetting.findMany({
+        where:{
+          key:{
+            in:[
+              "supportPhone",
+              "whatsappUrl",
+              "googleReviewUrl"
+            ]
+          }
+        }
+      })
+    ]);
+
+    const safeSettings=
+      Object.fromEntries(
+        settingsRows.map(x=>[x.key,x.value])
+      );
+
+    let organizerDocuments=null;
+
+    if(access.role==="ORGANIZER"){
+
+      let invoices=[];
+
+      try{
+        const driveResult=
+          await googleService.listEventDocuments(
+            req,
+            event.id
+          );
+
+        const documents=
+          driveResult.documents || [];
+
+        invoices=documents
+          .filter(f=>
+            /facture|invoice/i.test(f.name || "") &&
+            (
+              f.mimeType==="application/pdf" ||
+              /\.pdf$/i.test(f.name || "")
+            )
+          )
+          .map(f=>({
+            id:f.id,
+            name:f.name,
+            mimeType:f.mimeType,
+            url:
+              `/api/guest/${encodeURIComponent(req.params.token)}` +
+              `/documents/${encodeURIComponent(f.id)}`
+          }));
+
+      }catch(err){
+        console.error(
+          "Documents portail organisateur :",
+          err.message
+        );
+      }
+
+      organizerDocuments={
+        contract:{
+          status:event.contractStatus || "NOT_SENT",
+
+          signed:
+            event.contractStatus==="SIGNED",
+
+          signedAt:
+            event.contractSignedAt || null,
+
+          signerName:
+            event.contractSignerName || null,
+
+          signerEmail:
+            event.contractSignerEmail || null,
+
+          signatureData:
+            event.contractStatus === "SIGNED"
+              ? (event.contractSignatureData || null)
+              : null,
+
+          pdfUrl:
+            `/api/guest/${encodeURIComponent(req.params.token)}/contract.pdf`,
+
+          signatureUrl:
+            event.contractToken
+              ? `/signature/${encodeURIComponent(event.contractToken)}`
+              : null
+        },
+
+        invoices
+      };
+    }
+
+    res.json({
+      ok:true,
+
+      event:{
+        name:event.name,
+        type:event.type,
+        date:event.eventDate.toISOString().slice(0,10),
+
+        guestUploadEnabled:
+          event.guestUploadEnabled,
+
+        guestVideoEnabled:
+          event.guestVideoEnabled,
+
+        guestUploadModerated:
+          event.guestUploadModerated,
+
+        fotoshareUrl:
+          event.fotoshareUrl
+      },
+
+      assistanceVideos:
+        videos.map(v=>({
+          id:v.id,
+          title:v.title,
+          url:v.url
+        })),
+
+      role:access.role,
+
+      documents:organizerDocuments,
+
+      support:{
+        phone:
+          safeSettings.supportPhone || "",
+
+        whatsappUrl:
+          safeSettings.whatsappUrl || "",
+
+        googleReviewUrl:
+          safeSettings.googleReviewUrl || ""
+      }
+    });
+
+  }catch(err){
+    console.error(
+      "Portail organisateur/invité :",
+      err
+    );
+
+    res.status(500).json({
+      ok:false,
+      message:"Impossible de charger le portail."
+    });
+  }
+});
+// Documents d'un événement : preuve de signature + factures Drive
+app.get("/api/events/:id/documents", adminOnly, async (req,res) => {
+  try{
+    const event=await prisma.event.findUnique({where:{id:req.params.id}});
+    if(!event) return res.status(404).json({ok:false,message:"Événement introuvable."});
+
+    let documents=[];
+    let driveConnected=false;
+    try{
+      const driveResult=await googleService.listEventDocuments(req,event.id);
+      driveConnected=Boolean(driveResult.connected);
+      documents=(driveResult.documents||[])
+        .filter(f=>/facture|invoice/i.test(f.name||"") && (f.mimeType==="application/pdf" || /\.pdf$/i.test(f.name||"")))
+        .map(f=>({
+          id:f.id,name:f.name,mimeType:f.mimeType,createdTime:f.createdTime,modifiedTime:f.modifiedTime,
+          url:`/api/events/${encodeURIComponent(event.id)}/documents/${encodeURIComponent(f.id)}`
+        }));
+    }catch(err){
+      console.error("Liste documents événement :",err.message);
+    }
+
+    res.json({
+      ok:true,driveConnected,
+      contract:{
+        status:event.contractStatus||"NOT_SENT",
+        signed:event.contractStatus==="SIGNED",
+        signedAt:event.contractSignedAt||null,
+        signerName:event.contractSignerName||null,
+        signerEmail:event.contractSignerEmail||null,
+        signatureData:event.contractStatus==="SIGNED" ? (event.contractSignatureData||null) : null,
+        pdfUrl:`/api/events/${encodeURIComponent(event.id)}/contract.pdf`
+      },
+      invoices:documents
+    });
+  }catch(err){
+    console.error("Documents événement :",err);
+    res.status(500).json({ok:false,message:"Impossible de charger les documents."});
+  }
 });
 
+app.post("/api/events/:id/documents/invoices", adminOnly, invoiceUpload.single("file"), async (req,res) => {
+  try{
+    if(!req.file) return res.status(400).json({ok:false,message:"Sélectionne une facture PDF."});
+    const safeBase=String(req.file.originalname||"facture.pdf").replace(/[^a-zA-Z0-9À-ÿ._ -]/g,"_");
+    if(!/facture|invoice/i.test(safeBase)) req.file.originalname=`Facture - ${safeBase}`;
+    else req.file.originalname=safeBase;
+    const document=await googleService.uploadEventDocument(req,req.params.id,req.file);
+    res.json({ok:true,document});
+  }catch(err){
+    console.error("Ajout facture événement :",err);
+    res.status(500).json({ok:false,message:err.message||"Impossible d'ajouter la facture."});
+  }
+});
+
+app.get("/api/events/:id/documents/:fileId", adminOnly, async (req,res) => {
+  try{
+    const driveResult=await googleService.listEventDocuments(req,req.params.id);
+    const document=(driveResult.documents||[]).find(f=>f.id===req.params.fileId && /facture|invoice/i.test(f.name||""));
+    if(!document) return res.status(404).json({ok:false,message:"Facture introuvable."});
+    const stream=await googleService.getMemoryFromDrive(req,document.id);
+    res.setHeader("Content-Type",document.mimeType||"application/pdf");
+    res.setHeader("Content-Disposition",`inline; filename="${String(document.name||"facture.pdf").replace(/["\r\n]/g,"")}"`);
+    stream.on("error",err=>{console.error("Lecture facture Drive :",err);if(!res.headersSent)res.status(500).end();});
+    stream.pipe(res);
+  }catch(err){
+    console.error("Lecture facture événement :",err);
+    if(!res.headersSent) res.status(500).json({ok:false,message:"Impossible d'ouvrir la facture."});
+  }
+});
+
+app.delete("/api/events/:id/documents/:fileId", adminOnly, async (req,res) => {
+  try{
+    const driveResult=await googleService.listEventDocuments(req,req.params.id);
+    const document=(driveResult.documents||[]).find(f=>f.id===req.params.fileId && /facture|invoice/i.test(f.name||""));
+    if(!document) return res.status(404).json({ok:false,message:"Facture introuvable."});
+    await googleService.deleteEventDocument(req,document.id);
+    res.json({ok:true});
+  }catch(err){
+    console.error("Suppression facture événement :",err);
+    res.status(500).json({ok:false,message:"Impossible de supprimer la facture."});
+  }
+});
+
+app.get(
+  "/api/guest/:token/contract.pdf",
+  async (req,res)=>{
+    try{
+
+      const access=
+        await portalAccess(req.params.token);
+
+      if(
+        !access ||
+        access.role!=="ORGANIZER" ||
+        !access.event.portalEnabled
+      ){
+        return res.status(403).json({
+          ok:false,
+          message:"Accès réservé à l'organisateur."
+        });
+      }
+
+      const event=
+        await prisma.event.findUnique({
+          where:{
+            id:access.event.id
+          },
+
+          include:{
+            client:true,
+
+            materials:{
+              include:{
+                material:true
+              }
+            }
+          }
+        });
+
+      if(!event){
+        return res.status(404).json({
+          ok:false,
+          message:"Événement introuvable."
+        });
+      }
+
+      const pdf=
+        await contractService.generateContractPdf(
+          event
+        );
+
+      const safeName=
+        String(event.name || "contrat")
+          .replace(/[^a-z0-9_-]+/gi,"_")
+          .replace(/^_+|_+$/g,"");
+
+      res.setHeader(
+        "Content-Type",
+        "application/pdf"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="Contrat_${safeName || "evenement"}.pdf"`
+      );
+
+      res.send(pdf);
+
+    }catch(err){
+      console.error(
+        "Contrat portail organisateur :",
+        err
+      );
+
+      res.status(500).json({
+        ok:false,
+        message:"Impossible d'ouvrir le contrat."
+      });
+    }
+  }
+);
+app.get(
+  "/api/guest/:token/documents/:fileId",
+  async (req,res)=>{
+    try{
+
+      const access=
+        await portalAccess(req.params.token);
+
+      if(
+        !access ||
+        access.role!=="ORGANIZER" ||
+        !access.event.portalEnabled
+      ){
+        return res.status(403).end();
+      }
+
+      const driveResult=
+        await googleService.listEventDocuments(
+          req,
+          access.event.id
+        );
+
+      const document=
+        (driveResult.documents || [])
+          .find(f=>
+            f.id===req.params.fileId &&
+            /facture|invoice/i.test(f.name || "")
+          );
+
+      if(!document){
+        return res.status(404).end();
+      }
+
+      const stream=
+        await googleService.getMemoryFromDrive(
+          req,
+          document.id
+        );
+
+      res.setHeader(
+        "Content-Type",
+        document.mimeType ||
+        "application/pdf"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${String(document.name || "facture.pdf")
+          .replace(/"/g,"") }"`
+      );
+
+      stream.on("error",err=>{
+        console.error(
+          "Lecture facture Drive :",
+          err
+        );
+
+        if(!res.headersSent){
+          res.status(500).end();
+        }
+      });
+
+      stream.pipe(res);
+
+    }catch(err){
+      console.error(
+        "Document portail organisateur :",
+        err
+      );
+
+      if(!res.headersSent){
+        res.status(500).end();
+      }
+    }
+  }
+);
 // ---------------- V8.2.2 : LP28 Memories ----------------
 app.use("/memories", express.static(MEMORIES_DIR, {fallthrough:false,maxAge:"1h"}));
 
@@ -2056,22 +2524,205 @@ app.get("/api/guest/:token/memories", async (req,res)=>{
   if(!access?.event?.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
   const where={eventId:access.event.id,status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE"};
   const media=await prisma.memoryMedia.findMany({where,orderBy:{createdAt:"asc"}});
-  res.json({ok:true,role:access.role,media:media.map(safeMedia)});
+  res.json({
+  ok:true,
+  role:access.role,
+  media:media.map(m=>safeMedia(m,req.params.token))
+});
 });
 
-app.post("/api/guest/:token/memories/upload", memoriesUpload.array("files",100), async (req,res)=>{
-  const access=await portalAccess(req.params.token);
-  if(!access?.event?.portalEnabled){ for(const f of req.files||[]) fs.unlink(f.path,()=>{}); return res.status(404).json({ok:false,message:"Portail indisponible."}); }
-  const files=req.files||[];
-  if(!files.length)return res.status(400).json({ok:false,message:"Aucun fichier reÃ§u."});
-  for(const f of files){
-    const isVideo=f.mimetype.startsWith("video/");
-    const allowed=isVideo?access.event.guestVideoEnabled:access.event.guestUploadEnabled;
-    if(!allowed){ fs.unlink(f.path,()=>{}); continue; }
-    await prisma.memoryMedia.create({data:{eventId:access.event.id,fileName:f.filename,originalName:f.originalname,mimeType:f.mimetype,sizeBytes:f.size,mediaType:isVideo?"VIDEO":"PHOTO",status:access.event.guestUploadModerated?"PENDING":"VISIBLE",uploadedBy:access.role}});
+app.get("/api/guest/:token/memories/:id/file", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+
+    if(!access?.event?.portalEnabled){
+      return res.status(404).end();
+    }
+
+    const media=await prisma.memoryMedia.findFirst({
+      where:{
+        id:req.params.id,
+        eventId:access.event.id
+      }
+    });
+
+    if(!media){
+      return res.status(404).end();
+    }
+
+    if(
+      access.role!=="ORGANIZER" &&
+      media.status!=="VISIBLE"
+    ){
+      return res.status(403).end();
+    }
+
+    res.setHeader(
+      "Content-Type",
+      media.mimeType || "application/octet-stream"
+    );
+
+    res.setHeader(
+      "Cache-Control",
+      "private, max-age=3600"
+    );
+
+    if(
+      media.storageType==="DRIVE" &&
+      media.driveFileId
+    ){
+      const stream=
+        await googleService.getMemoryFromDrive(
+          req,
+          media.driveFileId
+        );
+
+      stream.on("error",err=>{
+        console.error("Lecture souvenir Drive :",err);
+
+        if(!res.headersSent){
+          res.status(500).end();
+        }
+      });
+
+      return stream.pipe(res);
+    }
+
+    const localPath=
+      path.join(MEMORIES_DIR,media.fileName);
+
+    if(!fs.existsSync(localPath)){
+      return res.status(404).end();
+    }
+
+    return res.sendFile(localPath);
+
+  }catch(err){
+    console.error("Lecture souvenir :",err);
+
+    if(!res.headersSent){
+      res.status(500).end();
+    }
   }
-  res.json({ok:true});
 });
+app.post(
+  "/api/guest/:token/memories/upload",
+  memoriesUpload.array("files",100),
+  async (req,res)=>{
+
+    const access=
+      await portalAccess(req.params.token);
+
+    if(!access?.event?.portalEnabled){
+      for(const f of req.files||[]){
+        fs.unlink(f.path,()=>{});
+      }
+
+      return res.status(404).json({
+        ok:false,
+        message:"Portail indisponible."
+      });
+    }
+
+    const files=req.files||[];
+
+    if(!files.length){
+      return res.status(400).json({
+        ok:false,
+        message:"Aucun fichier reçu."
+      });
+    }
+
+    let uploadedCount=0;
+
+    try{
+
+      for(const f of files){
+
+        const isVideo=
+          f.mimetype.startsWith("video/");
+
+        const allowed=
+          isVideo
+            ? access.event.guestVideoEnabled
+            : access.event.guestUploadEnabled;
+
+        if(!allowed){
+          fs.unlink(f.path,()=>{});
+          continue;
+        }
+
+        try{
+
+          const driveFile=
+            await googleService.uploadMemoryToDrive(
+              req,
+              access.event,
+              f
+            );
+
+          await prisma.memoryMedia.create({
+            data:{
+              eventId:access.event.id,
+              fileName:f.filename,
+              originalName:f.originalname,
+              mimeType:f.mimetype,
+              sizeBytes:f.size,
+
+              mediaType:
+                isVideo ? "VIDEO" : "PHOTO",
+
+              status:
+                access.event.guestUploadModerated
+                  ? "PENDING"
+                  : "VISIBLE",
+
+              uploadedBy:access.role,
+
+              driveFileId:driveFile.id,
+
+              driveUrl:
+                driveFile.webViewLink ||
+                driveFile.webContentLink ||
+                null,
+
+              storageType:"DRIVE"
+            }
+          });
+
+          uploadedCount++;
+
+        }finally{
+          fs.unlink(f.path,()=>{});
+        }
+      }
+
+      res.json({
+        ok:true,
+        uploaded:uploadedCount
+      });
+
+    }catch(err){
+
+      console.error(
+        "Upload souvenir Drive :",
+        err
+      );
+
+      for(const f of files){
+        if(fs.existsSync(f.path)){
+          fs.unlink(f.path,()=>{});
+        }
+      }
+
+      res.status(500).json({
+        ok:false,
+        message:
+          "Impossible d'enregistrer les souvenirs sur Google Drive."
+      });
+    }
+  }
+);
 
 app.post("/api/guest/:token/memories/:id/hide", async (req,res)=>{
   const access=await portalAccess(req.params.token);
@@ -2162,9 +2813,12 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
   });
 
   const mediaWithUrls = media.map(m => ({
-    ...m,
-    url: `/memories/${encodeURIComponent(m.fileName)}`
-  }));
+  ...m,
+
+  url:event.organizerToken
+    ? `/api/guest/${encodeURIComponent(event.organizerToken)}/memories/${m.id}/file`
+    : `/memories/${encodeURIComponent(m.fileName)}`
+}));
 
   res.json({
     ok: true,
