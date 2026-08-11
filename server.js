@@ -32,15 +32,6 @@ const memoriesUpload = multer({
   }
 });
 
-const invoiceUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
-  fileFilter: (req,file,cb) => {
-    const ok = file.mimetype === "application/pdf" || /\.pdf$/i.test(file.originalname || "");
-    cb(ok ? null : new Error("Seuls les fichiers PDF sont autorisés."), ok);
-  }
-});
-
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -1813,17 +1804,44 @@ app.delete("/api/events/:id", adminOnly, async (req, res) => {
 });
 
 app.get("/api/events/:id/share", adminOnly, async (req, res) => {
-  const event = await prisma.event.findUnique({ where: { id: req.params.id } });
-  if (!event) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
+  let event = await prisma.event.findUnique({ where: { id: req.params.id } });
+
+  if (!event) {
+    return res.status(404).json({
+      ok: false,
+      message: "Événement introuvable."
+    });
+  }
+
+  // Dès qu'un lien de partage est demandé depuis l'administration,
+  // le portail est activé automatiquement afin d'éviter un lien 404.
+  if (!event.portalEnabled || !event.guestUploadEnabled) {
+    event = await prisma.event.update({
+      where: { id: event.id },
+      data: {
+        portalEnabled: true,
+        guestUploadEnabled: true
+      }
+    });
+  }
 
   const base = appBaseUrl(req);
 
   const guestUrl = `${base}/portal/${event.guestToken}`;
   const organizerUrl = `${base}/portal/${event.organizerToken}`;
 
-  const qrDataUrl = await QRCode.toDataURL(guestUrl, { width: 700, margin: 2 });
+  const qrDataUrl = await QRCode.toDataURL(
+    guestUrl,
+    { width: 700, margin: 2 }
+  );
 
-  res.json({ ok: true, guestUrl, organizerUrl, qrDataUrl });
+  res.json({
+    ok: true,
+    guestUrl,
+    organizerUrl,
+    qrDataUrl,
+    portalEnabled: true
+  });
 });
 
 
@@ -2150,8 +2168,27 @@ function safeMedia(m,token){
       );
 
     let organizerDocuments=null;
+    let guestShare=null;
 
     if(access.role==="ORGANIZER"){
+
+      const guestUrl =
+        `${appBaseUrl(req)}/portal/${event.guestToken}`;
+
+      const qrDataUrl =
+        await QRCode.toDataURL(
+          guestUrl,
+          {
+            width:900,
+            margin:2,
+            errorCorrectionLevel:"M"
+          }
+        );
+
+      guestShare={
+        guestUrl,
+        qrDataUrl
+      };
 
       let invoices=[];
 
@@ -2202,14 +2239,6 @@ function safeMedia(m,token){
           signerName:
             event.contractSignerName || null,
 
-          signerEmail:
-            event.contractSignerEmail || null,
-
-          signatureData:
-            event.contractStatus === "SIGNED"
-              ? (event.contractSignatureData || null)
-              : null,
-
           pdfUrl:
             `/api/guest/${encodeURIComponent(req.params.token)}/contract.pdf`,
 
@@ -2255,6 +2284,8 @@ function safeMedia(m,token){
 
       documents:organizerDocuments,
 
+      guestShare,
+
       support:{
         phone:
           safeSettings.supportPhone || "",
@@ -2279,89 +2310,6 @@ function safeMedia(m,token){
     });
   }
 });
-// Documents d'un événement : preuve de signature + factures Drive
-app.get("/api/events/:id/documents", adminOnly, async (req,res) => {
-  try{
-    const event=await prisma.event.findUnique({where:{id:req.params.id}});
-    if(!event) return res.status(404).json({ok:false,message:"Événement introuvable."});
-
-    let documents=[];
-    let driveConnected=false;
-    try{
-      const driveResult=await googleService.listEventDocuments(req,event.id);
-      driveConnected=Boolean(driveResult.connected);
-      documents=(driveResult.documents||[])
-        .filter(f=>/facture|invoice/i.test(f.name||"") && (f.mimeType==="application/pdf" || /\.pdf$/i.test(f.name||"")))
-        .map(f=>({
-          id:f.id,name:f.name,mimeType:f.mimeType,createdTime:f.createdTime,modifiedTime:f.modifiedTime,
-          url:`/api/events/${encodeURIComponent(event.id)}/documents/${encodeURIComponent(f.id)}`
-        }));
-    }catch(err){
-      console.error("Liste documents événement :",err.message);
-    }
-
-    res.json({
-      ok:true,driveConnected,
-      contract:{
-        status:event.contractStatus||"NOT_SENT",
-        signed:event.contractStatus==="SIGNED",
-        signedAt:event.contractSignedAt||null,
-        signerName:event.contractSignerName||null,
-        signerEmail:event.contractSignerEmail||null,
-        signatureData:event.contractStatus==="SIGNED" ? (event.contractSignatureData||null) : null,
-        pdfUrl:`/api/events/${encodeURIComponent(event.id)}/contract.pdf`
-      },
-      invoices:documents
-    });
-  }catch(err){
-    console.error("Documents événement :",err);
-    res.status(500).json({ok:false,message:"Impossible de charger les documents."});
-  }
-});
-
-app.post("/api/events/:id/documents/invoices", adminOnly, invoiceUpload.single("file"), async (req,res) => {
-  try{
-    if(!req.file) return res.status(400).json({ok:false,message:"Sélectionne une facture PDF."});
-    const safeBase=String(req.file.originalname||"facture.pdf").replace(/[^a-zA-Z0-9À-ÿ._ -]/g,"_");
-    if(!/facture|invoice/i.test(safeBase)) req.file.originalname=`Facture - ${safeBase}`;
-    else req.file.originalname=safeBase;
-    const document=await googleService.uploadEventDocument(req,req.params.id,req.file);
-    res.json({ok:true,document});
-  }catch(err){
-    console.error("Ajout facture événement :",err);
-    res.status(500).json({ok:false,message:err.message||"Impossible d'ajouter la facture."});
-  }
-});
-
-app.get("/api/events/:id/documents/:fileId", adminOnly, async (req,res) => {
-  try{
-    const driveResult=await googleService.listEventDocuments(req,req.params.id);
-    const document=(driveResult.documents||[]).find(f=>f.id===req.params.fileId && /facture|invoice/i.test(f.name||""));
-    if(!document) return res.status(404).json({ok:false,message:"Facture introuvable."});
-    const stream=await googleService.getMemoryFromDrive(req,document.id);
-    res.setHeader("Content-Type",document.mimeType||"application/pdf");
-    res.setHeader("Content-Disposition",`inline; filename="${String(document.name||"facture.pdf").replace(/["\r\n]/g,"")}"`);
-    stream.on("error",err=>{console.error("Lecture facture Drive :",err);if(!res.headersSent)res.status(500).end();});
-    stream.pipe(res);
-  }catch(err){
-    console.error("Lecture facture événement :",err);
-    if(!res.headersSent) res.status(500).json({ok:false,message:"Impossible d'ouvrir la facture."});
-  }
-});
-
-app.delete("/api/events/:id/documents/:fileId", adminOnly, async (req,res) => {
-  try{
-    const driveResult=await googleService.listEventDocuments(req,req.params.id);
-    const document=(driveResult.documents||[]).find(f=>f.id===req.params.fileId && /facture|invoice/i.test(f.name||""));
-    if(!document) return res.status(404).json({ok:false,message:"Facture introuvable."});
-    await googleService.deleteEventDocument(req,document.id);
-    res.json({ok:true});
-  }catch(err){
-    console.error("Suppression facture événement :",err);
-    res.status(500).json({ok:false,message:"Impossible de supprimer la facture."});
-  }
-});
-
 app.get(
   "/api/guest/:token/contract.pdf",
   async (req,res)=>{
@@ -2645,7 +2593,10 @@ app.post(
         const allowed=
           isVideo
             ? access.event.guestVideoEnabled
-            : access.event.guestUploadEnabled;
+            : (
+                access.role==="ORGANIZER" ||
+                access.event.guestUploadEnabled
+              );
 
         if(!allowed){
           fs.unlink(f.path,()=>{});
@@ -3177,6 +3128,8 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
       collaborator: true,
       event: {
   include: {
+    client: true,
+
     materials: {
       include: {
         material: true
@@ -3280,9 +3233,15 @@ actions: (event.collaboratorActions || []).map(a => ({
       : null,
 documents: {
   contract: access.canSeeContract
-    ? driveDocuments.find(f =>
-        /contrat/i.test(f.name)
-      ) || null
+    ? {
+        available: true,
+        signed: event.contractStatus === "SIGNED",
+        status: event.contractStatus || "NOT_SENT",
+        signedAt: event.contractSignedAt || null,
+        signerName: event.contractSignerName || null,
+        url:
+          `/api/collaborator-portal/${encodeURIComponent(req.params.token)}/contract.pdf`
+      }
     : null,
 
   invoice: access.canSeeInvoice
@@ -3301,6 +3260,83 @@ documents: {
     }
   });
 });
+
+app.get(
+  "/api/collaborator-portal/:token/contract.pdf",
+  async (req,res)=>{
+    try{
+      const access =
+        await prisma.collaboratorAccess.findUnique({
+          where:{token:req.params.token},
+          include:{
+            event:{
+              include:{
+                client:true,
+                materials:{
+                  include:{material:true}
+                }
+              }
+            }
+          }
+        });
+
+      if(!access || !access.active){
+        return res.status(404).json({
+          ok:false,
+          message:"Accès invalide ou expiré."
+        });
+      }
+
+      if(!access.canSeeContract){
+        return res.status(403).json({
+          ok:false,
+          message:"Contrat non autorisé pour ce collaborateur."
+        });
+      }
+
+      const event=access.event;
+
+      if(!event){
+        return res.status(404).json({
+          ok:false,
+          message:"Événement introuvable."
+        });
+      }
+
+      const pdf =
+        await contractService.generateContractPdf(event);
+
+      const safeName=
+        String(event.name || "contrat")
+          .replace(/[^a-z0-9_-]+/gi,"_")
+          .replace(/^_+|_+$/g,"");
+
+      res.setHeader(
+        "Content-Type",
+        "application/pdf"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="Contrat_${safeName || "evenement"}${event.contractStatus==="SIGNED"?"_signe":""}.pdf"`
+      );
+
+      res.send(pdf);
+
+    }catch(err){
+      console.error(
+        "Contrat collaborateur :",
+        err
+      );
+
+      res.status(500).json({
+        ok:false,
+        message:"Impossible d'ouvrir le contrat."
+      });
+    }
+  }
+);
+
 app.post("/api/collaborator-portal/:token/caution-received", async (req, res) => {
   const access = await prisma.collaboratorAccess.findUnique({
     where: { token: req.params.token },

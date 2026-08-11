@@ -36,7 +36,7 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:false, guestUploadEnabled:false, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",totalPrice:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
   customPrintCount:"",
@@ -2468,6 +2468,168 @@ const invoices=organizerDocuments?.invoices||[];
 
   const e=data.event,support=data.support||{};
   const paged=galleryMedia.slice(0,visibleCount);
+  const guestShare=data?.guestShare||null;
+
+  const eventDisplayName=String(e.name||"")
+    .replace(/^mariage\s+/i,"")
+    .trim() || e.name || "Votre événement";
+
+  const eventDateLabel=e.date
+    ? new Date(e.date+"T12:00:00").toLocaleDateString(
+        "fr-FR",
+        {day:"2-digit",month:"2-digit",year:"numeric"}
+      )
+    : "";
+
+  const qrPrintMessage=
+    e.type==="MARIAGE"
+      ? "Partagez vos plus beaux moments avec les mariés ! Scannez ce QR Code pour ajouter vos photos et découvrir les souvenirs partagés."
+      : e.type==="ANNIVERSAIRE"
+        ? "Partagez vos plus beaux moments de cet anniversaire ! Scannez ce QR Code pour ajouter vos photos et découvrir les souvenirs partagés."
+        : "";
+
+  const guestWhatsappUrl=guestShare?.guestUrl
+    ? `https://wa.me/?text=${encodeURIComponent(
+        `📸 ${eventDisplayName}\n\n` +
+        `La galerie photo de notre événement est connectée !\n` +
+        `Scannez le QR Code ou utilisez ce lien pour ajouter vos photos et découvrir les souvenirs :\n` +
+        `${guestShare.guestUrl}\n\n` +
+        `Location Photobooth 28`
+      )}`
+    : "";
+
+  function printGuestQr(){
+    if(!guestShare?.qrDataUrl)return;
+
+    const safeTitle=String(eventDisplayName)
+      .replace(/[<>&"]/g,ch=>({
+        "<":"&lt;",
+        ">":"&gt;",
+        "&":"&amp;",
+        '"':"&quot;"
+      }[ch]));
+
+    const safeDate=String(eventDateLabel)
+      .replace(/[<>&"]/g,ch=>({
+        "<":"&lt;",
+        ">":"&gt;",
+        "&":"&amp;",
+        '"':"&quot;"
+      }[ch]));
+
+    const card=`
+      <section class="qr-card">
+        <div class="brand">LOCATION PHOTOBOOTH 28</div>
+        <h1>${safeTitle}</h1>
+        ${safeDate ? `<div class="date">${safeDate}</div>` : ""}
+        <img src="${guestShare.qrDataUrl}" alt="QR Code invités" />
+        <h2>📸 Scannez-moi !</h2>
+        ${qrPrintMessage ? `<p>${qrPrintMessage}</p>` : ""}
+        <div class="connected">🟢 Galerie photo connectée</div>
+      </section>
+    `;
+
+    const w=window.open("","_blank","width=900,height=1000");
+
+    if(!w){
+      alert("Le navigateur a bloqué la fenêtre d'impression.");
+      return;
+    }
+
+    w.document.write(`
+      <!doctype html>
+      <html lang="fr">
+        <head>
+          <meta charset="utf-8">
+          <title>QR Code - ${safeTitle}</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #111827;
+              background: #fff;
+            }
+            .sheet {
+              width: 100%;
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              grid-template-rows: 1fr 1fr;
+              gap: 6mm;
+              min-height: 281mm;
+            }
+            .qr-card {
+              border: 2px solid #111827;
+              border-radius: 12px;
+              padding: 8mm 6mm;
+              text-align: center;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              page-break-inside: avoid;
+            }
+            .brand {
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 1.4px;
+              margin-bottom: 4px;
+            }
+            h1 {
+              font-size: 23px;
+              margin: 4px 0;
+            }
+            .date {
+              font-size: 13px;
+              margin-bottom: 4px;
+            }
+            img {
+              width: 48mm;
+              height: 48mm;
+              object-fit: contain;
+              margin: 4mm 0 2mm;
+            }
+            h2 {
+              margin: 2px 0 6px;
+              font-size: 18px;
+            }
+            p {
+              max-width: 75mm;
+              margin: 0 0 8px;
+              font-size: 12px;
+              line-height: 1.35;
+            }
+            .connected {
+              display: inline-block;
+              padding: 5px 9px;
+              border-radius: 999px;
+              background: #dcfce7;
+              color: #166534;
+              font-size: 11px;
+              font-weight: 800;
+            }
+          </style>
+        </head>
+        <body>
+          <main class="sheet">
+            ${card}${card}${card}${card}
+          </main>
+          <script>
+            window.addEventListener("load", function(){
+              setTimeout(function(){
+                window.focus();
+                window.print();
+              }, 250);
+            });
+          </script>
+        </body>
+      </html>
+    `);
+
+    w.document.close();
+  }
 
   return <div className="portal-shell"><main className="portal-card">
     <img className="portal-logo" src="/logo.jpg"/>
@@ -2510,23 +2672,6 @@ const invoices=organizerDocuments?.invoices||[];
                 {new Date(contract.signedAt)
                   .toLocaleString("fr-FR")}
               </p>
-            )}
-
-            {contract.signerEmail&&(
-              <p className="muted">
-                E-mail : {contract.signerEmail}
-              </p>
-            )}
-
-            {contract.signatureData&&(
-              <div style={{margin:"12px 0"}}>
-                <div className="muted" style={{marginBottom:6}}>Signature enregistrée :</div>
-                <img
-                  src={contract.signatureData}
-                  alt="Signature du client"
-                  style={{maxWidth:360,width:"100%",height:120,objectFit:"contain",background:"#fff",border:"1px solid #ddd",borderRadius:10}}
-                />
-              </div>
             )}
 
             {contract.pdfUrl&&(
@@ -2605,6 +2750,116 @@ const invoices=organizerDocuments?.invoices||[];
 )}
     {organizer&&<div className="portal-role">🔐 Espace organisateur</div>}
 
+    {organizer&&guestShare&&(
+      <section className="portal-section">
+        <h2>📱 QR Code invités</h2>
+
+        <div
+          className="portal-document-card"
+          style={{
+            textAlign:"center",
+            display:"grid",
+            gap:12,
+            justifyItems:"center"
+          }}
+        >
+          <div>
+            <h3 style={{marginBottom:4}}>
+              {eventDisplayName}
+            </h3>
+
+            {eventDateLabel&&(
+              <p className="muted" style={{marginTop:0}}>
+                {eventDateLabel}
+              </p>
+            )}
+          </div>
+
+          <img
+            src={guestShare.qrDataUrl}
+            alt={`QR Code invités ${eventDisplayName}`}
+            style={{
+              width:"min(280px,80vw)",
+              height:"auto",
+              borderRadius:12,
+              background:"#fff",
+              padding:8
+            }}
+          />
+
+          <div>
+            <strong>🟢 Galerie photo connectée</strong>
+            <p className="muted" style={{marginBottom:0}}>
+              Les invités peuvent scanner ce QR Code pour ajouter leurs photos
+              et consulter les souvenirs de l'événement.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display:"flex",
+              gap:10,
+              flexWrap:"wrap",
+              justifyContent:"center"
+            }}
+          >
+            <button
+              type="button"
+              className="portal-action"
+              onClick={printGuestQr}
+            >
+              🖨️ Imprimer 4 QR Code sur A4
+            </button>
+
+            {guestWhatsappUrl&&(
+              <a
+                className="portal-action primary"
+                href={guestWhatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                💬 Partager sur WhatsApp
+              </a>
+            )}
+          </div>
+
+          <div
+            style={{
+              width:"100%",
+              display:"flex",
+              gap:8
+            }}
+          >
+            <input
+              readOnly
+              value={guestShare.guestUrl}
+              style={{flex:1,minWidth:0}}
+            />
+
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={async ()=>{
+                try{
+                  await navigator.clipboard.writeText(
+                    guestShare.guestUrl
+                  );
+                  alert("✅ Lien invités copié.");
+                }catch{
+                  prompt(
+                    "Copie le lien invités :",
+                    guestShare.guestUrl
+                  );
+                }
+              }}
+            >
+              Copier
+            </button>
+          </div>
+        </div>
+      </section>
+    )}
+
     {e.fotoshareUrl&&<a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos de la borne</a>}
 
     <section className="portal-section">
@@ -2613,12 +2868,21 @@ const invoices=organizerDocuments?.invoices||[];
         {organizer&&galleryMedia.length>0&&<button className="memory-select-toggle" onClick={()=>{setSelectMode(v=>!v);setSelected([])}}>{selectMode?"Annuler":"☑ Sélectionner"}</button>}
       </div>
 
-      {(e.guestUploadEnabled||e.guestVideoEnabled)&&<label className={`portal-upload ${busy?"disabled":""}`}>
-        ⬆️ {busy?"Envoi en cours…":"Ajouter des souvenirs"}
-        <input type="file" multiple
-          accept={[e.guestUploadEnabled?"image/jpeg,image/png,image/webp,image/heic,image/heif":"",e.guestVideoEnabled?"video/mp4,video/quicktime":""].filter(Boolean).join(",")}
-          onChange={upload} disabled={busy}/>
-      </label>}
+      <label className={`portal-upload ${busy?"disabled":""}`}>
+        📷 {busy?"Envoi en cours…":"Ajouter des photos"}
+        <input
+          type="file"
+          multiple
+          accept={[
+            "image/jpeg,image/png,image/webp,image/heic,image/heif",
+            e.guestVideoEnabled
+              ? "video/mp4,video/quicktime"
+              : ""
+          ].filter(Boolean).join(",")}
+          onChange={upload}
+          disabled={busy}
+        />
+      </label>
 
       {e.guestUploadModerated&&<p className="portal-note">Modération avant publication activée pour cet événement.</p>}
 
@@ -3181,78 +3445,6 @@ function CollaboratorsPanel(){
     </section>
   );
 }
-function EventDocumentsModal({event,onClose}){
-  const [data,setData]=useState(null);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState("");
-  const fileRef=useRef(null);
-
-  async function load(){
-    setError("");
-    const r=await fetch(`/api/events/${event.id}/documents`,{credentials:"include"});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok){setError(d.message||"Impossible de charger les documents.");return;}
-    setData(d);
-  }
-
-  useEffect(()=>{load()},[event.id]);
-
-  async function uploadInvoice(e){
-    const file=e.target.files?.[0];
-    if(!file)return;
-    setBusy(true);setError("");
-    try{
-      const fd=new FormData();fd.append("file",file);
-      const r=await fetch(`/api/events/${event.id}/documents/invoices`,{method:"POST",credentials:"include",body:fd});
-      const d=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(d.message||"Ajout impossible.");
-      await load();
-    }catch(err){setError(err.message)}
-    finally{setBusy(false);e.target.value="";}
-  }
-
-  async function removeInvoice(invoice){
-    if(!confirm(`Supprimer la facture « ${invoice.name} » ?`))return;
-    const r=await fetch(`/api/events/${event.id}/documents/${encodeURIComponent(invoice.id)}`,{method:"DELETE",credentials:"include"});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)return alert(d.message||"Suppression impossible.");
-    await load();
-  }
-
-  const contract=data?.contract;
-  return <div className="modal-backdrop"><div className="event-modal" style={{maxWidth:850}}>
-    <div className="modal-head"><div><div className="eyebrow">FICHE CLIENT · DOCUMENTS</div><h2>{event.name}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
-    {error&&<div className="alert">{error}</div>}
-    {!data?<p>Chargement…</p>:<>
-      <section className="panel" style={{marginBottom:16}}>
-        <h3>✍️ Preuve de signature du contrat</h3>
-        {contract?.signed?<>
-          <p><strong>✅ Contrat signé</strong></p>
-          <p className="muted">Signataire : {contract.signerName||"Non renseigné"}{contract.signerEmail?` · ${contract.signerEmail}`:""}</p>
-          <p className="muted">Horodatage serveur : {contract.signedAt?new Date(contract.signedAt).toLocaleString("fr-FR"):"Non disponible"}</p>
-          {contract.signatureData&&<img src={contract.signatureData} alt="Signature du client" style={{maxWidth:420,width:"100%",height:150,objectFit:"contain",background:"#fff",border:"1px solid #ddd",borderRadius:12,padding:8}}/>}
-          <div style={{marginTop:12}}><button onClick={()=>window.open(contract.pdfUrl,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button></div>
-        </>:<p className="muted">Le contrat n'est pas encore signé. La preuve apparaîtra ici après signature.</p>}
-      </section>
-
-      <section className="panel">
-        <h3>🧾 Factures accessibles au client</h3>
-        <p className="muted">Dépose une ou plusieurs factures PDF. Elles seront rangées dans le dossier Documents de l'événement sur Google Drive et visibles dans la session organisateur.</p>
-        <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={uploadInvoice} style={{display:"none"}}/>
-        <button className="primary" disabled={busy} onClick={()=>fileRef.current?.click()}>{busy?"Envoi…":"➕ Ajouter une facture PDF"}</button>
-        {!data.driveConnected&&<p className="alert" style={{marginTop:10}}>Google Drive doit être connecté pour déposer des factures.</p>}
-        <div style={{display:"grid",gap:10,marginTop:14}}>
-          {(data.invoices||[]).map(invoice=><div key={invoice.id} style={{display:"flex",gap:8,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
-            <strong>🧾 {invoice.name}</strong>
-            <div style={{display:"flex",gap:8}}><button onClick={()=>window.open(invoice.url,"_blank","noopener,noreferrer")}>Voir</button><button className="danger-btn" onClick={()=>removeInvoice(invoice)}>Supprimer</button></div>
-          </div>)}
-          {!data.invoices?.length&&<p className="muted">Aucune facture déposée.</p>}
-        </div>
-      </section>
-    </>}
-  </div></div>;
-}
-
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
@@ -3260,7 +3452,6 @@ function Dashboard({onLogout}) {
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
-  const [documentsEvent,setDocumentsEvent]=useState(null);
   const [search,setSearch]=useState("");
 
   async function load(){
@@ -3372,7 +3563,6 @@ function Dashboard({onLogout}) {
               <div className="event-actions">
                 <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
                 <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
-                <button onClick={()=>setDocumentsEvent(event)}>📁 Documents client</button>
                 <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
                 <button onClick={async()=>{
                   try{
@@ -3399,7 +3589,6 @@ function Dashboard({onLogout}) {
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
-    {documentsEvent&&<EventDocumentsModal event={documentsEvent} onClose={()=>setDocumentsEvent(null)}/>}
   </div>;
 }
 
@@ -3741,14 +3930,48 @@ function CollaboratorPortalPage({token}){
     {data.permissions.contract && (
       <div style={{marginBottom:12}}>
         {data.documents?.contract ? (
-          <a
-            className="primary"
-            href={data.documents.contract.webViewLink}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            📑 Voir le contrat
-          </a>
+          <>
+            {data.documents.contract.signed ? (
+              <div
+                style={{
+                  marginBottom:10,
+                  padding:"10px 12px",
+                  borderRadius:10,
+                  background:"#dcfce7",
+                  color:"#166534",
+                  fontWeight:700
+                }}
+              >
+                🟢 Contrat signé
+                {data.documents.contract.signerName
+                  ? ` par ${data.documents.contract.signerName}`
+                  : ""}
+                {data.documents.contract.signedAt && (
+                  <div style={{fontSize:12,marginTop:4}}>
+                    Signé le{" "}
+                    {new Date(
+                      data.documents.contract.signedAt
+                    ).toLocaleString("fr-FR")}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="muted">
+                ⏳ Contrat en attente de signature
+              </p>
+            )}
+
+            <a
+              className="primary"
+              href={data.documents.contract.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {data.documents.contract.signed
+                ? "📑 Voir le contrat signé"
+                : "📑 Voir le contrat"}
+            </a>
+          </>
         ) : (
           <p className="muted">
             📑 Contrat autorisé — document non disponible

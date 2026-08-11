@@ -16,7 +16,7 @@ const BOOTHS = {
   "Borne Photobooth Miroir Lola": {
     shortName: "Lola",
     title: "Photobooth Miroir Lola",
-    estimatedValue: 8000,
+    estimatedValue: 8500,
     prices: {
       0: 200,
       100: 250,
@@ -30,7 +30,7 @@ const BOOTHS = {
   "Borne Photobooth Nina": {
     shortName: "Nina",
     title: "Photobooth Nina",
-    estimatedValue: 4500,
+    estimatedValue: 8500,
     prices: {
       0: 150,
       100: 200,
@@ -44,7 +44,7 @@ const BOOTHS = {
   "Borne Photobooth Gabin": {
     shortName: "Gabin",
     title: "Photobooth Gabin",
-    estimatedValue: 4500,
+    estimatedValue: 8500,
     prices: {
       0: 150,
       100: 200,
@@ -247,6 +247,66 @@ function wrapText(text,font,size,maxWidth){
   return lines;
 }
 
+
+function signatureDateTimeFr(value){
+  if(!value) return null;
+
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return null;
+
+  return {
+    date:d.toLocaleDateString("fr-FR",{
+      day:"2-digit",
+      month:"2-digit",
+      year:"numeric",
+      timeZone:"Europe/Paris"
+    }),
+    time:d.toLocaleTimeString("fr-FR",{
+      hour:"2-digit",
+      minute:"2-digit",
+      second:"2-digit",
+      timeZone:"Europe/Paris"
+    })
+  };
+}
+
+function signatureDataUrl(event){
+  return (
+    event.contractSignatureData ||
+    event.contractSignatureDataUrl ||
+    event.signatureDataUrl ||
+    event.contractSignature ||
+    event.signature ||
+    null
+  );
+}
+
+function signatureSignerName(event,client){
+  return (
+    event.contractSignerName ||
+    event.signerName ||
+    client.name ||
+    "Non renseigné"
+  );
+}
+
+function signatureSignerEmail(event,client){
+  return (
+    event.contractSignerEmail ||
+    event.signerEmail ||
+    client.email ||
+    "Non renseigné"
+  );
+}
+
+function signatureSignedAt(event){
+  return (
+    event.contractSignedAt ||
+    event.signedAt ||
+    null
+  );
+}
+
 async function generateContractPdf(event){
   if(!event){
     throw new Error("Événement obligatoire pour générer le contrat.");
@@ -266,6 +326,15 @@ async function generateContractPdf(event){
   const booths = getBooths(event);
   const printPackage = getPrintPackage(event);
   const options = getOptions(event);
+
+  const signedAtValue = signatureSignedAt(event);
+  const signedAt = signatureDateTimeFr(signedAtValue);
+  const signatureImage = signatureDataUrl(event);
+  const signerName = signatureSignerName(event,client);
+  const signerEmail = signatureSignerEmail(event,client);
+  const contractIsSigned =
+    event.contractStatus === "SIGNED" ||
+    Boolean(signedAtValue && signatureImage);
 
   const pageWidth = 595.28;
   const pageHeight = 841.89;
@@ -665,48 +734,184 @@ async function generateContractPdf(event){
 
   y -= 12;
 
-  drawText(
-    `Fait à : ______________________________`,
-    {
-      gapAfter:8
+  if(contractIsSigned){
+    ensureSpace(235);
+
+    drawText(
+      "CONTRAT SIGNÉ ÉLECTRONIQUEMENT",
+      {
+        size:12,
+        fontUsed:bold,
+        gapAfter:8
+      }
+    );
+
+    drawText(
+      `Signataire : ${signerName}`,
+      {
+        size:10,
+        gapAfter:3
+      }
+    );
+
+    drawText(
+      `E-mail : ${signerEmail}`,
+      {
+        size:10,
+        gapAfter:3
+      }
+    );
+
+    if(signedAt){
+      drawText(
+        `Signé le ${signedAt.date} à ${signedAt.time} (heure de Paris)`,
+        {
+          size:10,
+          fontUsed:bold,
+          gapAfter:5
+        }
+      );
     }
-  );
 
-  drawText(
-    `Le : ____ / ____ / ______`,
-    {
-      gapAfter:16
+    drawText(
+      "Mention : Lu et approuvé",
+      {
+        size:10,
+        gapAfter:10
+      }
+    );
+
+    const boxHeight=105;
+
+    ensureSpace(boxHeight + 25);
+
+    page.drawRectangle({
+      x:margin,
+      y:y-boxHeight,
+      width:contentWidth,
+      height:boxHeight,
+      borderWidth:1,
+      borderColor:rgb(0.6,0.6,0.6)
+    });
+
+    if(signatureImage){
+      try{
+        const match=String(signatureImage).match(
+          /^data:image\/(png|jpe?g);base64,(.+)$/i
+        );
+
+        if(match){
+          const imageBytes=Buffer.from(match[2],"base64");
+
+          const embeddedSignature=
+            match[1].toLowerCase()==="png"
+              ? await pdfDoc.embedPng(imageBytes)
+              : await pdfDoc.embedJpg(imageBytes);
+
+          const maxWidth=contentWidth-30;
+          const maxHeight=boxHeight-20;
+
+          const natural=embeddedSignature.scale(1);
+
+          const scale=Math.min(
+            maxWidth/natural.width,
+            maxHeight/natural.height,
+            1
+          );
+
+          const width=natural.width*scale;
+          const height=natural.height*scale;
+
+          page.drawImage(embeddedSignature,{
+            x:margin+(contentWidth-width)/2,
+            y:y-boxHeight+(boxHeight-height)/2,
+            width,
+            height
+          });
+        }else{
+          page.drawText(
+            "Signature électronique enregistrée",
+            {
+              x:margin+15,
+              y:y-55,
+              size:10,
+              font:bold,
+              color:rgb(0.12,0.12,0.12)
+            }
+          );
+        }
+      }catch(err){
+        console.error(
+          "Impossible d'intégrer l'image de signature dans le contrat PDF :",
+          err
+        );
+
+        page.drawText(
+          "Signature électronique enregistrée",
+          {
+            x:margin+15,
+            y:y-55,
+            size:10,
+            font:bold,
+            color:rgb(0.12,0.12,0.12)
+          }
+        );
+      }
     }
-  );
 
-  ensureSpace(130);
+    y -= boxHeight + 18;
 
-  drawText(
-    "Pour le locataire",
-    {
-      fontUsed:bold,
-      gapAfter:4
-    }
-  );
+    drawText(
+      "La date et l'heure ci-dessus correspondent à l'horodatage enregistré lors de la signature électronique.",
+      {
+        size:8,
+        gapAfter:14
+      }
+    );
+  }else{
+    drawText(
+      `Fait à : ______________________________`,
+      {
+        gapAfter:8
+      }
+    );
 
-  drawText(
-    "Nom, prénom et signature précédés de la mention « Lu et approuvé » :",
-    {
-      size:9,
-      gapAfter:35
-    }
-  );
+    drawText(
+      `Le : ____ / ____ / ______`,
+      {
+        gapAfter:16
+      }
+    );
 
-  page.drawRectangle({
-    x:margin,
-    y:y-45,
-    width:contentWidth,
-    height:70,
-    borderWidth:1,
-    borderColor:rgb(0.6,0.6,0.6)
-  });
+    ensureSpace(130);
 
-  y -= 65;
+    drawText(
+      "Pour le locataire",
+      {
+        fontUsed:bold,
+        gapAfter:4
+      }
+    );
+
+    drawText(
+      "Nom, prénom et signature précédés de la mention « Lu et approuvé » :",
+      {
+        size:9,
+        gapAfter:35
+      }
+    );
+
+    page.drawRectangle({
+      x:margin,
+      y:y-45,
+      width:contentWidth,
+      height:70,
+      borderWidth:1,
+      borderColor:rgb(0.6,0.6,0.6)
+    });
+
+    y -= 65;
+  }
 
   drawText(
     "Pour le propriétaire : Location Photobooth 28",
