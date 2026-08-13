@@ -654,6 +654,125 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
   }
 });
 
+
+// ======================================================
+// LP28 BOOTH AGENT API V1
+// ======================================================
+// Authentification : Authorization: Bearer <BOOTH_AGENT_API_KEY>
+// Le secret doit être défini dans Render et dans chaque Booth Agent.
+const boothAgentUpload = multer({
+  storage: memoriesStorage,
+  limits:{fileSize:25*1024*1024,files:1},
+  fileFilter:(req,file,cb)=>{
+    const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif"].includes(file.mimetype);
+    cb(ok?null:new Error("Format image non autorisé."),ok);
+  }
+});
+
+function boothAgentOnly(req,res,next){
+  const expected=String(process.env.BOOTH_AGENT_API_KEY||"").trim();
+  const auth=String(req.get("authorization")||"");
+  const supplied=auth.replace(/^Bearer\s+/i,"").trim();
+
+  if(!expected){
+    return res.status(503).json({ok:false,message:"Booth Agent API non configurée."});
+  }
+
+  const a=Buffer.from(supplied);
+  const b=Buffer.from(expected);
+  if(a.length!==b.length || !crypto.timingSafeEqual(a,b)){
+    return res.status(401).json({ok:false,message:"Clé Booth Agent invalide."});
+  }
+  next();
+}
+
+function boothAgentDedupKey(eventId,sha256){
+  return `boothAgentFile:${eventId}:${sha256}`;
+}
+
+app.get("/api/booth-agent/ping",boothAgentOnly,(req,res)=>{
+  res.json({ok:true,service:"LP28 Booth Agent API",version:1});
+});
+
+app.get("/api/booth-agent/events",boothAgentOnly,async(req,res)=>{
+  const events=await prisma.event.findMany({
+    where:{archived:false},
+    orderBy:{eventDate:"asc"},
+    select:{id:true,name:true,eventDate:true,address:true,portalEnabled:true}
+  });
+  res.json({ok:true,events});
+});
+
+app.post(
+  "/api/booth-agent/upload",
+  boothAgentOnly,
+  boothAgentUpload.single("file"),
+  async(req,res)=>{
+    const f=req.file;
+    if(!f)return res.status(400).json({ok:false,message:"Fichier manquant."});
+
+    try{
+      const eventId=String(req.body?.eventId||"").trim();
+      const kind=String(req.body?.kind||"").trim().toLowerCase();
+      const declaredHash=String(req.body?.sha256||"").trim().toLowerCase();
+      const boothName=String(req.body?.boothName||"").trim().slice(0,100);
+
+      if(!eventId || !["original","print"].includes(kind)){
+        return res.status(400).json({ok:false,message:"eventId ou kind invalide."});
+      }
+
+      const event=await prisma.event.findUnique({where:{id:eventId}});
+      if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+
+      const actualHash=crypto.createHash("sha256").update(fs.readFileSync(f.path)).digest("hex");
+      if(declaredHash && declaredHash!==actualHash){
+        return res.status(400).json({ok:false,message:"Empreinte SHA-256 incorrecte."});
+      }
+
+      const dedupKey=boothAgentDedupKey(event.id,actualHash);
+      const existing=await prisma.appSetting.findUnique({where:{key:dedupKey}});
+      if(existing){
+        return res.json({ok:true,duplicate:true,sha256:actualHash});
+      }
+
+      const driveFile=await googleService.uploadMemoryToDrive(req,event,f);
+      let media;
+      try{
+        media=await prisma.memoryMedia.create({
+          data:{
+            eventId:event.id,
+            fileName:f.filename,
+            originalName:f.originalname,
+            mimeType:f.mimetype,
+            sizeBytes:f.size,
+            mediaType:"PHOTO",
+            status:"VISIBLE",
+            uploadedBy:kind==="original"?"LUMABOOTH_ORIGINAL":"LUMABOOTH_PRINT",
+            driveFileId:driveFile.id,
+            driveUrl:driveFile.webViewLink||driveFile.webContentLink||null,
+            storageType:"DRIVE"
+          }
+        });
+
+        await prisma.appSetting.create({
+          data:{key:dedupKey,value:JSON.stringify({mediaId:media.id,boothName,kind,at:new Date().toISOString()})}
+        });
+      }catch(err){
+        try{await googleService.deleteMemoryFromDrive(req,driveFile.id)}catch{}
+        throw err;
+      }
+
+      console.log(`BOOTH AGENT IMPORT OK : ${event.name} / ${boothName||"borne"} / ${kind} / ${media.id}`);
+      return res.json({ok:true,duplicate:false,mediaId:media.id,sha256:actualHash});
+    }catch(err){
+      console.error("BOOTH AGENT UPLOAD ERROR :",err);
+      return res.status(500).json({ok:false,message:"Import Booth Agent impossible."});
+    }finally{
+      if(f?.path)fs.unlink(f.path,()=>{});
+    }
+  }
+);
+
 // ======================================================
 // LUMABOOTH / FOTOSHARE - MODE TEST WEBHOOK
 // ======================================================
