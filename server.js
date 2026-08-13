@@ -341,6 +341,75 @@ async function choosePrinterForEvent({
   };
 }
 
+
+// ======================================================
+// LUMABOOTH / FOTOSHARE - MODE TEST WEBHOOK
+// ======================================================
+// URL à renseigner dans LumaBooth > Déclencheurs > URL :
+// https://location-photobooth-28-suite.onrender.com/api/lumabooth/test
+//
+// Cette route observe uniquement ce que LumaBooth envoie.
+// Elle n'importe encore aucune photo dans LP28.
+app.get("/api/lumabooth/test", async (req,res)=>{
+  try{
+    const payload={
+      receivedAt:new Date().toISOString(),
+      method:req.method,
+      ip:req.ip,
+      query:req.query,
+      userAgent:req.get("user-agent") || null
+    };
+
+    console.log("================ LUMABOOTH TEST ================");
+    console.log(JSON.stringify(payload,null,2));
+    console.log("=================================================");
+
+    res
+      .status(200)
+      .type("text/plain")
+      .send("LP28 LumaBooth test OK");
+
+  }catch(err){
+    console.error("Erreur webhook LumaBooth test :",err);
+
+    res
+      .status(500)
+      .type("text/plain")
+      .send("LP28 LumaBooth test ERROR");
+  }
+});
+
+app.post("/api/lumabooth/test", async (req,res)=>{
+  try{
+    const payload={
+      receivedAt:new Date().toISOString(),
+      method:req.method,
+      ip:req.ip,
+      query:req.query,
+      body:req.body,
+      contentType:req.get("content-type") || null,
+      userAgent:req.get("user-agent") || null
+    };
+
+    console.log("================ LUMABOOTH TEST ================");
+    console.log(JSON.stringify(payload,null,2));
+    console.log("=================================================");
+
+    res.json({
+      ok:true,
+      message:"LP28 LumaBooth test OK"
+    });
+
+  }catch(err){
+    console.error("Erreur webhook LumaBooth test :",err);
+
+    res.status(500).json({
+      ok:false,
+      message:"LP28 LumaBooth test ERROR"
+    });
+  }
+});
+
 app.get("/api/health", async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
