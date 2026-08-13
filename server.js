@@ -342,6 +342,227 @@ async function choosePrinterForEvent({
 }
 
 
+
+// ======================================================
+// LUMABOOTH - LIEN UNIQUE PAR EVENEMENT
+// ======================================================
+app.get("/api/lumabooth/event/:token", async (req,res)=>{
+  try{
+    const event = await prisma.event.findFirst({
+      where:{organizerToken:req.params.token}
+    });
+
+    if(!event){
+      console.warn("LUMABOOTH EVENT : token inconnu", req.params.token);
+      return res
+        .status(404)
+        .type("text/plain")
+        .send("LP28 LumaBooth event not found");
+    }
+
+    const eventType = String(req.query.event_type || "").trim();
+    const sourcePath = String(req.query.param1 || "").trim();
+    const fotoshareUrl = String(req.query.param2 || "").trim();
+    const kind = String(req.query.param3 || "").trim().toLowerCase();
+    const album = String(req.query.param4 || "").trim();
+
+    console.log("================ LUMABOOTH EVENT ================");
+    console.log(JSON.stringify({
+      receivedAt:new Date().toISOString(),
+      eventId:event.id,
+      eventName:event.name,
+      eventType,
+      sourcePath,
+      fotoshareUrl,
+      kind,
+      album
+    },null,2));
+    console.log("==================================================");
+
+    // Les événements de session sont seulement journalisés.
+    if(eventType !== "file_upload"){
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 LumaBooth event OK");
+    }
+
+    if(kind !== "original" && kind !== "print"){
+      console.log("LUMABOOTH EVENT : type de média ignoré =", kind);
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 LumaBooth media ignored");
+    }
+
+    if(!fotoshareUrl){
+      console.warn("LUMABOOTH EVENT : URL FotoShare absente.");
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 LumaBooth missing FotoShare URL");
+    }
+
+    if(/license-error/i.test(fotoshareUrl)){
+      console.warn(
+        "LUMABOOTH EVENT : FotoShare en mode démo/licence, import impossible :",
+        fotoshareUrl
+      );
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 LumaBooth FotoShare license error");
+    }
+
+    const originalName =
+      path.basename(sourcePath.replace(/\\/g,"/")) ||
+      `lumabooth-${Date.now()}.jpg`;
+
+    const uploadedBy =
+      kind === "print"
+        ? "LUMABOOTH_PRINT"
+        : "LUMABOOTH_ORIGINAL";
+
+    const existing = await prisma.memoryMedia.findFirst({
+      where:{
+        eventId:event.id,
+        originalName,
+        uploadedBy,
+        deletedAt:null
+      }
+    });
+
+    if(existing){
+      console.log(
+        "LUMABOOTH EVENT : doublon ignoré :",
+        originalName,
+        uploadedBy
+      );
+
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 LumaBooth duplicate ignored");
+    }
+
+    const response = await fetch(fotoshareUrl,{
+      redirect:"follow",
+      headers:{
+        "User-Agent":"LP28-LumaBooth/1.0",
+        "Accept":"image/*,*/*;q=0.8"
+      }
+    });
+
+    if(!response.ok){
+      console.warn(
+        "LUMABOOTH EVENT : téléchargement FotoShare impossible :",
+        response.status,
+        fotoshareUrl
+      );
+
+      return res
+        .status(200)
+        .type("text/plain")
+        .send(`LP28 FotoShare HTTP ${response.status}`);
+    }
+
+    const mimeType =
+      String(response.headers.get("content-type") || "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+
+    if(!mimeType.startsWith("image/")){
+      console.warn(
+        "LUMABOOTH EVENT : FotoShare n'a pas renvoyé une image :",
+        mimeType || "(content-type absent)",
+        response.url
+      );
+
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 FotoShare response is not an image");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if(!buffer.length || buffer.length > 25*1024*1024){
+      console.warn(
+        "LUMABOOTH EVENT : taille image invalide :",
+        buffer.length
+      );
+
+      return res
+        .status(200)
+        .type("text/plain")
+        .send("LP28 invalid image size");
+    }
+
+    const extByMime = {
+      "image/jpeg":".jpg",
+      "image/png":".png",
+      "image/webp":".webp",
+      "image/heic":".heic",
+      "image/heif":".heif"
+    };
+
+    const ext =
+      extByMime[mimeType] ||
+      path.extname(originalName).toLowerCase() ||
+      ".jpg";
+
+    const fileName =
+      `${Date.now()}-${crypto.randomBytes(10).toString("hex")}${ext}`;
+
+    const localPath =
+      path.join(MEMORIES_DIR,fileName);
+
+    fs.writeFileSync(localPath,buffer);
+
+    try{
+      const media = await prisma.memoryMedia.create({
+        data:{
+          eventId:event.id,
+          fileName,
+          originalName,
+          mimeType,
+          sizeBytes:buffer.length,
+          mediaType:"PHOTO",
+          status:"VISIBLE",
+          uploadedBy,
+          storageType:"LOCAL"
+        }
+      });
+
+      console.log(
+        `LUMABOOTH IMPORT OK : ${event.name} / ${kind} / ${media.id}`
+      );
+
+    }catch(err){
+      try{
+        fs.unlinkSync(localPath);
+      }catch{}
+
+      throw err;
+    }
+
+    return res
+      .status(200)
+      .type("text/plain")
+      .send("LP28 LumaBooth import OK");
+
+  }catch(err){
+    console.error("LUMABOOTH EVENT ERROR :",err);
+
+    return res
+      .status(500)
+      .type("text/plain")
+      .send("LP28 LumaBooth event ERROR");
+  }
+});
+
 // ======================================================
 // LUMABOOTH / FOTOSHARE - MODE TEST WEBHOOK
 // ======================================================
@@ -2540,6 +2761,11 @@ function safeMedia(m,token){
     mimeType:m.mimeType,
     mediaType:m.mediaType,
     status:m.status,
+    uploadedBy:m.uploadedBy,
+    sourceGroup:
+      m.uploadedBy==="LUMABOOTH_PRINT"
+        ? "PRINT"
+        : "ORIGINAL",
     createdAt:m.createdAt
   };
 }
@@ -3275,7 +3501,10 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
         : null,
       organizerToken: event.organizerToken,
       guestToken: event.guestToken,
-      fotoshareUrl: event.fotoshareUrl
+      fotoshareUrl: event.fotoshareUrl,
+      lumaboothWebhookPath: event.organizerToken
+        ? `/api/lumabooth/event/${encodeURIComponent(event.organizerToken)}`
+        : null
     },
     media: mediaWithUrls
   });

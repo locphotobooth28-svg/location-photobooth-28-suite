@@ -3027,6 +3027,30 @@ function AdminGalleries(){
         {guest&&<a href={guest} target="_blank" rel="noreferrer">👥 Portail invité</a>}
       </div>
 
+      {detail.event.lumaboothWebhookPath&&<div className="qr-panel" style={{marginBottom:16}}>
+        <div style={{minWidth:0,flex:1}}>
+          <strong>🔌 LumaBooth — {detail.event.name}</strong>
+          <p>Lien unique de cette prestation à mettre dans LumaBooth → Déclencheurs → URL.</p>
+          <input
+            readOnly
+            value={`${base}${detail.event.lumaboothWebhookPath}`}
+            onFocus={e=>e.target.select()}
+            style={{width:"100%",marginTop:8}}
+          />
+          <div style={{marginTop:10}}>
+            <button onClick={async()=>{
+              const url=`${base}${detail.event.lumaboothWebhookPath}`;
+              try{
+                await navigator.clipboard.writeText(url);
+                alert("Lien LumaBooth copié.");
+              }catch{
+                window.prompt("Copiez le lien LumaBooth :",url);
+              }
+            }}>📋 Copier le lien LumaBooth</button>
+          </div>
+        </div>
+      </div>}
+
       <div className="qr-panel">
         <div><strong>QR Code invité</strong><p>Le QR Code ouvre directement la galerie de cet événement.</p></div>
         {guest&&<img alt="QR Code invité" src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(guest)}`}/>}
