@@ -582,12 +582,27 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
     const fileName =
       `${Date.now()}-${crypto.randomBytes(10).toString("hex")}${ext}`;
 
-    const localPath =
+    // Google Drive est le stockage définitif des imports LumaBooth.
+    // Le fichier temporaire n'existe que le temps de l'envoi vers Drive.
+    const tempPath =
       path.join(MEMORIES_DIR,fileName);
 
-    fs.writeFileSync(localPath,buffer);
+    fs.writeFileSync(tempPath,buffer);
 
     try{
+      const driveFile =
+        await googleService.uploadMemoryToDrive(
+          req,
+          event,
+          {
+            path:tempPath,
+            filename:fileName,
+            originalname:originalName,
+            mimetype:mimeType,
+            size:buffer.length
+          }
+        );
+
       const media = await prisma.memoryMedia.create({
         data:{
           eventId:event.id,
@@ -598,20 +613,30 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
           mediaType:"PHOTO",
           status:"VISIBLE",
           uploadedBy,
-          storageType:"LOCAL"
+          driveFileId:driveFile.id,
+          driveUrl:
+            driveFile.webViewLink ||
+            driveFile.webContentLink ||
+            null,
+          storageType:"DRIVE"
         }
       });
 
       console.log(
-        `LUMABOOTH IMPORT OK : ${event.name} / ${kind} / ${media.id}`
+        `LUMABOOTH IMPORT DRIVE OK : ${event.name} / ${kind} / ${media.id} / ${driveFile.id}`
       );
 
-    }catch(err){
+    }finally{
       try{
-        fs.unlinkSync(localPath);
-      }catch{}
-
-      throw err;
+        if(fs.existsSync(tempPath)){
+          fs.unlinkSync(tempPath);
+        }
+      }catch(err){
+        console.warn(
+          "LUMABOOTH EVENT : suppression temporaire impossible :",
+          err.message
+        );
+      }
     }
 
     return res
@@ -2819,6 +2844,17 @@ async function portalAccess(token){
   if(!event)return null;
   return {event,role:event.organizerToken===token?"ORGANIZER":"GUEST"};
 }
+
+function originalsSettingKey(eventId){
+  return `galleryShowOriginalsToGuests:${eventId}`;
+}
+
+async function getShowOriginalsToGuests(eventId){
+  const row=await prisma.appSetting.findUnique({
+    where:{key:originalsSettingKey(eventId)}
+  });
+  return String(row?.value||"false").toLowerCase()==="true";
+}
 function safeMedia(m,token){
   return {
     id:m.id,
@@ -2829,9 +2865,9 @@ function safeMedia(m,token){
     status:m.status,
     uploadedBy:m.uploadedBy,
     sourceGroup:
-      m.uploadedBy==="LUMABOOTH_PRINT"
-        ? "PRINT"
-        : "ORIGINAL",
+      m.uploadedBy==="LUMABOOTH_ORIGINAL"
+        ? "ORIGINAL"
+        : "PRINT_GUEST",
     createdAt:m.createdAt
   };
 }
@@ -3052,6 +3088,9 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
         guestUploadModerated:
           event.guestUploadModerated,
 
+        showOriginalsToGuests:
+          await getShowOriginalsToGuests(event.id),
+
         fotoshareUrl:
           event.fotoshareUrl
       },
@@ -3093,6 +3132,30 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
     });
   }
 });
+app.post("/api/guest/:token/gallery-originals-visibility", async (req,res)=>{
+  const access=await portalAccess(req.params.token);
+
+  if(!access||access.role!=="ORGANIZER"||!access.event.portalEnabled){
+    return res.status(403).json({
+      ok:false,
+      message:"Réservé à l'organisateur."
+    });
+  }
+
+  const show=Boolean(req.body?.show);
+
+  await prisma.appSetting.upsert({
+    where:{key:originalsSettingKey(access.event.id)},
+    update:{value:String(show)},
+    create:{
+      key:originalsSettingKey(access.event.id),
+      value:String(show)
+    }
+  });
+
+  res.json({ok:true,showOriginalsToGuests:show});
+});
+
 app.get(
   "/api/guest/:token/contract.pdf",
   async (req,res)=>{
@@ -3254,13 +3317,27 @@ app.use("/memories", express.static(MEMORIES_DIR, {fallthrough:false,maxAge:"1h"
 app.get("/api/guest/:token/memories", async (req,res)=>{
   const access=await portalAccess(req.params.token);
   if(!access?.event?.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
-  const where={eventId:access.event.id,status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE"};
+
+  const showOriginalsToGuests=
+    access.role==="ORGANIZER"
+      ? true
+      : await getShowOriginalsToGuests(access.event.id);
+
+  const where={
+    eventId:access.event.id,
+    status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE",
+    ...(access.role!=="ORGANIZER"&&!showOriginalsToGuests
+      ? {uploadedBy:{not:"LUMABOOTH_ORIGINAL"}}
+      : {})
+  };
+
   const media=await prisma.memoryMedia.findMany({where,orderBy:{createdAt:"asc"}});
   res.json({
-  ok:true,
-  role:access.role,
-  media:media.map(m=>safeMedia(m,req.params.token))
-});
+    ok:true,
+    role:access.role,
+    showOriginalsToGuests,
+    media:media.map(m=>safeMedia(m,req.params.token))
+  });
 });
 
 app.get("/api/guest/:token/memories/:id/file", async (req,res)=>{
@@ -3285,6 +3362,14 @@ app.get("/api/guest/:token/memories/:id/file", async (req,res)=>{
     if(
       access.role!=="ORGANIZER" &&
       media.status!=="VISIBLE"
+    ){
+      return res.status(403).end();
+    }
+
+    if(
+      access.role!=="ORGANIZER" &&
+      media.uploadedBy==="LUMABOOTH_ORIGINAL" &&
+      !(await getShowOriginalsToGuests(access.event.id))
     ){
       return res.status(403).end();
     }
@@ -3549,6 +3634,10 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
 
   const mediaWithUrls = media.map(m => ({
   ...m,
+  sourceGroup:
+    m.uploadedBy==="LUMABOOTH_ORIGINAL"
+      ? "ORIGINAL"
+      : "PRINT_GUEST",
 
   url:event.organizerToken
     ? `/api/guest/${encodeURIComponent(event.organizerToken)}/memories/${m.id}/file`
@@ -3568,6 +3657,7 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
       organizerToken: event.organizerToken,
       guestToken: event.guestToken,
       fotoshareUrl: event.fotoshareUrl,
+      showOriginalsToGuests: await getShowOriginalsToGuests(event.id),
       lumaboothWebhookPath: event.organizerToken
         ? `/api/lumabooth/event/${encodeURIComponent(event.organizerToken)}`
         : null

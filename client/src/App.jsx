@@ -2382,7 +2382,14 @@ function PortalPage({token}){
 
   async function loadMemories(){
     const r=await fetch(`/api/guest/${token}/memories`);
-    if(r.ok){const d=await r.json();setMedia(d.media||[])}
+    if(r.ok){
+      const d=await r.json();
+      setMedia(d.media||[]);
+      setData(old=>old
+        ? {...old,event:{...old.event,showOriginalsToGuests:Boolean(d.showOriginalsToGuests)}}
+        : old
+      );
+    }
   }
 
   useEffect(()=>{
@@ -2416,6 +2423,35 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     window.addEventListener("keydown",onKey);
     return()=>window.removeEventListener("keydown",onKey);
   },[lightbox,photoMedia.length]);
+
+  async function toggleOriginalsVisibility(){
+    if(!organizer)return;
+
+    const next=!Boolean(data?.event?.showOriginalsToGuests);
+
+    const r=await fetch(
+      `/api/guest/${token}/gallery-originals-visibility`,
+      {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({show:next})
+      }
+    );
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+      return alert(d.message||"Modification impossible.");
+    }
+
+    setData(old=>({
+      ...old,
+      event:{
+        ...old.event,
+        showOriginalsToGuests:Boolean(d.showOriginalsToGuests)
+      }
+    }));
+  }
 
   async function upload(ev){
     const files=[...ev.target.files];
@@ -2468,6 +2504,8 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
   const e=data.event,support=data.support||{};
   const paged=galleryMedia.slice(0,visibleCount);
+  const originalsMedia=paged.filter(m=>m.sourceGroup==="ORIGINAL");
+  const partyMedia=paged.filter(m=>m.sourceGroup!=="ORIGINAL");
   const guestShare=data?.guestShare||null;
 
   const eventDisplayName=String(e.name||"")
@@ -2871,6 +2909,26 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
     {e.fotoshareUrl&&<a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos de la borne</a>}
 
+    {organizer&&(
+      <section className="portal-section">
+        <div className="portal-document-card" style={{display:"flex",gap:16,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
+          <div>
+            <h3 style={{margin:"0 0 4px"}}>📸 Originaux visibles aux invités</h3>
+            <p className="muted" style={{margin:0}}>
+              Les originaux restent toujours visibles dans votre espace organisateur.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={e.showOriginalsToGuests?"primary":"secondary-btn"}
+            onClick={toggleOriginalsVisibility}
+          >
+            {e.showOriginalsToGuests?"🟢 Affichés aux invités":"⚪ Masqués aux invités"}
+          </button>
+        </div>
+      </section>
+    )}
+
     <section className="portal-section">
       <div className="memories-heading">
         <div><h2>📸 LP28 Memories</h2><p className="muted">{galleryMedia.length} souvenir{galleryMedia.length>1?"s":""}</p></div>
@@ -2900,8 +2958,10 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
         <button disabled={!selected.length} onClick={hideSelected}>👁️ Masquer la sélection</button>
       </div>}
 
-      <div className="memories-grid">
-        {paged.map(m=><article key={m.id} className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`}>
+      {partyMedia.length>0&&<>
+        <h3 style={{marginTop:18}}>🎉 Tirages & invités <span className="muted">({partyMedia.length})</span></h3>
+        <div className="memories-grid">
+          {partyMedia.map(m=><article key={m.id} className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`}>
           {selectMode&&organizer&&<button className="memory-select-check" onClick={()=>toggleSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
 
           {m.mediaType==="VIDEO"
@@ -2918,7 +2978,31 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
             <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
           </div>}
         </article>)}
-      </div>
+        </div>
+      </>}
+
+      {originalsMedia.length>0&&<>
+        <h3 style={{marginTop:28}}>📸 Originaux <span className="muted">({originalsMedia.length})</span></h3>
+        <div className="memories-grid">
+          {originalsMedia.map(m=><article key={m.id} className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`}>
+          {selectMode&&organizer&&<button className="memory-select-check" onClick={()=>toggleSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
+
+          {m.mediaType==="VIDEO"
+            ? <video src={m.url} controls preload="metadata"/>
+            : <button className="memory-photo-button" onClick={()=>selectMode&&organizer?toggleSelected(m.id):setLightbox(m)}>
+                <img src={m.url} loading="lazy" decoding="async"/>
+              </button>}
+
+          {organizer&&<div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"À valider"}</div>}
+          {organizer&&!selectMode&&<div className="memory-actions">
+            {m.status==="VISIBLE"&&<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>}
+            {m.status==="HIDDEN"&&<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
+            {m.status==="PENDING"&&<><button onClick={()=>action(m.id,"approve")}>✅ Publier</button><button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button></>}
+            <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
+          </div>}
+        </article>)}
+        </div>
+      </>}
 
       {!galleryMedia.length&&<p className="muted">Aucun souvenir ajouté pour le moment.</p>}
       {visibleCount<galleryMedia.length&&<button className="memory-load-more" onClick={()=>setVisibleCount(v=>v+80)}>Afficher 80 photos de plus</button>}
@@ -3012,6 +3096,8 @@ function AdminGalleries(){
 
   if(detail){
     const list=(detail.media||[]).filter(m=>filter==="ALL"||m.status===filter);
+    const originalList=list.filter(m=>m.sourceGroup==="ORIGINAL");
+    const partyList=list.filter(m=>m.sourceGroup!=="ORIGINAL");
     const base=window.location.origin;
     const org=detail.event.organizerToken?`${base}/portal/${detail.event.organizerToken}`:"";
     const guest=detail.event.guestToken?`${base}/portal/${detail.event.guestToken}`:"";
@@ -3060,16 +3146,29 @@ function AdminGalleries(){
         {["ALL","VISIBLE","HIDDEN","PENDING"].map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="ALL"?"Tout":x==="VISIBLE"?"Visibles":x==="HIDDEN"?"Masquées":"En attente"}</button>)}
       </div>
 
-      <div className="memories-grid">
-        {list.map(m=><article className={`memory-card ${m.status.toLowerCase()}`} key={m.id}>
+      {partyList.length>0&&<>
+        <h3 style={{marginTop:18}}>🎉 Tirages & invités <span className="muted">({partyList.length})</span></h3>
+        <div className="memories-grid">{partyList.map(m=><article className={`memory-card ${m.status.toLowerCase()}`} key={m.id}>
           {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>setLightbox(m)}><img src={m.url} loading="lazy"/></button>}
           <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
           <div className="memory-actions">
             {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
             <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
           </div>
-        </article>)}
-      </div>
+        </article>)}</div>
+      </>}
+
+      {originalList.length>0&&<>
+        <h3 style={{marginTop:28}}>📸 Originaux <span className="muted">({originalList.length})</span></h3>
+        <div className="memories-grid">{originalList.map(m=><article className={`memory-card ${m.status.toLowerCase()}`} key={m.id}>
+          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>setLightbox(m)}><img src={m.url} loading="lazy"/></button>}
+          <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
+          <div className="memory-actions">
+            {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
+            <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
+          </div>
+        </article>)}</div>
+      </>}
 
       {lightbox&&<div className="memory-lightbox admin-lightbox">
         <button className="lightbox-close" onClick={()=>setLightbox(null)}>✕</button>
