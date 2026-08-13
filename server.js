@@ -445,47 +445,113 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
         .send("LP28 LumaBooth duplicate ignored");
     }
 
-    const response = await fetch(fotoshareUrl,{
+    const fotoshareResponse = await fetch(fotoshareUrl,{
       redirect:"follow",
       headers:{
         "User-Agent":"LP28-LumaBooth/1.0",
-        "Accept":"image/*,*/*;q=0.8"
+        "Accept":"text/html,image/*,*/*;q=0.8"
       }
     });
 
-    if(!response.ok){
+    if(!fotoshareResponse.ok){
       console.warn(
-        "LUMABOOTH EVENT : téléchargement FotoShare impossible :",
-        response.status,
+        "LUMABOOTH EVENT : ouverture FotoShare impossible :",
+        fotoshareResponse.status,
         fotoshareUrl
       );
 
       return res
         .status(200)
         .type("text/plain")
-        .send(`LP28 FotoShare HTTP ${response.status}`);
+        .send(`LP28 FotoShare HTTP ${fotoshareResponse.status}`);
     }
 
-    const mimeType =
-      String(response.headers.get("content-type") || "")
+    let imageResponse = fotoshareResponse;
+    let mimeType =
+      String(fotoshareResponse.headers.get("content-type") || "")
         .split(";")[0]
         .trim()
         .toLowerCase();
 
+    // /i/<hash> est une page HTML FotoShare. On récupère l'image CDN
+    // publiée dans og:image. C'est le fichier réellement affiché par FotoShare.
+    if(mimeType === "text/html" || mimeType === "application/xhtml+xml"){
+      const html = await fotoshareResponse.text();
+
+      const ogMatch =
+        html.match(
+          /<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i
+        ) ||
+        html.match(
+          /<meta\s+[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["'][^>]*>/i
+        );
+
+      let cdnUrl = ogMatch?.[1] || "";
+
+      if(cdnUrl){
+        cdnUrl = cdnUrl
+          .replace(/&amp;/g,"&")
+          .replace(/&#x2F;/gi,"/")
+          .trim();
+      }
+
+      if(!cdnUrl || !/^https:\/\//i.test(cdnUrl)){
+        console.warn(
+          "LUMABOOTH EVENT : og:image FotoShare introuvable :",
+          fotoshareUrl
+        );
+
+        return res
+          .status(200)
+          .type("text/plain")
+          .send("LP28 FotoShare og:image not found");
+      }
+
+      console.log("LUMABOOTH EVENT : image CDN =", cdnUrl);
+
+      imageResponse = await fetch(cdnUrl,{
+        redirect:"follow",
+        headers:{
+          "User-Agent":"LP28-LumaBooth/1.0",
+          "Accept":"image/*,*/*;q=0.8",
+          "Referer":fotoshareUrl
+        }
+      });
+
+      if(!imageResponse.ok){
+        console.warn(
+          "LUMABOOTH EVENT : téléchargement CDN impossible :",
+          imageResponse.status,
+          cdnUrl
+        );
+
+        return res
+          .status(200)
+          .type("text/plain")
+          .send(`LP28 FotoShare CDN HTTP ${imageResponse.status}`);
+      }
+
+      mimeType =
+        String(imageResponse.headers.get("content-type") || "")
+          .split(";")[0]
+          .trim()
+          .toLowerCase();
+    }
+
     if(!mimeType.startsWith("image/")){
       console.warn(
-        "LUMABOOTH EVENT : FotoShare n'a pas renvoyé une image :",
+        "LUMABOOTH EVENT : la ressource finale n'est pas une image :",
         mimeType || "(content-type absent)",
-        response.url
+        imageResponse.url
       );
 
       return res
         .status(200)
         .type("text/plain")
-        .send("LP28 FotoShare response is not an image");
+        .send("LP28 FotoShare final response is not an image");
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await imageResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     if(!buffer.length || buffer.length > 25*1024*1024){
