@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const { google } = require("googleapis");
+
+const { Readable } = require("stream");
 const { DateTime } = require("luxon");
 const prisma = require("../lib/prisma");
 
@@ -722,7 +724,7 @@ async function listEventDocuments(req,eventId){
 
   const files = await drive.files.list({
     q:`'${documentsFolder.id}' in parents and trashed=false`,
-    fields:"files(id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime)",
+    fields:"files(id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime,appProperties)",
     orderBy:"name"
   });
 
@@ -733,10 +735,211 @@ async function listEventDocuments(req,eventId){
   };
 }
 
+
+async function ensureEventDocumentsFolder(req,eventId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const event = await prisma.event.findUnique({
+    where:{id:eventId}
+  });
+
+  if(!event){
+    throw new Error("Événement introuvable.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const parentId = await ensureDrive(client,event);
+
+  const folders = await drive.files.list({
+    q:`'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields:"files(id,name)"
+  });
+
+  let documentsFolder = (folders.data.files||[])
+    .find(f=>f.name==="Documents");
+
+  if(!documentsFolder){
+    documentsFolder = await createFolder(
+      drive,
+      "Documents",
+      parentId
+    );
+  }
+
+  return {
+    client,
+    drive,
+    event,
+    folderId:documentsFolder.id
+  };
+}
+
+async function uploadEventDocument(req,eventId,file,metadata={}){
+  if(!file?.buffer){
+    throw new Error("Fichier document manquant.");
+  }
+
+  const {
+    drive,
+    folderId
+  } = await ensureEventDocumentsFolder(
+    req,
+    eventId
+  );
+
+  const type = String(metadata.type||"OTHER").trim() || "OTHER";
+  const displayName =
+    String(metadata.displayName||file.originalname||"Document")
+      .trim()
+      .slice(0,180) || "Document";
+
+  const visibleClient =
+    metadata.visibleClient === true ||
+    String(metadata.visibleClient).toLowerCase()==="true";
+
+  const safeOriginal =
+    String(file.originalname||"document.pdf")
+      .replace(/[\\/:*?"<>|]+/g,"-")
+      .trim() || "document.pdf";
+
+  const finalName =
+    displayName.toLowerCase().endsWith(".pdf")
+      ? displayName
+      : `${displayName}.pdf`;
+
+  const uploaded = await drive.files.create({
+    requestBody:{
+      name:finalName || safeOriginal,
+      parents:[folderId],
+      appProperties:{
+        lp28Document:"true",
+        lp28Type:type,
+        lp28DisplayName:displayName,
+        lp28VisibleClient:visibleClient ? "true" : "false"
+      }
+    },
+    media:{
+      mimeType:file.mimetype || "application/pdf",
+      body:Readable.from(file.buffer)
+    },
+    fields:"id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime,appProperties"
+  });
+
+  return uploaded.data;
+}
+
+async function deleteEventDocument(req,eventId,fileId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const driveResult = await listEventDocuments(
+    req,
+    eventId
+  );
+
+  const document = (driveResult.documents||[])
+    .find(f=>f.id===fileId);
+
+  if(!document){
+    throw new Error("Document introuvable.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  await drive.files.delete({
+    fileId
+  });
+
+  return {
+    ok:true,
+    id:fileId
+  };
+}
+
+async function updateEventDocumentMetadata(req,eventId,fileId,metadata={}){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const driveResult = await listEventDocuments(
+    req,
+    eventId
+  );
+
+  const document = (driveResult.documents||[])
+    .find(f=>f.id===fileId);
+
+  if(!document){
+    throw new Error("Document introuvable.");
+  }
+
+  const drive = google.drive({
+    version:"v3",
+    auth:client
+  });
+
+  const currentProps = document.appProperties || {};
+
+  const visibleClient =
+    metadata.visibleClient === true ||
+    String(metadata.visibleClient).toLowerCase()==="true";
+
+  const type =
+    String(metadata.type||currentProps.lp28Type||"OTHER")
+      .trim() || "OTHER";
+
+  const displayName =
+    String(
+      metadata.displayName ||
+      currentProps.lp28DisplayName ||
+      document.name ||
+      "Document"
+    ).trim().slice(0,180) || "Document";
+
+  const finalName =
+    displayName.toLowerCase().endsWith(".pdf")
+      ? displayName
+      : `${displayName}.pdf`;
+
+  const updated = await drive.files.update({
+    fileId,
+    requestBody:{
+      name:finalName,
+      appProperties:{
+        ...currentProps,
+        lp28Document:"true",
+        lp28Type:type,
+        lp28DisplayName:displayName.replace(/\.pdf$/i,""),
+        lp28VisibleClient:visibleClient ? "true" : "false"
+      }
+    },
+    fields:"id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime,appProperties"
+  });
+
+  return updated.data;
+}
+
 module.exports={
   configured,connection,authUrl,callback,disconnect,
   listCalendars,listDriveFolders,saveSettings,
   syncEvent,deleteCalendarEvent,listEventDocuments,
+  uploadEventDocument,deleteEventDocument,updateEventDocumentMetadata,
   uploadMemoryToDrive,
   getMemoryFromDrive,
   deleteMemoryFromDrive

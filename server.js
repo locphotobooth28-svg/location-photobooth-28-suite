@@ -32,6 +32,24 @@ const memoriesUpload = multer({
   }
 });
 
+const documentUpload = multer({
+  storage:multer.memoryStorage(),
+  limits:{
+    fileSize:15*1024*1024,
+    files:1
+  },
+  fileFilter:(req,file,cb)=>{
+    const isPdf =
+      file.mimetype==="application/pdf" ||
+      /\.pdf$/i.test(file.originalname||"");
+
+    cb(
+      isPdf ? null : new Error("Seuls les fichiers PDF sont autorisés."),
+      isPdf
+    );
+  }
+});
+
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -1780,6 +1798,349 @@ googleCalendarId: String(b.googleCalendarId || "").trim() || null,
   res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
+
+app.post(
+  "/api/events/:id/contract-signature/cancel",
+  adminOnly,
+  async (req,res)=>{
+    try{
+      const event=
+        await prisma.event.findUnique({
+          where:{id:req.params.id}
+        });
+
+      if(!event){
+        return res.status(404).json({
+          ok:false,
+          message:"Événement introuvable."
+        });
+      }
+
+      if(event.contractStatus!=="SIGNED"){
+        return res.status(400).json({
+          ok:false,
+          message:"Ce contrat n'est pas signé."
+        });
+      }
+
+      const cancelledAt=new Date();
+
+      const historyKey=
+        `contractSignatureHistory:${event.id}`;
+
+      let history=[];
+
+      try{
+        const current=
+          await prisma.appSetting.findUnique({
+            where:{key:historyKey}
+          });
+
+        if(current?.value){
+          const parsed=JSON.parse(current.value);
+
+          if(Array.isArray(parsed)){
+            history=parsed;
+          }
+        }
+      }catch(parseErr){
+        console.warn(
+          "Lecture historique annulation signature :",
+          parseErr.message
+        );
+      }
+
+      history.push({
+        signedAt:
+          event.contractSignedAt
+            ? event.contractSignedAt.toISOString()
+            : null,
+        signerName:
+          event.contractSignerName || null,
+        signerEmail:
+          event.contractSignerEmail || null,
+        cancelledAt:
+          cancelledAt.toISOString()
+      });
+
+      history=history.slice(-20);
+
+      await prisma.$transaction([
+        prisma.appSetting.upsert({
+          where:{key:historyKey},
+          update:{value:JSON.stringify(history)},
+          create:{
+            key:historyKey,
+            value:JSON.stringify(history)
+          }
+        }),
+
+        prisma.event.update({
+          where:{id:event.id},
+          data:{
+            contractStatus:"SENT",
+            contractSignedAt:null,
+            contractSignerName:null,
+            contractSignerEmail:null,
+            contractSignatureData:null
+          }
+        })
+      ]);
+
+      res.json({
+        ok:true,
+        status:"SENT",
+        cancelledAt,
+        signatureUrl:
+          event.contractToken
+            ? `${appBaseUrl(req)}/signature/${event.contractToken}`
+            : null
+      });
+
+    }catch(err){
+      console.error("Annulation signature contrat :",err);
+
+      res.status(500).json({
+        ok:false,
+        message:"Impossible d'annuler la signature."
+      });
+    }
+  }
+);
+
+
+app.get("/api/events/:id/documents", adminOnly, async (req,res)=>{
+  try{
+    const event=await prisma.event.findUnique({
+      where:{id:req.params.id},
+      select:{id:true,name:true}
+    });
+
+    if(!event){
+      return res.status(404).json({
+        ok:false,
+        message:"Événement introuvable."
+      });
+    }
+
+    const result=
+      await googleService.listEventDocuments(
+        req,
+        event.id
+      );
+
+    const documents=(result.documents||[])
+      .filter(f=>
+        f.mimeType==="application/pdf" ||
+        /\.pdf$/i.test(f.name||"")
+      )
+      .map(normalizeDriveDocument)
+      .map(d=>({
+        ...d,
+        adminUrl:
+          `/api/events/${encodeURIComponent(event.id)}` +
+          `/documents/${encodeURIComponent(d.id)}/file`
+      }));
+
+    res.json({
+      ok:true,
+      connected:result.connected,
+      event,
+      documents
+    });
+
+  }catch(err){
+    console.error("Liste documents événement :",err);
+
+    res.status(500).json({
+      ok:false,
+      message:err.message || "Impossible de charger les documents."
+    });
+  }
+});
+
+app.post(
+  "/api/events/:id/documents",
+  adminOnly,
+  documentUpload.single("file"),
+  async (req,res)=>{
+    try{
+      if(!req.file){
+        return res.status(400).json({
+          ok:false,
+          message:"Sélectionne un fichier PDF."
+        });
+      }
+
+      const allowedTypes=[
+        "QUOTE",
+        "DEPOSIT_INVOICE",
+        "INVOICE",
+        "PURCHASE_ORDER",
+        "OTHER"
+      ];
+
+      const type=
+        allowedTypes.includes(String(req.body?.type||""))
+          ? String(req.body.type)
+          : "OTHER";
+
+      const displayName=
+        String(req.body?.displayName||"")
+          .trim() ||
+        documentTypeLabel(type);
+
+      const visibleClient=
+        String(req.body?.visibleClient||"true")==="true";
+
+      const uploaded=
+        await googleService.uploadEventDocument(
+          req,
+          req.params.id,
+          req.file,
+          {
+            type,
+            displayName,
+            visibleClient
+          }
+        );
+
+      const document=normalizeDriveDocument(uploaded);
+
+      res.json({
+        ok:true,
+        document:{
+          ...document,
+          adminUrl:
+            `/api/events/${encodeURIComponent(req.params.id)}` +
+            `/documents/${encodeURIComponent(document.id)}/file`
+        }
+      });
+
+    }catch(err){
+      console.error("Ajout document événement :",err);
+
+      res.status(500).json({
+        ok:false,
+        message:err.message || "Impossible d'ajouter le document."
+      });
+    }
+  }
+);
+
+app.patch(
+  "/api/events/:id/documents/:fileId",
+  adminOnly,
+  async (req,res)=>{
+    try{
+      const updated=
+        await googleService.updateEventDocumentMetadata(
+          req,
+          req.params.id,
+          req.params.fileId,
+          {
+            type:req.body?.type,
+            displayName:req.body?.displayName,
+            visibleClient:Boolean(req.body?.visibleClient)
+          }
+        );
+
+      res.json({
+        ok:true,
+        document:normalizeDriveDocument(updated)
+      });
+
+    }catch(err){
+      console.error("Modification document événement :",err);
+
+      res.status(500).json({
+        ok:false,
+        message:err.message || "Impossible de modifier le document."
+      });
+    }
+  }
+);
+
+app.delete(
+  "/api/events/:id/documents/:fileId",
+  adminOnly,
+  async (req,res)=>{
+    try{
+      await googleService.deleteEventDocument(
+        req,
+        req.params.id,
+        req.params.fileId
+      );
+
+      res.json({ok:true});
+
+    }catch(err){
+      console.error("Suppression document événement :",err);
+
+      res.status(500).json({
+        ok:false,
+        message:err.message || "Impossible de supprimer le document."
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/events/:id/documents/:fileId/file",
+  adminOnly,
+  async (req,res)=>{
+    try{
+      const driveResult=
+        await googleService.listEventDocuments(
+          req,
+          req.params.id
+        );
+
+      const document=
+        (driveResult.documents||[])
+          .find(f=>f.id===req.params.fileId);
+
+      if(!document){
+        return res.status(404).end();
+      }
+
+      const stream=
+        await googleService.getMemoryFromDrive(
+          req,
+          document.id
+        );
+
+      res.setHeader(
+        "Content-Type",
+        document.mimeType || "application/pdf"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${String(document.name||"document.pdf")
+          .replace(/"/g,"")}"`
+      );
+
+      stream.on("error",err=>{
+        console.error("Lecture document admin :",err);
+
+        if(!res.headersSent){
+          res.status(500).end();
+        }
+      });
+
+      stream.pipe(res);
+
+    }catch(err){
+      console.error("Ouverture document admin :",err);
+
+      if(!res.headersSent){
+        res.status(500).end();
+      }
+    }
+  }
+);
+
 app.post("/api/events/:id/archive", adminOnly, async (req, res) => {
   const current = await prisma.event.findUnique({ where: { id: req.params.id } });
   if (!current) return res.status(404).json({ ok: false, message: "Ã‰vÃ©nement introuvable." });
@@ -2116,7 +2477,70 @@ function safeMedia(m,token){
 
 // Endpoint public limitÃ© au portail organisateur/invitÃ©.
 // Aucun lien d'administration, inventaire ou stock n'est exposÃ© ici.
- app.get("/api/guest/:token/portal", async (req,res)=>{
+ 
+function documentTypeLabel(type){
+  return ({
+    QUOTE:"Devis",
+    DEPOSIT_INVOICE:"Facture d'acompte",
+    INVOICE:"Facture",
+    PURCHASE_ORDER:"Bon de commande",
+    OTHER:"Autre document"
+  })[type] || "Document";
+}
+
+function normalizeDriveDocument(file){
+  const props=file?.appProperties||{};
+  const explicitType=String(props.lp28Type||"").trim();
+
+  let type=explicitType;
+
+  if(!type){
+    const name=String(file?.name||"");
+
+    if(/devis|quote/i.test(name)){
+      type="QUOTE";
+    }else if(/acompte/i.test(name) && /facture|invoice/i.test(name)){
+      type="DEPOSIT_INVOICE";
+    }else if(/facture|invoice/i.test(name)){
+      type="INVOICE";
+    }else if(/bon[ _-]*de[ _-]*commande|purchase[ _-]*order/i.test(name)){
+      type="PURCHASE_ORDER";
+    }else{
+      type="OTHER";
+    }
+  }
+
+  const legacyVisible =
+    /facture|invoice|devis|quote|bon[ _-]*de[ _-]*commande|purchase[ _-]*order/i
+      .test(String(file?.name||""));
+
+  const visibleClient =
+    props.lp28VisibleClient != null
+      ? String(props.lp28VisibleClient)==="true"
+      : legacyVisible;
+
+  const displayName=
+    String(
+      props.lp28DisplayName ||
+      file?.name ||
+      documentTypeLabel(type)
+    ).replace(/\.pdf$/i,"");
+
+  return {
+    id:file.id,
+    name:file.name,
+    displayName,
+    type,
+    typeLabel:documentTypeLabel(type),
+    visibleClient,
+    mimeType:file.mimeType,
+    createdTime:file.createdTime||null,
+    modifiedTime:file.modifiedTime||null,
+    webViewLink:file.webViewLink||null
+  };
+}
+
+app.get("/api/guest/:token/portal", async (req,res)=>{
   try{
     await ensureV82Settings();
 
@@ -2190,7 +2614,7 @@ function safeMedia(m,token){
         qrDataUrl
       };
 
-      let invoices=[];
+      let clientDocuments=[];
 
       try{
         const driveResult=
@@ -2199,21 +2623,15 @@ function safeMedia(m,token){
             event.id
           );
 
-        const documents=
-          driveResult.documents || [];
-
-        invoices=documents
+        clientDocuments=(driveResult.documents||[])
           .filter(f=>
-            /facture|invoice/i.test(f.name || "") &&
-            (
-              f.mimeType==="application/pdf" ||
-              /\.pdf$/i.test(f.name || "")
-            )
+            f.mimeType==="application/pdf" ||
+            /\.pdf$/i.test(f.name||"")
           )
+          .map(normalizeDriveDocument)
+          .filter(f=>f.visibleClient)
           .map(f=>({
-            id:f.id,
-            name:f.name,
-            mimeType:f.mimeType,
+            ...f,
             url:
               `/api/guest/${encodeURIComponent(req.params.token)}` +
               `/documents/${encodeURIComponent(f.id)}`
@@ -2248,7 +2666,11 @@ function safeMedia(m,token){
               : null
         },
 
-        invoices
+        files:clientDocuments,
+        invoices:clientDocuments.filter(d=>
+          d.type==="INVOICE" ||
+          d.type==="DEPOSIT_INVOICE"
+        )
       };
     }
 
@@ -2412,9 +2834,10 @@ app.get(
 
       const document=
         (driveResult.documents || [])
+          .map(normalizeDriveDocument)
           .find(f=>
             f.id===req.params.fileId &&
-            /facture|invoice/i.test(f.name || "")
+            f.visibleClient
           );
 
       if(!document){

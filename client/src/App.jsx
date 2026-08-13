@@ -2395,7 +2395,7 @@ function PortalPage({token}){
   const organizer=data?.role==="ORGANIZER";
   const organizerDocuments=data?.documents||null;
 const contract=organizerDocuments?.contract||null;
-const invoices=organizerDocuments?.invoices||[];
+const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[];
   const galleryMedia=organizer ? media : media.filter(m=>m.status==="VISIBLE");
   const photoMedia=galleryMedia.filter(m=>m.mediaType==="PHOTO");
 
@@ -2717,28 +2717,37 @@ const invoices=organizerDocuments?.invoices||[];
 
       <div className="portal-document-card">
 
-        <h3>🧾 Factures</h3>
+        <h3>📁 Documents</h3>
 
-        {invoices.length ? (
+        {clientDocuments.length ? (
           <div style={{
             display:"grid",
             gap:10
           }}>
-            {invoices.map((invoice,index)=>(
+            {clientDocuments.map((document,index)=>(
               <a
-                key={invoice.id}
+                key={document.id}
                 className="portal-action"
-                href={invoice.url}
+                href={document.url}
                 target="_blank"
                 rel="noreferrer"
               >
-                🧾 {invoice.name || `Facture ${index+1}`}
+                {document.type==="QUOTE"
+                  ? "📄"
+                  : document.type==="DEPOSIT_INVOICE"
+                    ? "💶"
+                    : document.type==="INVOICE"
+                      ? "🧾"
+                      : document.type==="PURCHASE_ORDER"
+                        ? "📦"
+                        : "📎"}{" "}
+                {document.displayName || document.name || `Document ${index+1}`}
               </a>
             ))}
           </div>
         ) : (
           <p className="muted">
-            Aucune facture disponible pour le moment.
+            Aucun document disponible pour le moment.
           </p>
         )}
 
@@ -3445,6 +3454,490 @@ function CollaboratorsPanel(){
     </section>
   );
 }
+
+const LP28_DOCUMENT_TYPES=[
+  {value:"QUOTE",label:"📄 Devis"},
+  {value:"DEPOSIT_INVOICE",label:"💶 Facture d'acompte"},
+  {value:"INVOICE",label:"🧾 Facture"},
+  {value:"PURCHASE_ORDER",label:"📦 Bon de commande"},
+  {value:"OTHER",label:"📎 Autre document"}
+];
+
+function DocumentManager({event,onClose}){
+  const [documents,setDocuments]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [file,setFile]=useState(null);
+  const [type,setType]=useState("INVOICE");
+  const [displayName,setDisplayName]=useState("");
+  const [visibleClient,setVisibleClient]=useState(true);
+
+  async function load(){
+    setLoading(true);
+
+    try{
+      const r=await fetch(
+        `/api/events/${event.id}/documents`,
+        {credentials:"include"}
+      );
+
+      const d=await r.json().catch(()=>({}));
+
+      if(!r.ok){
+        throw new Error(
+          d.message || "Impossible de charger les documents."
+        );
+      }
+
+      setDocuments(d.documents||[]);
+    }catch(err){
+      alert(err.message);
+    }finally{
+      setLoading(false);
+    }
+  }
+
+  useEffect(()=>{
+    load();
+  },[event.id]);
+
+  async function uploadDocument(ev){
+    ev.preventDefault();
+
+    if(!file){
+      return alert("Choisis un fichier PDF.");
+    }
+
+    setBusy(true);
+
+    try{
+      const fd=new FormData();
+
+      fd.append("file",file);
+      fd.append("type",type);
+      fd.append(
+        "displayName",
+        displayName.trim() ||
+        LP28_DOCUMENT_TYPES.find(x=>x.value===type)?.label
+          ?.replace(/^[^\p{L}\p{N}]+/u,"")
+          || "Document"
+      );
+      fd.append(
+        "visibleClient",
+        visibleClient ? "true" : "false"
+      );
+
+      const r=await fetch(
+        `/api/events/${event.id}/documents`,
+        {
+          method:"POST",
+          credentials:"include",
+          body:fd
+        }
+      );
+
+      const d=await r.json().catch(()=>({}));
+
+      if(!r.ok){
+        throw new Error(
+          d.message || "Impossible d'ajouter le document."
+        );
+      }
+
+      setFile(null);
+      setDisplayName("");
+
+      const input=document.getElementById(
+        `lp28-document-file-${event.id}`
+      );
+
+      if(input){
+        input.value="";
+      }
+
+      await load();
+
+    }catch(err){
+      alert(err.message);
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  async function removeDocument(document){
+    if(
+      !confirm(
+        `Supprimer définitivement "${document.displayName||document.name}" ?`
+      )
+    ){
+      return;
+    }
+
+    const r=await fetch(
+      `/api/events/${event.id}/documents/${document.id}`,
+      {
+        method:"DELETE",
+        credentials:"include"
+      }
+    );
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+      return alert(
+        d.message || "Suppression impossible."
+      );
+    }
+
+    await load();
+  }
+
+  async function toggleVisibility(document){
+    const r=await fetch(
+      `/api/events/${event.id}/documents/${document.id}`,
+      {
+        method:"PATCH",
+        credentials:"include",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          type:document.type,
+          displayName:document.displayName,
+          visibleClient:!document.visibleClient
+        })
+      }
+    );
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+      return alert(
+        d.message || "Modification impossible."
+      );
+    }
+
+    await load();
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div
+        className="share-modal"
+        style={{
+          width:"min(760px,94vw)",
+          maxHeight:"90vh",
+          overflow:"auto"
+        }}
+      >
+        <div className="modal-head">
+          <div>
+            <div className="eyebrow">
+              DOSSIER CLIENT
+            </div>
+            <h2>📁 Documents — {event.name}</h2>
+          </div>
+
+          <button
+            className="icon-btn"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          onSubmit={uploadDocument}
+          style={{
+            display:"grid",
+            gap:12,
+            marginBottom:20
+          }}
+        >
+          <div className="form-grid">
+            <div>
+              <label>Type de document</label>
+
+              <select
+                value={type}
+                onChange={e=>setType(e.target.value)}
+              >
+                {LP28_DOCUMENT_TYPES.map(x=>(
+                  <option
+                    key={x.value}
+                    value={x.value}
+                  >
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label>Nom affiché</label>
+
+              <input
+                value={displayName}
+                onChange={e=>
+                  setDisplayName(e.target.value)
+                }
+                placeholder="Ex : Facture d'acompte 2026-042"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label>Fichier PDF</label>
+
+            <input
+              id={`lp28-document-file-${event.id}`}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={e=>
+                setFile(
+                  e.target.files?.[0] || null
+                )
+              }
+            />
+          </div>
+
+          <label
+            style={{
+              display:"flex",
+              alignItems:"center",
+              gap:8
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={visibleClient}
+              onChange={e=>
+                setVisibleClient(e.target.checked)
+              }
+            />
+
+            👤 Visible dans l'espace organisateur
+          </label>
+
+          <button
+            className="primary"
+            disabled={busy}
+          >
+            {busy
+              ? "Envoi en cours..."
+              : "📤 Ajouter le document"}
+          </button>
+        </form>
+
+        <hr/>
+
+        <h3>Documents du dossier</h3>
+
+        {loading ? (
+          <p className="muted">
+            Chargement...
+          </p>
+        ) : documents.length ? (
+          <div
+            style={{
+              display:"grid",
+              gap:10
+            }}
+          >
+            {documents.map(document=>(
+              <div
+                key={document.id}
+                className="portal-document-card"
+                style={{
+                  display:"grid",
+                  gap:8
+                }}
+              >
+                <div
+                  style={{
+                    display:"flex",
+                    justifyContent:"space-between",
+                    gap:12,
+                    flexWrap:"wrap"
+                  }}
+                >
+                  <div>
+                    <strong>
+                      {document.typeLabel}
+                    </strong>
+
+                    <div>
+                      {document.displayName || document.name}
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      padding:"4px 8px",
+                      borderRadius:999,
+                      fontSize:12,
+                      fontWeight:700,
+                      background:document.visibleClient
+                        ? "#dcfce7"
+                        : "#f3f4f6",
+                      color:document.visibleClient
+                        ? "#166534"
+                        : "#4b5563"
+                    }}
+                  >
+                    {document.visibleClient
+                      ? "👤 Visible client"
+                      : "🔒 Admin uniquement"}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display:"flex",
+                    gap:8,
+                    flexWrap:"wrap"
+                  }}
+                >
+                  <a
+                    className="portal-action"
+                    href={document.adminUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    👁️ Voir
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={()=>
+                      toggleVisibility(document)
+                    }
+                  >
+                    {document.visibleClient
+                      ? "🔒 Masquer au client"
+                      : "👤 Rendre visible"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="danger-btn"
+                    onClick={()=>
+                      removeDocument(document)
+                    }
+                  >
+                    🗑️ Supprimer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">
+            Aucun document déposé.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminDocuments({events,onOpen}){
+  const [search,setSearch]=useState("");
+
+  const filtered=events.filter(event=>
+    (
+      `${event.name} ${event.organizerName||""} ${event.type||""}`
+    )
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+
+  return (
+    <section>
+      <div className="calendar-toolbar">
+        <div>
+          <div className="eyebrow">
+            DOSSIERS CLIENTS
+          </div>
+
+          <h2>📄 Documents</h2>
+
+          <p className="muted">
+            Devis, factures d'acompte, factures,
+            bons de commande et autres PDF.
+          </p>
+        </div>
+      </div>
+
+      <div className="events-toolbar">
+        <input
+          placeholder="🔎 Rechercher un client ou événement..."
+          value={search}
+          onChange={e=>setSearch(e.target.value)}
+        />
+
+        <span>
+          {filtered.length} dossier(s)
+        </span>
+      </div>
+
+      <div className="events-list">
+        {filtered.map(event=>(
+          <article
+            className="event-card"
+            key={event.id}
+          >
+            <div className="event-date">
+              <strong>
+                {event.date?.slice(8,10)||"--"}
+              </strong>
+
+              <span>
+                {new Date(
+                  event.date+"T12:00:00"
+                ).toLocaleDateString(
+                  "fr-FR",
+                  {month:"short"}
+                )}
+              </span>
+            </div>
+
+            <div className="event-content">
+              <strong>{event.name}</strong>
+
+              <div className="event-meta">
+                {event.organizerName&&(
+                  <span>
+                    👤 {event.organizerName}
+                  </span>
+                )}
+
+                <span>
+                  {event.type}
+                </span>
+
+                {event.contractStatus==="SIGNED"&&(
+                  <span>
+                    🟢 Contrat signé
+                  </span>
+                )}
+              </div>
+
+              <div className="event-actions">
+                <button
+                  onClick={()=>onOpen(event)}
+                >
+                  📁 Gérer les documents
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
@@ -3452,6 +3945,7 @@ function Dashboard({onLogout}) {
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
+  const [documentEvent,setDocumentEvent]=useState(null);
   const [search,setSearch]=useState("");
 
   async function load(){
@@ -3470,6 +3964,40 @@ function Dashboard({onLogout}) {
     const r=await fetch(`/api/events/${event.id}/complete`,{method:"PATCH"});
     const d=await r.json().catch(()=>({}));
     if(!r.ok) return alert(d.message||"Impossible de terminer la prestation.");
+    await load();
+  }
+
+  async function cancelContractSignature(event){
+    if(
+      !confirm(
+        `Annuler la signature du contrat de "${event.name}" ?\n\n` +
+        "La signature et l'horodatage seront retirés du contrat actif. " +
+        "Une trace de l'annulation sera conservée dans l'administration."
+      )
+    ){
+      return;
+    }
+
+    const r=await fetch(
+      `/api/events/${event.id}/contract-signature/cancel`,
+      {
+        method:"POST",
+        credentials:"include"
+      }
+    );
+
+    const d=await r.json().catch(()=>({}));
+
+    if(!r.ok){
+      return alert(
+        d.message || "Impossible d'annuler la signature."
+      );
+    }
+
+    alert(
+      "✅ Signature annulée. Le contrat peut être signé à nouveau."
+    );
+
     await load();
   }
 
@@ -3564,15 +4092,25 @@ function Dashboard({onLogout}) {
                 <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
                 <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
                 <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
-                <button onClick={async()=>{
-                  try{
-                    const r=await fetch(`/api/events/${event.id}/contract-signature-link`,{method:"POST"});
-                    const d=await r.json().catch(()=>({}));
-                    if(!r.ok)return alert(d.message||"Impossible de préparer le contrat à signer.");
-                    try{await navigator.clipboard.writeText(d.signatureUrl);alert(`✅ Lien de signature créé et copié !\n\n${d.signatureUrl}`)}
-                    catch{prompt("Copie ce lien et envoie-le au client :",d.signatureUrl)}
-                  }catch(err){console.error(err);alert("Erreur lors de la création du lien de signature.")}
-                }}>✍️ Faire signer</button>
+                <button onClick={()=>setDocumentEvent(event)}>📁 Documents</button>
+                {event.contractStatus==="SIGNED" ? (
+                  <button
+                    className="danger-btn"
+                    onClick={()=>cancelContractSignature(event)}
+                  >
+                    ↩️ Annuler la signature
+                  </button>
+                ) : (
+                  <button onClick={async()=>{
+                    try{
+                      const r=await fetch(`/api/events/${event.id}/contract-signature-link`,{method:"POST"});
+                      const d=await r.json().catch(()=>({}));
+                      if(!r.ok)return alert(d.message||"Impossible de préparer le contrat à signer.");
+                      try{await navigator.clipboard.writeText(d.signatureUrl);alert(`✅ Lien de signature créé et copié !\n\n${d.signatureUrl}`)}
+                      catch{prompt("Copie ce lien et envoie-le au client :",d.signatureUrl)}
+                    }catch(err){console.error(err);alert("Erreur lors de la création du lien de signature.")}
+                  }}>✍️ Faire signer</button>
+                )}
                 {event.status!=="COMPLETED"&&<button onClick={()=>completeEvent(event)}>✅ Prestation terminée</button>}
                 <button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button>
                 <button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button>
@@ -3584,11 +4122,12 @@ function Dashboard({onLogout}) {
       </> : view==="planning" ? <>
         <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <section className="panel"><h2>📄 Documents</h2><p className="muted">Les contrats sont accessibles depuis chaque événement et depuis l'espace organisateur.</p></section> : null}
+      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
+    {documentEvent&&<DocumentManager event={documentEvent} onClose={()=>setDocumentEvent(null)}/>}
   </div>;
 }
 
