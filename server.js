@@ -387,7 +387,7 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
         .send("LP28 LumaBooth event OK");
     }
 
-    if(kind !== "original" && kind !== "print"){
+    if(kind !== "original" && kind !== "print" && kind !== "animated"){
       console.log("LUMABOOTH EVENT : type de média ignoré =", kind);
       return res
         .status(200)
@@ -421,7 +421,9 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
     const uploadedBy =
       kind === "print"
         ? "LUMABOOTH_PRINT"
-        : "LUMABOOTH_ORIGINAL";
+        : kind === "animated"
+          ? "LUMABOOTH_ANIMATED"
+          : "LUMABOOTH_ORIGINAL";
 
     const existing = await prisma.memoryMedia.findFirst({
       where:{
@@ -570,6 +572,7 @@ app.get("/api/lumabooth/event/:token", async (req,res)=>{
       "image/jpeg":".jpg",
       "image/png":".png",
       "image/webp":".webp",
+      "image/gif":".gif",
       "image/heic":".heic",
       "image/heif":".heif"
     };
@@ -664,7 +667,7 @@ const boothAgentUpload = multer({
   storage: memoriesStorage,
   limits:{fileSize:25*1024*1024,files:1},
   fileFilter:(req,file,cb)=>{
-    const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif"].includes(file.mimetype);
+    const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif","image/gif"].includes(file.mimetype);
     cb(ok?null:new Error("Format image non autorisé."),ok);
   }
 });
@@ -717,7 +720,7 @@ app.post(
       const declaredHash=String(req.body?.sha256||"").trim().toLowerCase();
       const boothName=String(req.body?.boothName||"").trim().slice(0,100);
 
-      if(!eventId || !["original","print"].includes(kind)){
+      if(!eventId || !["original","print","animated"].includes(kind)){
         return res.status(400).json({ok:false,message:"eventId ou kind invalide."});
       }
 
@@ -747,7 +750,12 @@ app.post(
             sizeBytes:f.size,
             mediaType:"PHOTO",
             status:"VISIBLE",
-            uploadedBy:kind==="original"?"LUMABOOTH_ORIGINAL":"LUMABOOTH_PRINT",
+            uploadedBy:
+              kind==="original"
+                ? "LUMABOOTH_ORIGINAL"
+                : kind==="animated"
+                  ? "LUMABOOTH_ANIMATED"
+                  : "LUMABOOTH_PRINT",
             driveFileId:driveFile.id,
             driveUrl:driveFile.webViewLink||driveFile.webContentLink||null,
             storageType:"DRIVE"
@@ -2986,7 +2994,9 @@ function safeMedia(m,token){
     sourceGroup:
       m.uploadedBy==="LUMABOOTH_ORIGINAL"
         ? "ORIGINAL"
-        : "PRINT_GUEST",
+        : m.uploadedBy==="LUMABOOTH_ANIMATED"
+          ? "ANIMATED"
+          : "PRINT_GUEST",
     createdAt:m.createdAt
   };
 }
@@ -3754,9 +3764,11 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
   const mediaWithUrls = media.map(m => ({
   ...m,
   sourceGroup:
-    m.uploadedBy==="LUMABOOTH_ORIGINAL"
-      ? "ORIGINAL"
-      : "PRINT_GUEST",
+      m.uploadedBy==="LUMABOOTH_ORIGINAL"
+        ? "ORIGINAL"
+        : m.uploadedBy==="LUMABOOTH_ANIMATED"
+          ? "ANIMATED"
+          : "PRINT_GUEST",
 
   url:event.organizerToken
     ? `/api/guest/${encodeURIComponent(event.organizerToken)}/memories/${m.id}/file`
