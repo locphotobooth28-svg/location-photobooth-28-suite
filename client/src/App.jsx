@@ -1150,6 +1150,75 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
   }
 
+  function printCalendar() {
+    const shell = document.getElementById("lp28-calendar-print-area");
+    if (!shell) return;
+
+    const weekdays = shell.querySelector(".calendar-weekdays")?.outerHTML || "";
+    const grid = shell.querySelector(".calendar-grid")?.cloneNode(true);
+    if (!grid) return;
+
+    // L'impression est un document de consultation : on retire les boutons de suppression.
+    grid.querySelectorAll('button[aria-label^="Supprimer "]').forEach(el => el.remove());
+    grid.querySelectorAll("button").forEach(el => {
+      el.removeAttribute("onclick");
+      el.setAttribute("tabindex", "-1");
+    });
+
+    const w = window.open("", "_blank", "width=1200,height=850");
+    if (!w) {
+      alert("Le navigateur a bloqué la fenêtre d'impression. Autorise les fenêtres pop-up pour LP28 puis réessaie.");
+      return;
+    }
+
+    const title = `Location Photobooth 28 — Planning ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}`;
+    w.document.write(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <title>${title}</title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #0f172a; background: #fff; }
+    .print-header { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin:0 0 5mm; }
+    .print-brand { font-size:10px; font-weight:800; letter-spacing:.12em; color:#64748b; text-transform:uppercase; }
+    h1 { margin:2px 0 0; font-size:22px; }
+    .printed-at { font-size:9px; color:#64748b; white-space:nowrap; }
+    .calendar-weekdays { display:grid; grid-template-columns:repeat(7,1fr); border:1px solid #cbd5e1; border-bottom:0; }
+    .calendar-weekdays > div { padding:5px 4px; text-align:center; font-size:10px; font-weight:800; background:#f1f5f9; border-right:1px solid #cbd5e1; }
+    .calendar-weekdays > div:last-child { border-right:0; }
+    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); border-left:1px solid #cbd5e1; border-top:1px solid #cbd5e1; }
+    .calendar-cell { min-width:0; height:25.5mm; padding:3px; overflow:hidden; border-right:1px solid #cbd5e1; border-bottom:1px solid #cbd5e1; background:#fff; }
+    .muted-cell { background:#f8fafc; }
+    .today-cell { box-shadow: inset 0 0 0 1.5px #0f172a; }
+    .calendar-day-number { font-size:10px; font-weight:800; margin-bottom:3px; }
+    .calendar-events { display:flex; flex-direction:column; gap:3px; }
+    .calendar-events > div { min-width:0; }
+    .calendar-event { width:100%; min-width:0; min-height:0; margin:0; padding:3px 4px !important; border-radius:4px !important; font:inherit; text-align:left; line-height:1.1; }
+    .calendar-event strong { font-size:7.5px !important; }
+    .calendar-event span { font-size:7.5px !important; }
+    .more-events { font-size:7px; color:#475569; }
+    button { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    @media print {
+      html, body { width:100%; }
+      .calendar-cell { break-inside:avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="print-header">
+    <div><div class="print-brand">Location Photobooth 28</div><h1>Planning — ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}</h1></div>
+    <div class="printed-at">Imprimé le ${new Date().toLocaleDateString("fr-FR")}</div>
+  </header>
+  ${weekdays}
+  ${grid.outerHTML}
+  <script>window.addEventListener("load",()=>setTimeout(()=>{window.focus();window.print();},250));<\/script>
+</body>
+</html>`);
+    w.document.close();
+  }
+
   const typeClass = type => {
     const t = String(type || "").toLowerCase();
     if (t.includes("mariage")) return "event-marriage";
@@ -1189,7 +1258,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     return items;
   };
 
-  return <section className="calendar-shell">
+  return <section className="calendar-shell" id="lp28-calendar-print-area">
     <div className="calendar-toolbar">
       <div>
         <div className="eyebrow">PLANNING</div>
@@ -1199,6 +1268,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
         <button className="secondary-btn" onClick={previousMonth}>←</button>
         <button className="secondary-btn" onClick={today}>Aujourd'hui</button>
         <button className="secondary-btn" onClick={nextMonth}>→</button>
+        <button className="secondary-btn" onClick={printCalendar}>🖨️ Imprimer le calendrier</button>
       </div>
     </div>
 
@@ -5633,8 +5703,64 @@ function ContractSignaturePage({token}){
   );
 }
 
+function FamilyPlanningPage(){
+  const [session,setSession]=useState(null);
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState("");
+  const [events,setEvents]=useState([]);
+  const [blocks,setBlocks]=useState([]);
+  const [form,setForm]=useState({startDate:"",endDate:"",notes:""});
+  const [saving,setSaving]=useState(false);
+
+  const load=async()=>{
+    const s=await fetch("/api/family-planning/session").then(r=>r.json()).catch(()=>({authenticated:false}));
+    setSession(s);
+    if(s.authenticated){
+      const d=await fetch("/api/family-planning/data").then(r=>r.json());
+      setEvents(d.events||[]); setBlocks(d.blocks||[]);
+    }
+  };
+  useEffect(()=>{load()},[]);
+
+  async function login(e){
+    e.preventDefault(); setError("");
+    const r=await fetch("/api/family-planning/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){setError(d.message||"Connexion impossible.");return;}
+    setSession(d); await load();
+  }
+  async function logout(){await fetch("/api/family-planning/logout",{method:"POST"});setSession({authenticated:false});}
+  async function block(e){
+    e.preventDefault(); if(!form.startDate||!form.endDate)return;
+    setSaving(true);
+    const r=await fetch("/api/family-planning/blocks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
+    const d=await r.json().catch(()=>({})); setSaving(false);
+    if(!r.ok)return alert(d.message||"Impossible de bloquer cette période.");
+    setForm({startDate:"",endDate:"",notes:""}); await load();
+  }
+  async function unblock(id){
+    if(!confirm("Débloquer cette période ?"))return;
+    const r=await fetch(`/api/family-planning/blocks/${id}`,{method:"DELETE"});
+    const d=await r.json().catch(()=>({})); if(!r.ok)return alert(d.message||"Impossible de débloquer."); await load();
+  }
+  if(session===null)return <div className="loading">Chargement…</div>;
+  if(!session.authenticated)return <div className="login-page"><form className="login-card" onSubmit={login}><div className="eyebrow">LP28</div><h1>📅 Planning familial</h1><p className="muted">Consultation des locations et blocage des périodes non réservables.</p><label>Adresse e-mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/><label>Mot de passe</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>{error&&<div className="error-box">{error}</div>}<button className="primary" type="submit">Se connecter</button></form></div>;
+
+  return <div style={{maxWidth:1450,margin:"0 auto",padding:18}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:16}}><div><div className="eyebrow">LOCATION PHOTOBOOTH 28</div><h1 style={{margin:"4px 0"}}>📅 Planning familial</h1><p className="muted" style={{margin:0}}>Consultation générale · accès limité</p></div><button className="secondary-btn" onClick={logout}>Déconnexion</button></div>
+    <section className="panel" style={{marginBottom:16}}><h2>🚫 Bloquer une période</h2><form onSubmit={block} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end"}}><div><label>Du</label><input type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})} required/></div><div><label>Au</label><input type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})} required/></div><div><label>Motif (facultatif)</label><input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Week-end famille, vacances…"/></div><button className="primary" disabled={saving}>{saving?"Blocage…":"🚫 NON RÉSERVABLE"}</button></form></section>
+    {blocks.length>0&&<section className="panel" style={{marginBottom:16}}><h2>Mes périodes bloquées</h2><div style={{display:"flex",flexDirection:"column",gap:8}}>{blocks.map(b=><div key={b.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:10,border:"1px solid #475569",borderRadius:10}}><div><strong>🚫 {new Date(b.startAt).toLocaleDateString("fr-FR")} → {new Date(b.endAt).toLocaleDateString("fr-FR")}</strong>{b.notes&&<div className="muted">{b.notes}</div>}</div><button className="secondary-btn" onClick={()=>unblock(b.id)}>🔓 Débloquer</button></div>)}</div></section>}
+    <CalendarView events={events} onOpenEvent={()=>{}} />
+  </div>;
+}
+
 export default function App(){
   const path=window.location.pathname;
+
+  if(path === "/planning-famille"){
+    return <FamilyPlanningPage/>;
+  }
 
   const signatureMatch =
   path.match(/^\/signature\/([^/]+)$/);
