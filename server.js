@@ -263,7 +263,8 @@ if(materialUnavailabilities.length){
       startAt: u.startAt,
       endAt: u.endAt,
       reason: u.reason,
-      notes: u.notes,
+      notes: String(u.notes||"").startsWith("FAMILY_PLANNING|") ? "CONFIDENTIEL" : u.notes,
+      confidential: String(u.notes||"").startsWith("FAMILY_PLANNING|"),
       status: u.status
     }))
   });
@@ -1509,7 +1510,33 @@ app.get("/api/family-planning/data",familyPlanningOnly,async(req,res)=>{
     prisma.event.findMany({where:{archived:false,bookingStatus:{notIn:["DECLINED","CANCELLED"]}},include:{materials:{include:{material:true}}},orderBy:{eventDate:"asc"}}),
     prisma.materialUnavailability.findMany({where:{status:"ACTIVE",reason:"VACATION",notes:{startsWith:"FAMILY_PLANNING|"}},orderBy:{startAt:"asc"}})
   ]);
-  res.json({ok:true,events:events.map(familyEventDto),blocks:blocks.map(b=>({id:b.id,startAt:b.startAt,endAt:b.endAt,notes:String(b.notes||"").replace(/^FAMILY_PLANNING\|/,"")}))});
+  // Un blocage familial est créé pour chaque matériel bloquant. Pour l'interface,
+  // on les regroupe en une seule période afin d'éviter une carte par matériel.
+  const groupedBlocks=[];
+  const seen=new Set();
+  for(const b of blocks){
+    const rawNotes=String(b.notes||"");
+    const key=`${new Date(b.startAt).toISOString()}|${new Date(b.endAt).toISOString()}|${rawNotes}`;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    groupedBlocks.push({id:b.id,startAt:b.startAt,endAt:b.endAt,notes:rawNotes.replace(/^FAMILY_PLANNING\|/,"")});
+  }
+  res.json({ok:true,events:events.map(familyEventDto),blocks:groupedBlocks});
+});
+
+// Planning Admin : mêmes blocages familiaux, sans exposer le motif privé.
+app.get("/api/admin/family-planning/blocks",adminOnly,async(req,res)=>{
+  const blocks=await prisma.materialUnavailability.findMany({
+    where:{status:"ACTIVE",reason:"VACATION",notes:{startsWith:"FAMILY_PLANNING|"}},
+    orderBy:{startAt:"asc"}
+  });
+  const grouped=[]; const seen=new Set();
+  for(const b of blocks){
+    const key=`${new Date(b.startAt).toISOString()}|${new Date(b.endAt).toISOString()}|${String(b.notes||"")}`;
+    if(seen.has(key)) continue; seen.add(key);
+    grouped.push({id:b.id,startAt:b.startAt,endAt:b.endAt,label:"NON RÉSERVABLE"});
+  }
+  res.json({ok:true,blocks:grouped});
 });
 app.post("/api/family-planning/blocks",familyPlanningOnly,async(req,res)=>{
   const startDate=String(req.body?.startDate||""); const endDate=String(req.body?.endDate||""); const note=String(req.body?.notes||"").trim();
