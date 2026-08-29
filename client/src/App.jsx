@@ -4737,10 +4737,39 @@ function Dashboard({onLogout}) {
 
   function saved(){setShowForm(false);setFormEvent(undefined);load();}
 
-  const filtered=useMemo(
-    ()=>events.filter(e=>(e.name+" "+e.organizerName+" "+e.type).toLowerCase().includes(search.toLowerCase())),
-    [events,search]
-  );
+  const [eventTab,setEventTab]=useState("upcoming");
+
+  const eventTabCounts=useMemo(()=>{
+    const today=new Date();
+    const todayIso=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+    const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
+    return {
+      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)&&String(e.date||"")>=todayIso).length,
+      completed:events.filter(e=>!e.archived&&isCompleted(e)).length,
+      archived:events.filter(e=>e.archived).length
+    };
+  },[events]);
+
+  const filtered=useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    const today=new Date();
+    const todayIso=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+    const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
+
+    return events
+      .filter(e=>{
+        if(eventTab==="completed")return !e.archived&&isCompleted(e);
+        if(eventTab==="archived")return !!e.archived;
+        return !e.archived&&!isCompleted(e)&&String(e.date||"")>=todayIso;
+      })
+      .filter(e=>(`${e.name||""} ${e.organizerName||""} ${e.type||""}`).toLowerCase().includes(q))
+      .sort((a,b)=>{
+        const da=String(a.date||"");
+        const db=String(b.date||"");
+        if(eventTab==="upcoming")return da.localeCompare(db);
+        return db.localeCompare(da);
+      });
+  },[events,search,eventTab]);
 
   function eventBooths(event){
     const materials=event.materials||[];
@@ -4794,7 +4823,7 @@ function Dashboard({onLogout}) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.11</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.12</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
@@ -4834,9 +4863,26 @@ function Dashboard({onLogout}) {
         </section>
         <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo.jpg"/></section>
       </> : view==="events" ? <>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+          <button
+            className={eventTab==="upcoming"?"primary":""}
+            onClick={()=>setEventTab("upcoming")}
+            style={eventTab!=="upcoming"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+          >📅 À venir <strong style={{marginLeft:6}}>{eventTabCounts.upcoming}</strong></button>
+          <button
+            className={eventTab==="completed"?"primary":""}
+            onClick={()=>setEventTab("completed")}
+            style={eventTab!=="completed"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+          >✅ Prestations terminées <strong style={{marginLeft:6}}>{eventTabCounts.completed}</strong></button>
+          <button
+            className={eventTab==="archived"?"primary":""}
+            onClick={()=>setEventTab("archived")}
+            style={eventTab!=="archived"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+          >📦 Archivées <strong style={{marginLeft:6}}>{eventTabCounts.archived}</strong></button>
+        </div>
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
-          {filtered.length===0 && <div className="empty-state"><span>📅</span><h2>Aucun événement</h2><p>Crée ton premier événement.</p></div>}
+          {filtered.length===0 && <div className="empty-state"><span>{eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":"Aucun dossier dans cet onglet."}</p></div>}
           {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id}>
             <div className="event-date"><strong>{event.date?.slice(8,10)||"--"}</strong><span>{new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{month:"short"})}</span></div>
             <div className="event-content">
