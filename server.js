@@ -1154,46 +1154,12 @@ app.post("/api/events/:id/google-sync", adminOnly, async (req, res) => {
 });
 
 app.get("/api/dashboard", adminOnly, async (req, res) => {
-  const now = new Date();
-  const today = new Date(now);
+  const today = new Date();
   today.setHours(0,0,0,0);
 
-  // Fin de la semaine courante : dimanche 23:59:59.999.
-  // Le compteur "Événements à venir" représente donc ce qu'il reste à faire
-  // d'aujourd'hui jusqu'à dimanche soir.
-  const sundayEnd = new Date(today);
-  const daysUntilSunday = (7 - sundayEnd.getDay()) % 7;
-  sundayEnd.setDate(sundayEnd.getDate() + daysUntilSunday);
-  sundayEnd.setHours(23,59,59,999);
-
-  const upcomingWhere = {
-    archived: false,
-    eventDate: { gte: today, lte: sundayEnd },
-    bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] }
-  };
-
-  const [events, upcoming, unsignedUpcomingContracts, activeGalleries, signedContracts, consumables] = await Promise.all([
-    prisma.event.count({ where: { archived: false } }),
-    prisma.event.count({ where: upcomingWhere }),
-    prisma.event.count({
-      where: {
-        ...upcomingWhere,
-        contractStatus: { not: "SIGNED" }
-      }
-    }),
-    prisma.event.count({
-      where: {
-        archived: false,
-        portalEnabled: true,
-        bookingStatus: { notIn: ["DECLINED", "CANCELLED"] }
-      }
-    }),
-    prisma.event.count({
-      where: {
-        archived: false,
-        contractStatus: "SIGNED"
-      }
-    }),
+  const [events, upcoming, consumables] = await Promise.all([
+    prisma.event.count(),
+    prisma.event.count({ where: { archived: false, eventDate: { gte: today } } }),
     prisma.consumable.findMany({ orderBy: { printer: "asc" } })
   ]);
 
@@ -1201,10 +1167,8 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
     stats: {
       events,
       upcoming,
-      unsignedUpcomingContracts,
-      activeGalleries,
-      signedContracts,
-      upcomingUntil: sundayEnd.toISOString()
+      activeGalleries: 0,
+      signedContracts: 0
     },
     consumables
   });
@@ -1514,6 +1478,57 @@ app.post("/api/events/check-conflicts", adminOnly, async (req, res) => {
   });
   res.json({ ok: true, conflicts });
 });
+
+
+// === LP28 V8.5.8 - Planning familial sécurisé ===
+const FAMILY_PLANNING_EMAIL = String(process.env.FAMILY_PLANNING_EMAIL || "").trim().toLowerCase();
+const FAMILY_PLANNING_PASSWORD = String(process.env.FAMILY_PLANNING_PASSWORD || "");
+function familyPlanningOnly(req,res,next){
+  if(req.session?.familyPlanning === true) return next();
+  return res.status(401).json({ok:false,message:"Non autorisé."});
+}
+app.get("/api/family-planning/session",(req,res)=>res.json({authenticated:Boolean(req.session?.familyPlanning)}));
+app.post("/api/family-planning/login",(req,res)=>{
+  const email=String(req.body?.email||"").trim().toLowerCase();
+  const password=String(req.body?.password||"");
+  if(!FAMILY_PLANNING_EMAIL || !FAMILY_PLANNING_PASSWORD) return res.status(503).json({ok:false,message:"Accès planning familial non configuré."});
+  if(email!==FAMILY_PLANNING_EMAIL || password!==FAMILY_PLANNING_PASSWORD) return res.status(401).json({ok:false,message:"Identifiants incorrects."});
+  req.session.familyPlanning=true;
+  req.session.familyPlanningEmail=email;
+  req.session.save(err=>err?res.status(500).json({ok:false,message:"Impossible d'enregistrer la session."}):res.json({ok:true,authenticated:true}));
+});
+app.post("/api/family-planning/logout",(req,res)=>{ delete req.session.familyPlanning; delete req.session.familyPlanningEmail; req.session.save(()=>res.json({ok:true})); });
+
+function familyEventDto(e){ return {
+  id:e.id,name:e.name,type:e.type,date:e.eventDate.toISOString().slice(0,10),time:e.installTime,
+  pickupDate:e.pickupDate?e.pickupDate.toISOString().slice(0,10):null,pickupTime:e.pickupTime,
+  address:e.address,archived:e.archived,bookingStatus:e.bookingStatus,materials:(e.materials||[]).map(x=>x.material?.name).filter(Boolean)
+};}
+app.get("/api/family-planning/data",familyPlanningOnly,async(req,res)=>{
+  const [events,blocks]=await Promise.all([
+    prisma.event.findMany({where:{archived:false,bookingStatus:{notIn:["DECLINED","CANCELLED"]}},include:{materials:{include:{material:true}}},orderBy:{eventDate:"asc"}}),
+    prisma.materialUnavailability.findMany({where:{status:"ACTIVE",reason:"VACATION",notes:{startsWith:"FAMILY_PLANNING|"}},orderBy:{startAt:"asc"}})
+  ]);
+  res.json({ok:true,events:events.map(familyEventDto),blocks:blocks.map(b=>({id:b.id,startAt:b.startAt,endAt:b.endAt,notes:String(b.notes||"").replace(/^FAMILY_PLANNING\|/,"")}))});
+});
+app.post("/api/family-planning/blocks",familyPlanningOnly,async(req,res)=>{
+  const startDate=String(req.body?.startDate||""); const endDate=String(req.body?.endDate||""); const note=String(req.body?.notes||"").trim();
+  const start=new Date(`${startDate}T00:00:00`); const end=new Date(`${endDate}T23:59:59`);
+  if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<start) return res.status(400).json({ok:false,message:"Période invalide."});
+  await ensureCatalog(prisma);
+  const materials=await prisma.material.findMany({where:{active:true,blocksPlanning:true}});
+  if(!materials.length) return res.status(400).json({ok:false,message:"Aucun matériel bloquant n'est configuré."});
+  const created=await prisma.$transaction(materials.map(m=>prisma.materialUnavailability.create({data:{materialId:m.id,startAt:start,endAt:end,reason:"VACATION",notes:`FAMILY_PLANNING|${note}`,status:"ACTIVE"}})));
+  res.json({ok:true,count:created.length});
+});
+app.delete("/api/family-planning/blocks/:id",familyPlanningOnly,async(req,res)=>{
+  const first=await prisma.materialUnavailability.findUnique({where:{id:req.params.id}});
+  if(!first || first.reason!=="VACATION" || !String(first.notes||"").startsWith("FAMILY_PLANNING|")) return res.status(404).json({ok:false,message:"Blocage familial introuvable."});
+  const note=String(first.notes||"");
+  await prisma.materialUnavailability.deleteMany({where:{reason:"VACATION",notes:note,startAt:first.startAt,endAt:first.endAt}});
+  res.json({ok:true});
+});
+// === fin Planning familial ===
 
 app.get("/api/events", adminOnly, async (req, res) => {
   const events = await prisma.event.findMany({
