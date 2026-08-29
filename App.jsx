@@ -2479,6 +2479,14 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
   }
 
+  function selectAllMemories(){
+    setSelected(galleryMedia.map(m=>m.id));
+  }
+
+  function clearSelectedMemories(){
+    setSelected([]);
+  }
+
   async function hideSelected(){
     if(!selected.length)return;
     for(const id of selected){
@@ -2954,8 +2962,24 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       {e.guestUploadModerated&&<p className="portal-note">Modération avant publication activée pour cet événement.</p>}
 
       {selectMode&&organizer&&<div className="memory-selection-bar">
-        <strong>{selected.length} sélectionnée{selected.length>1?"s":""}</strong>
-        <button disabled={!selected.length} onClick={hideSelected}>👁️ Masquer la sélection</button>
+        <strong>{selected.length} sélectionnée{selected.length>1?"s":""} sur {galleryMedia.length}</strong>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+          <button
+            type="button"
+            onClick={selectAllMemories}
+            disabled={!galleryMedia.length || selected.length===galleryMedia.length}
+          >
+            ☑ Tout sélectionner
+          </button>
+          <button
+            type="button"
+            onClick={clearSelectedMemories}
+            disabled={!selected.length}
+          >
+            ⬜ Tout désélectionner
+          </button>
+          <button disabled={!selected.length} onClick={hideSelected}>👁️ Masquer la sélection</button>
+        </div>
       </div>}
 
       {partyMedia.length>0&&<>
