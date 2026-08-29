@@ -3170,13 +3170,18 @@ function AdminBooths(){
           <div>☁️ Galerie : {b.syncStatus||"—"}</div>
           {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
           <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
-          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&b.printer?.mediaCapacity!==null&&typeof b.printer?.mediaCapacity!=="undefined"&&(()=>{
-            const pct=Number(b.printer.mediaPercent);
+          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&(()=>{
+            const isCitizen=String(b.printer.model||"").toUpperCase().includes("CITIZEN")||String(b.printer.model||"").toUpperCase().includes("CY-02");
+            const reportedCapacity=Number(b.printer.mediaCapacity);
+            const capacity=Number.isFinite(reportedCapacity)&&reportedCapacity>0?reportedCapacity:(isCitizen?700:null);
+            const reportedPct=Number(b.printer.mediaPercent);
+            const calculatedPct=capacity?Number(b.printer.mediaRemaining)*100/capacity:NaN;
+            const pct=Number.isFinite(reportedPct)&&reportedPct>0?reportedPct:calculatedPct;
             const validPct=Number.isFinite(pct);
             const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";
             const barValue=validPct?Math.max(0,Math.min(100,pct)):0;
             return <div style={{marginTop:8,marginBottom:8}}>
-              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining} / {b.printer.mediaCapacity}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
+              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining}{capacity?` / ${capacity}`:""}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
               {validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}>
                 <div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/>
               </div>}
@@ -3187,6 +3192,7 @@ function AdminBooths(){
             </div>;
           })()}
           {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
+          {b.printer?.printCount&&<div>🔢 Compteur : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
           {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
           {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
           <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
@@ -4437,6 +4443,56 @@ function Dashboard({onLogout}) {
     [events,search]
   );
 
+  function eventBooths(event){
+    const materials=event.materials||[];
+    const booths=[];
+    if(materials.includes("Borne Photobooth Miroir Lola"))booths.push("LOLA");
+    if(materials.includes("Borne Photobooth Nina"))booths.push("NINA");
+    if(materials.includes("Borne Photobooth Gabin"))booths.push("GABIN");
+    return booths;
+  }
+
+  function eventPrintChoice(event){
+    const materials=event.materials||[];
+    if(materials.includes("Forfait impressions personnalisé")){
+      const n=Number(event.customPrintCount||0);
+      return n>0?`${n} impressions`:"Personnalisé";
+    }
+    const pack=materials.find(x=>/^Forfait \d+ impressions$/i.test(String(x)));
+    if(pack){
+      const m=String(pack).match(/(\d+)/);
+      return m?`${m[1]} impressions`:pack;
+    }
+    if(materials.includes("Forfait sans aucune impression"))return "Sans impression";
+    return "Non renseigné";
+  }
+
+  function eventExtraMaterials(event){
+    const excluded=new Set([
+      "Borne Photobooth Miroir Lola",
+      "Borne Photobooth Nina",
+      "Borne Photobooth Gabin",
+      "Forfait sans aucune impression",
+      "Forfait 100 impressions",
+      "Forfait 200 impressions",
+      "Forfait 300 impressions",
+      "Forfait 400 impressions",
+      "Forfait 700 impressions",
+      "Forfait impressions personnalisé"
+    ]);
+    return (event.materials||[]).filter(x=>!excluded.has(x));
+  }
+
+  function materialShortLabel(name){
+    const item=MATERIALS.find(m=>m.name===name);
+    let label=String(name||"")
+      .replace(/^Location\s+/i,"")
+      .replace(/^Borne Photobooth\s+/i,"")
+      .replace(/Location /i,"");
+    if(label.length>34)label=label.slice(0,31)+"…";
+    return `${item?.icon||"📦"} ${label}`;
+  }
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.3.0</span></div></div>
@@ -4486,6 +4542,43 @@ function Dashboard({onLogout}) {
                   {event.bookingStatus==="OPTION"?"🟠 Option":event.bookingStatus==="QUOTE_SENT"?"📤 Devis envoyé":event.bookingStatus==="QUOTE_DRAFT"?"📝 Devis":event.bookingStatus==="CONFIRMED"?"🟢 Confirmé":event.bookingStatus==="COMPLETED"?"🔵 Terminé":event.bookingStatus==="DECLINED"?"⚪ Refusé":event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
                 </span>
               </div>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap",margin:"14px 0 10px"}}>
+                <div style={{
+                  flex:"1 1 250px",minWidth:220,maxWidth:390,padding:"16px 20px",borderRadius:18,
+                  border:"1px solid #1677ff",background:"linear-gradient(135deg,rgba(10,83,214,.92),rgba(7,52,145,.92))",
+                  boxShadow:"0 8px 24px rgba(0,92,255,.18)",display:"flex",alignItems:"center",gap:16
+                }}>
+                  <span style={{fontSize:34}}>🖥️</span>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.9}}>Borne en prestation</div>
+                    <div style={{fontSize:28,fontWeight:900,lineHeight:1.1,marginTop:4}}>{eventBooths(event).length?eventBooths(event).join(" + "):"Aucune"}</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  flex:"1 1 280px",minWidth:240,maxWidth:430,padding:"16px 20px",borderRadius:18,
+                  border:"1px solid #8b5cf6",background:"linear-gradient(135deg,rgba(100,53,180,.92),rgba(70,39,132,.92))",
+                  boxShadow:"0 8px 24px rgba(124,58,237,.16)",display:"flex",alignItems:"center",gap:16
+                }}>
+                  <span style={{fontSize:34}}>🖨️</span>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.9}}>Impressions choisies par le client</div>
+                    <div style={{fontSize:28,fontWeight:900,lineHeight:1.1,marginTop:4}}>{eventPrintChoice(event)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {eventExtraMaterials(event).length>0&&<div style={{display:"flex",gap:7,flexWrap:"wrap",margin:"0 0 12px"}}>
+                {eventExtraMaterials(event).slice(0,5).map((m,i)=><span key={`${m}-${i}`} style={{
+                  display:"inline-flex",alignItems:"center",padding:"6px 10px",borderRadius:999,
+                  border:"1px solid rgba(148,163,184,.22)",background:"rgba(30,41,59,.58)",fontSize:12,fontWeight:700
+                }}>{materialShortLabel(m)}</span>)}
+                {eventExtraMaterials(event).length>5&&<span style={{
+                  display:"inline-flex",alignItems:"center",padding:"6px 10px",borderRadius:999,
+                  border:"1px solid rgba(148,163,184,.22)",background:"rgba(30,41,59,.58)",fontSize:12,fontWeight:800
+                }}>+{eventExtraMaterials(event).length-5} autre(s)</span>}
+              </div>}
+
               <div className="event-meta">
                 <span>{event.type}{event.organizerName?` · ${event.organizerName}`:""}{event.archived?" · Archivé":""}</span>
                 <span>📍 {event.address||"Adresse non renseignée"}</span>
