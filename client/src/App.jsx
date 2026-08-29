@@ -3170,6 +3170,23 @@ function AdminBooths(){
           <div>☁️ Galerie : {b.syncStatus||"—"}</div>
           {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
           <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
+          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&b.printer?.mediaCapacity!==null&&typeof b.printer?.mediaCapacity!=="undefined"&&(()=>{
+            const pct=Number(b.printer.mediaPercent);
+            const validPct=Number.isFinite(pct);
+            const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";
+            const barValue=validPct?Math.max(0,Math.min(100,pct)):0;
+            return <div style={{marginTop:8,marginBottom:8}}>
+              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining} / {b.printer.mediaCapacity}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
+              {validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}>
+                <div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/>
+              </div>}
+              <div className="muted" style={{fontSize:12,marginTop:4}}>
+                {b.printer.mediaFresh?"🟢 Lecture récente":"🟠 Dernière lecture connue"}
+                {b.printer.mediaAgeSeconds!==null&&typeof b.printer.mediaAgeSeconds!=="undefined"?` · ${ago(b.printer.mediaAgeSeconds)}`:""}
+              </div>
+            </div>;
+          })()}
+          {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
           {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
           {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
           <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
