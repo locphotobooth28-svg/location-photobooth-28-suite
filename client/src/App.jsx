@@ -1159,6 +1159,36 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     return "event-other";
   };
 
+  // Planning visuel : une ligne par borne. Si aucune borne n'est louée
+  // mais que le livre d'or audio est réservé seul, on affiche TÉLÉPHONE.
+  const planningItems = event => {
+    const materials = Array.isArray(event?.materials) ? event.materials : [];
+    const names = materials.map(m => typeof m === "string" ? m : (m?.name || m?.material?.name || ""));
+    const items = [];
+
+    if (names.some(n => n === "Borne Photobooth Nina")) {
+      items.push({label:"NINA", background:"#dc2626", color:"#ffffff"});
+    }
+    if (names.some(n => n === "Borne Photobooth Miroir Lola")) {
+      items.push({label:"LOLA", background:"#7e22ce", color:"#ffffff"});
+    }
+    if (names.some(n => n === "Borne Photobooth Gabin")) {
+      items.push({label:"GABIN", background:"#ea580c", color:"#ffffff"});
+    }
+
+    if (!items.length && names.some(n => n === "Location livre d'or audio")) {
+      items.push({label:"☎ TÉLÉPHONE", background:"#334155", color:"#ffffff"});
+    }
+
+    // Sécurité : si aucun matériel principal n'est identifié, on garde
+    // une ligne neutre afin que la prestation reste visible au planning.
+    if (!items.length) {
+      items.push({label:"PRESTATION", background:"#475569", color:"#ffffff"});
+    }
+
+    return items;
+  };
+
   return <section className="calendar-shell">
     <div className="calendar-toolbar">
       <div>
@@ -1189,15 +1219,23 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
           <div className="calendar-events">
             {dayEvents.slice(0,4).map(event =>
               <div key={event.id} style={{display:"flex",alignItems:"stretch",gap:4}}>
-                <button
-                  className={`calendar-event ${typeClass(event.type)}`}
-                  onClick={() => onOpenEvent(event)}
-                  title={`${event.name}${event.time ? ` — ${event.time}` : ""}`}
-                  style={{flex:1,minWidth:0}}
-                >
-                  <strong>{event.time || "•"}</strong>
-                  <span>{event.name}</span>
-                </button>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+                  {planningItems(event).map((item,itemIndex)=>(
+                    <button
+                      key={`${event.id}-${item.label}-${itemIndex}`}
+                      className="calendar-event"
+                      onClick={() => onOpenEvent(event)}
+                      title={`${item.label} — ${event.name}${event.time ? ` — installation ${event.time}` : ""}`}
+                      style={{
+                        width:"100%",minWidth:0,display:"flex",alignItems:"center",gap:7,
+                        background:item.background,color:item.color,border:"none"
+                      }}
+                    >
+                      <strong style={{minWidth:"auto",whiteSpace:"nowrap"}}>{item.label}</strong>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.name}</span>
+                    </button>
+                  ))}
+                </div>
                 {onDeleteEvent&&<button
                   type="button"
                   className="danger-btn"
