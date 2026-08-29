@@ -811,7 +811,13 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
         queueName:String(p.queueName||"").slice(0,150),
         pnpStatus:String(p.pnpStatus||"").slice(0,50),
         workOffline:p.workOffline===null||typeof p.workOffline==="undefined"?null:Boolean(p.workOffline),
-        present:Boolean(p.present)
+        present:Boolean(p.present),
+        mediaFormat:String(p.mediaFormat||"").slice(0,50)||null,
+        mediaRemaining:Number.isFinite(Number(p.mediaRemaining))?Number(p.mediaRemaining):null,
+        mediaCapacity:Number.isFinite(Number(p.mediaCapacity))?Number(p.mediaCapacity):null,
+        mediaPercent:Number.isFinite(Number(p.mediaPercent))?Math.max(0,Math.min(100,Number(p.mediaPercent))):null,
+        mediaSource:String(p.mediaSource||"").slice(0,50)||null,
+        mediaReadAt:p.mediaReadAt?String(p.mediaReadAt).slice(0,80):null
       }:null,
       lastSeen:new Date().toISOString()
     };
@@ -838,6 +844,17 @@ app.get("/api/admin/booths",adminOnly,async(req,res)=>{
         const ageMs=s.lastSeen ? now-new Date(s.lastSeen).getTime() : Number.MAX_SAFE_INTEGER;
         s.online=ageMs<=60000;
         s.ageSeconds=Math.max(0,Math.round(ageMs/1000));
+        if(s.printer){
+          const mediaTime=s.printer.mediaReadAt?new Date(s.printer.mediaReadAt).getTime():NaN;
+          if(Number.isFinite(mediaTime)){
+            const mediaAgeMs=Math.max(0,now-mediaTime);
+            s.printer.mediaAgeSeconds=Math.round(mediaAgeMs/1000);
+            s.printer.mediaFresh=mediaAgeMs<=180000;
+          }else{
+            s.printer.mediaAgeSeconds=null;
+            s.printer.mediaFresh=false;
+          }
+        }
         byName[String(s.boothName||"").trim().toUpperCase()]=s;
       }catch{}
     }
