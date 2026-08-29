@@ -3134,6 +3134,51 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 }
 
 
+
+function AdminBooths(){
+  const [booths,setBooths]=useState([]),[error,setError]=useState("");
+  async function load(){
+    try{
+      const r=await fetch("/api/admin/booths");
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.message||"Supervision indisponible.");
+      setBooths(d.booths||[]);setError("");
+    }catch(e){setError(e.message)}
+  }
+  useEffect(()=>{load();const t=setInterval(load,15000);return()=>clearInterval(t)},[]);
+  const ago=s=>{
+    if(s===null||typeof s==="undefined")return "Jamais";
+    if(s<60)return `il y a ${s} s`;
+    if(s<3600)return `il y a ${Math.floor(s/60)} min`;
+    return `il y a ${Math.floor(s/3600)} h`;
+  };
+  return <section>
+    <div className="calendar-toolbar">
+      <div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Nina, Lola et Gabin.</p></div>
+      <button className="ghost" onClick={load}>↻ Actualiser</button>
+    </div>
+    {error&&<div className="notice error">{error}</div>}
+    <div className="stats-grid">
+      {booths.map(b=><article className="stat-card" key={b.boothName} style={{textAlign:"left"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
+          <strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong>
+          <span>{b.online?"En ligne":"Hors ligne"}</span>
+        </div>
+        <div style={{marginTop:14,lineHeight:1.8}}>
+          <div><b>Événement :</b> {b.eventName||"Aucun"}</div>
+          <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"}</div>
+          <div>☁️ Galerie : {b.syncStatus||"—"}</div>
+          {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
+          <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
+          {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
+          {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
+          <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
+        </div>
+      </article>)}
+    </div>
+  </section>;
+}
+
 function AdminGalleries(){
   const [galleries,setGalleries]=useState([]),[current,setCurrent]=useState(null),[detail,setDetail]=useState(null);
   const [deleteItem,setDeleteItem]=useState(null),[deleteText,setDeleteText]=useState("");
@@ -4387,6 +4432,7 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
         <button className={`nav-item ${view==="documents"?"active":""}`} onClick={()=>setView("documents")}>📄 Documents</button>
         <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
+        <button className={`nav-item ${view==="booths"?"active":""}`} onClick={()=>setView("booths")}>🖥️ Mes bornes</button>
         <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")}>👷 Collaborateurs</button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
         <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>setView("assistance")}>🆘 Assistance</button>
@@ -4396,7 +4442,7 @@ function Dashboard({onLogout}) {
 
     <main className="content">
       <header className="topbar">
-        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
+        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         <button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>
       </header>
 
@@ -4468,7 +4514,7 @@ function Dashboard({onLogout}) {
       </> : view==="planning" ? <>
         <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
+      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
