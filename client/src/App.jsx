@@ -1258,7 +1258,31 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     return items;
   };
 
-  return <section className="calendar-shell" id="lp28-calendar-print-area">
+  return <>
+    <style>{`
+      .calendar-mobile-list{display:none;}
+      @media (max-width: 760px){
+        .calendar-shell{padding:10px !important;border-radius:14px !important;}
+        .calendar-toolbar{align-items:flex-start !important;gap:10px !important;}
+        .calendar-toolbar h2{font-size:1.35rem !important;margin:2px 0 0 !important;}
+        .calendar-nav{width:100%;display:grid !important;grid-template-columns:44px 1fr 44px !important;gap:7px !important;}
+        .calendar-nav button{min-height:42px !important;padding:8px 10px !important;}
+        .calendar-nav button:last-child{grid-column:1 / -1 !important;}
+        .calendar-weekdays,.calendar-grid{display:none !important;}
+        .calendar-mobile-list{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+        .calendar-mobile-day{border:1px solid #334155;border-radius:12px;padding:10px;background:rgba(15,23,42,.65);}
+        .calendar-mobile-day.is-today{outline:2px solid #38bdf8;outline-offset:1px;}
+        .calendar-mobile-date{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:7px;}
+        .calendar-mobile-date strong{font-size:.98rem;}
+        .calendar-mobile-free{font-size:.83rem;color:#94a3b8;font-weight:700;}
+        .calendar-mobile-event{display:flex;align-items:stretch;gap:5px;margin-top:5px;}
+        .calendar-mobile-event-lines{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px;}
+        .calendar-mobile-event .calendar-event{min-height:38px !important;padding:8px 10px !important;}
+        .calendar-mobile-event .calendar-event strong{font-size:.78rem !important;}
+        .calendar-mobile-event .calendar-event span{font-size:.82rem !important;}
+      }
+    `}</style>
+    <section className="calendar-shell" id="lp28-calendar-print-area">
     <div className="calendar-toolbar">
       <div>
         <div className="eyebrow">PLANNING</div>
@@ -1321,7 +1345,36 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
         </div>
       })}
     </div>
-  </section>;
+
+    <div className="calendar-mobile-list">
+      {cells.filter(Boolean).map(date => {
+        const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+        const dayEvents = byDate[iso] || [];
+        const now = new Date();
+        const isToday = iso === `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+        const dayLabel = date.toLocaleDateString("fr-FR", {weekday:"long",day:"numeric",month:"long"});
+        return <div className={`calendar-mobile-day ${isToday ? "is-today" : ""}`} key={`mobile-${iso}`}>
+          <div className="calendar-mobile-date">
+            <strong>{dayLabel.charAt(0).toUpperCase()+dayLabel.slice(1)}</strong>
+            {dayEvents.length===0&&<span className="calendar-mobile-free">Libre</span>}
+          </div>
+          {dayEvents.map(event => <div className="calendar-mobile-event" key={`mobile-${iso}-${event.id}`}>
+            <div className="calendar-mobile-event-lines">
+              {planningItems(event).map((item,itemIndex)=><button
+                key={`mobile-${event.id}-${item.label}-${itemIndex}`}
+                className="calendar-event"
+                onClick={() => onOpenEvent(event)}
+                title={`${item.label} — ${event.name}${event.time ? ` — installation ${event.time}` : ""}`}
+                style={{width:"100%",minWidth:0,display:"flex",alignItems:"center",gap:7,background:item.background,color:item.color,border:"none"}}
+              ><strong style={{whiteSpace:"nowrap"}}>{item.label}</strong><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.name}</span></button>)}
+            </div>
+            {onDeleteEvent&&<button type="button" className="danger-btn" onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}} title={`Supprimer définitivement ${event.name}`} aria-label={`Supprimer ${event.name}`} style={{padding:"4px 8px",minWidth:34,borderRadius:8}}>🗑️</button>}
+          </div>)}
+        </div>;
+      })}
+    </div>
+  </section>
+  </>;
 }
 
 
@@ -5712,6 +5765,32 @@ function FamilyPlanningPage(){
   const [blocks,setBlocks]=useState([]);
   const [form,setForm]=useState({startDate:"",endDate:"",notes:""});
   const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    // Le raccourci familial doit conserver sa propre identité et son URL propre.
+    if(window.location.pathname === "/planning-famille" && (window.location.search || window.location.hash)){
+      window.history.replaceState({}, "", "/planning-famille");
+    }
+    const oldTitle=document.title;
+    document.title="Planning familial LP28";
+
+    let manifest=document.querySelector('link[rel="manifest"]');
+    const oldManifestHref=manifest?.getAttribute("href") || null;
+    let created=false;
+    if(!manifest){
+      manifest=document.createElement("link"); manifest.rel="manifest"; document.head.appendChild(manifest); created=true;
+    }
+    manifest.setAttribute("href","/planning-famille.webmanifest");
+
+    let theme=document.querySelector('meta[name="theme-color"]');
+    if(theme) theme.setAttribute("content","#0f172a");
+
+    return ()=>{
+      document.title=oldTitle;
+      if(created) manifest?.remove();
+      else if(manifest && oldManifestHref) manifest.setAttribute("href",oldManifestHref);
+    };
+  },[]);
 
   const load=async()=>{
     const s=await fetch("/api/family-planning/session").then(r=>r.json()).catch(()=>({authenticated:false}));
