@@ -2536,7 +2536,22 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
   if(error){
     const maintenance=/maintenance temporaire|momentanément verrouillé/i.test(error);
-    return <div className="portal-shell"><div className="portal-card"><img src="/logo.jpg"/><h1>{maintenance?"🔒 Galerie temporairement indisponible":"Portail indisponible"}</h1><p>{error}</p></div></div>;
+    return <div className="portal-shell"><div className="portal-card">
+      <img
+        src="/logo.jpg"
+        alt="Location Photobooth 28"
+        style={{
+          display:"block",
+          width:maintenance?"min(220px, 55vw)":"min(320px, 75vw)",
+          maxWidth:maintenance?220:320,
+          height:"auto",
+          objectFit:"contain",
+          margin:"0 auto 20px"
+        }}
+      />
+      <h1>{maintenance?"🔒 Galerie temporairement indisponible":"Portail indisponible"}</h1>
+      <p>{error}</p>
+    </div></div>;
   }
   if(!data)return <div className="portal-shell"><div className="portal-card"><p>Chargement…</p></div></div>;
 
