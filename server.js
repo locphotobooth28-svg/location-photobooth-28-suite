@@ -781,6 +781,78 @@ app.post(
   }
 );
 
+
+// ======================================================
+// LP28 BOOTH SUPERVISION V2
+// ======================================================
+function boothStatusKey(boothName){
+  const safe=String(boothName||"").trim().toUpperCase().replace(/[^A-Z0-9_-]+/g,"_").slice(0,50);
+  return `boothStatus:${safe}`;
+}
+
+app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
+  try{
+    const boothName=String(req.body?.boothName||"").trim().slice(0,100);
+    if(!boothName)return res.status(400).json({ok:false,message:"Nom de borne manquant."});
+
+    const p=req.body?.printer && typeof req.body.printer==="object" ? req.body.printer : null;
+    const payload={
+      boothName,
+      agentVersion:String(req.body?.agentVersion||"").slice(0,40),
+      eventId:String(req.body?.eventId||"").trim()||null,
+      eventName:String(req.body?.eventName||"").trim().slice(0,200)||null,
+      lumaActive:Boolean(req.body?.lumaActive),
+      syncStatus:String(req.body?.syncStatus||"").slice(0,100),
+      counts:req.body?.counts||null,
+      printer:p?{
+        model:String(p.model||"").slice(0,100),
+        serialNumber:String(p.serialNumber||"").slice(0,150),
+        portName:String(p.portName||"").slice(0,50),
+        queueName:String(p.queueName||"").slice(0,150),
+        pnpStatus:String(p.pnpStatus||"").slice(0,50),
+        workOffline:p.workOffline===null||typeof p.workOffline==="undefined"?null:Boolean(p.workOffline),
+        present:Boolean(p.present)
+      }:null,
+      lastSeen:new Date().toISOString()
+    };
+    await prisma.appSetting.upsert({
+      where:{key:boothStatusKey(boothName)},
+      update:{value:JSON.stringify(payload)},
+      create:{key:boothStatusKey(boothName),value:JSON.stringify(payload)}
+    });
+    res.json({ok:true,lastSeen:payload.lastSeen});
+  }catch(err){
+    console.error("BOOTH HEARTBEAT ERROR :",err);
+    res.status(500).json({ok:false,message:"Supervision borne impossible."});
+  }
+});
+
+app.get("/api/admin/booths",adminOnly,async(req,res)=>{
+  try{
+    const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}});
+    const now=Date.now();
+    const byName={};
+    for(const row of rows){
+      try{
+        const s=JSON.parse(row.value||"{}");
+        const ageMs=s.lastSeen ? now-new Date(s.lastSeen).getTime() : Number.MAX_SAFE_INTEGER;
+        s.online=ageMs<=60000;
+        s.ageSeconds=Math.max(0,Math.round(ageMs/1000));
+        byName[String(s.boothName||"").trim().toUpperCase()]=s;
+      }catch{}
+    }
+    const configured=["NINA","LOLA","GABIN"].map(name=>byName[name]||{
+      boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,
+      syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null
+    });
+    const extras=Object.values(byName).filter(s=>!["NINA","LOLA","GABIN"].includes(String(s.boothName||"").toUpperCase()));
+    res.json({ok:true,booths:[...configured,...extras]});
+  }catch(err){
+    console.error("ADMIN BOOTHS ERROR :",err);
+    res.status(500).json({ok:false,message:"Lecture des bornes impossible."});
+  }
+});
+
 // ======================================================
 // LUMABOOTH / FOTOSHARE - MODE TEST WEBHOOK
 // ======================================================
