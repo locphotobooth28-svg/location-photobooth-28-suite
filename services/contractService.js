@@ -618,9 +618,20 @@ async function generateContractPdf(event){
     "Le montant total enregistré dans la prestation prévaut sur les tarifs catalogue en cas de remise, offre commerciale, prestation professionnelle ou conditions particulières."
   );
 
-  drawText(
-    "Livraison / installation offerte dans un rayon de 15 km. Au-delà, les frais de déplacement convenus avec le client sont ajoutés à la prestation."
-  );
+  const travel = event.preparation && typeof event.preparation === "object"
+    ? event.preparation
+    : {};
+  const travelDistance = Math.max(Number(travel.travelDistanceKm || 0), 0);
+  const travelFreeKm = travel.travelFree15 ? 15 : 0;
+  const travelRate = 0.50;
+  const travelFee = Math.max(travelDistance - travelFreeKm, 0) * travelRate;
+
+  if(travelDistance > 0){
+    drawText(
+      `Frais de déplacement : ${money(travelFee)}${travel.travelFree15 ? " (15 km offerts appliqués)" : ""}.`,
+      { fontUsed:bold }
+    );
+  }
 
   // PAGE 2+
   section(4,"Règlement et dépôt de garantie");
