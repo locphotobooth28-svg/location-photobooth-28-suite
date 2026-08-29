@@ -4865,26 +4865,23 @@ function Dashboard({onLogout}) {
       </> : view==="events" ? <>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
           <button
-            className={eventTab==="upcoming"?"primary":""}
             onClick={()=>setEventTab("upcoming")}
-            style={eventTab!=="upcoming"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+            style={{border:`1px solid ${eventTab==="upcoming"?"#f4c542":"rgba(244,197,66,.55)"}`,background:eventTab==="upcoming"?"#d4ad2d":"rgba(244,197,66,.10)",color:eventTab==="upcoming"?"#111827":"#f8e6a0",fontWeight:900,boxShadow:eventTab==="upcoming"?"0 6px 18px rgba(212,173,45,.18)":"none"}}
           >📅 À venir <strong style={{marginLeft:6}}>{eventTabCounts.upcoming}</strong></button>
           <button
-            className={eventTab==="completed"?"primary":""}
             onClick={()=>setEventTab("completed")}
-            style={eventTab!=="completed"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+            style={{border:`1px solid ${eventTab==="completed"?"#22c55e":"rgba(34,197,94,.55)"}`,background:eventTab==="completed"?"#166534":"rgba(34,197,94,.10)",color:eventTab==="completed"?"#ffffff":"#86efac",fontWeight:900,boxShadow:eventTab==="completed"?"0 6px 18px rgba(34,197,94,.18)":"none"}}
           >✅ Prestations terminées <strong style={{marginLeft:6}}>{eventTabCounts.completed}</strong></button>
           <button
-            className={eventTab==="archived"?"primary":""}
             onClick={()=>setEventTab("archived")}
-            style={eventTab!=="archived"?{border:"1px solid rgba(148,163,184,.25)",background:"rgba(30,41,59,.45)"}:undefined}
+            style={{border:`1px solid ${eventTab==="archived"?"#cbd5e1":"rgba(203,213,225,.48)"}`,background:eventTab==="archived"?"#475569":"rgba(148,163,184,.10)",color:eventTab==="archived"?"#ffffff":"#e2e8f0",fontWeight:900,boxShadow:eventTab==="archived"?"0 6px 18px rgba(148,163,184,.16)":"none"}}
           >📦 Archivées <strong style={{marginLeft:6}}>{eventTabCounts.archived}</strong></button>
         </div>
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":"Aucun dossier dans cet onglet."}</p></div>}
           {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id}>
-            <div className="event-date"><strong>{event.date?.slice(8,10)||"--"}</strong><span>{new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{month:"short"})}</span></div>
+            <div className="event-date" style={{minWidth:190,width:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:2}}><strong style={{fontSize:15,lineHeight:1.2}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <strong>{event.name}</strong>
