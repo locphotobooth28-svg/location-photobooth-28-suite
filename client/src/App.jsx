@@ -231,6 +231,16 @@ const PRINT_MATERIALS = [
   "Forfait impressions personnalisé"
 ];
 
+const getTravelFee = (preparation) => {
+  const p = preparation && typeof preparation === "object" ? preparation : {};
+  const distance = Math.max(Number(p.travelDistanceKm || 0), 0);
+  const freeKm = p.travelFree15 ? 15 : 0;
+  return Math.max(distance - freeKm, 0) * 0.50;
+};
+
+const withTravelFee = (basePrice, preparation) =>
+  Number(basePrice || 0) + getTravelFee(preparation);
+
 const toggleMaterial = (name) => {
   setForm(f => {
     const alreadySelected = f.materials.includes(name);
@@ -282,10 +292,11 @@ const selectedPrintPack = materials.find(
             ? pack.other
             : pack.lola;
 
-        totalPrice = String(price);
+        const finalPrice = withTravelFee(price, f.preparation);
+        totalPrice = finalPrice.toFixed(2);
 
         balance = Math.max(
-          Number(price) - Number(f.deposit || 0),
+          finalPrice - Number(f.deposit || 0),
           0
         ).toFixed(2);
       }
@@ -308,10 +319,11 @@ if (
         ? pack.other
         : pack.lola;
 
-    totalPrice = String(price);
+    const finalPrice = withTravelFee(price, f.preparation);
+    totalPrice = finalPrice.toFixed(2);
 
     balance = Math.max(
-      Number(price) - Number(f.deposit || 0),
+      finalPrice - Number(f.deposit || 0),
       0
     ).toFixed(2);
   }
@@ -895,10 +907,10 @@ Johan — Location Photobooth 28`;
             setForm(f=>({
               ...f,
               customPrintPrice:price,
-              totalPrice:price,
+              totalPrice:price ? withTravelFee(price, f.preparation).toFixed(2) : "",
               balance:price
                 ? Math.max(
-                    Number(price)-Number(f.deposit||0),
+                    withTravelFee(price, f.preparation)-Number(f.deposit||0),
                     0
                   ).toFixed(2)
                 : ""
@@ -959,6 +971,60 @@ Johan — Location Photobooth 28`;
           </>}
         </div></div>
       </details>
+
+      <h3>🚗 Frais de déplacement</h3>
+      <div className="card" style={{marginBottom:16}}>
+        <div className="form-grid">
+          <div>
+            <label>Distance totale à facturer (km)</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.preparation?.travelDistanceKm ?? ""}
+              onChange={e=>{
+                const value=e.target.value;
+                setForm(f=>{
+                  const oldPrep=f.preparation||{};
+                  const oldFee=getTravelFee(oldPrep);
+                  const newPrep={...oldPrep,travelDistanceKm:value,travelRate:0.50};
+                  const newFee=getTravelFee(newPrep);
+                  newPrep.travelFee=Number(newFee.toFixed(2));
+                  const base=Math.max(Number(f.totalPrice||0)-oldFee,0);
+                  const total=base+newFee;
+                  return {...f,preparation:newPrep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)};
+                });
+              }}
+              placeholder="Ex : 40"
+            />
+          </div>
+          <div>
+            <label>Tarif déplacement</label>
+            <input value="0,50 € / km" readOnly />
+          </div>
+          <label className="switch-line">
+            <input
+              type="checkbox"
+              checked={Boolean(form.preparation?.travelFree15)}
+              onChange={e=>setForm(f=>{
+                const oldPrep=f.preparation||{};
+                const oldFee=getTravelFee(oldPrep);
+                const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:0.50};
+                const newFee=getTravelFee(newPrep);
+                newPrep.travelFee=Number(newFee.toFixed(2));
+                const base=Math.max(Number(f.totalPrice||0)-oldFee,0);
+                const total=base+newFee;
+                return {...f,preparation:newPrep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)};
+              })}
+            />
+            Appliquer 15 km offerts
+          </label>
+          <div>
+            <label>Frais de déplacement calculés</label>
+            <input value={`${getTravelFee(form.preparation).toFixed(2)} €`} readOnly />
+          </div>
+        </div>
+      </div>
 
       <h3>Paiement et caution</h3><div className="form-grid">
 
@@ -4728,7 +4794,7 @@ function Dashboard({onLogout}) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.4</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.11</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
