@@ -1083,7 +1083,7 @@ function ShareModal({event,onClose}) {
 }
 
 
-function CalendarView({ events, onOpenEvent }) {
+function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -1161,15 +1161,25 @@ function CalendarView({ events, onOpenEvent }) {
           <div className="calendar-day-number">{date.getDate()}</div>
           <div className="calendar-events">
             {dayEvents.slice(0,4).map(event =>
-              <button
-                key={event.id}
-                className={`calendar-event ${typeClass(event.type)}`}
-                onClick={() => onOpenEvent(event)}
-                title={`${event.name}${event.time ? ` — ${event.time}` : ""}`}
-              >
-                <strong>{event.time || "•"}</strong>
-                <span>{event.name}</span>
-              </button>
+              <div key={event.id} style={{display:"flex",alignItems:"stretch",gap:4}}>
+                <button
+                  className={`calendar-event ${typeClass(event.type)}`}
+                  onClick={() => onOpenEvent(event)}
+                  title={`${event.name}${event.time ? ` — ${event.time}` : ""}`}
+                  style={{flex:1,minWidth:0}}
+                >
+                  <strong>{event.time || "•"}</strong>
+                  <span>{event.name}</span>
+                </button>
+                {onDeleteEvent&&<button
+                  type="button"
+                  className="danger-btn"
+                  onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}}
+                  title={`Supprimer définitivement ${event.name}`}
+                  aria-label={`Supprimer ${event.name}`}
+                  style={{padding:"4px 7px",minWidth:30,borderRadius:8}}
+                >🗑️</button>}
+              </div>
             )}
             {dayEvents.length > 4 && <small className="more-events">+ {dayEvents.length-4} autre(s)</small>}
           </div>
@@ -4355,7 +4365,7 @@ function AdminDocuments({events,onOpen}){
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
-  const [stats,setStats]=useState({events:0,upcoming:0,signedContracts:0,activeGalleries:0});
+  const [stats,setStats]=useState({events:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
@@ -4368,7 +4378,7 @@ function Dashboard({onLogout}) {
       fetch("/api/dashboard").then(r=>r.json())
     ]);
     setEvents(e.events||[]);
-    setStats(d.stats||{events:0,upcoming:0,signedContracts:0,activeGalleries:0});
+    setStats(d.stats||{events:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   }
 
   useEffect(()=>{load()},[]);
@@ -4426,9 +4436,20 @@ function Dashboard({onLogout}) {
   }
 
   async function remove(event){
-    if(!confirm(`Supprimer définitivement "${event.name}" ?`)) return;
-    await fetch(`/api/events/${event.id}`,{method:"DELETE"});
-    load();
+    const ok=confirm(
+      `⚠️ SUPPRESSION DÉFINITIVE\n\n` +
+      `Supprimer la prestation "${event.name}" ?\n\n` +
+      `Elle disparaîtra des événements, du calendrier, des plannings, des documents et des compteurs LP28.\n` +
+      `L'événement Google Agenda sera supprimé s'il existe.\n` +
+      `Le dossier Google Drive et les photos sont conservés par sécurité.\n\n` +
+      `Cette action est irréversible dans LP28.`
+    );
+    if(!ok)return;
+
+    const r=await fetch(`/api/events/${event.id}`,{method:"DELETE"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Impossible de supprimer la prestation.");
+    await load();
   }
 
   async function archive(event){
@@ -4495,7 +4516,7 @@ function Dashboard({onLogout}) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.3.0</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.4</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
@@ -4522,7 +4543,14 @@ function Dashboard({onLogout}) {
       {view==="dashboard" ? <>
         <section className="stats-grid">
           <article className="stat-card"><span>Événements</span><strong>{stats.events}</strong></article>
-          <article className="stat-card"><span>À venir</span><strong>{stats.upcoming}</strong></article>
+          <article className="stat-card">
+            <span>Événements à venir</span>
+            <strong>{stats.upcoming}</strong>
+            <small className="muted">Aujourd'hui → dimanche 23h59</small>
+            {Number(stats.unsignedUpcomingContracts||0)>0
+              ? <div style={{marginTop:8,color:"#f59e0b",fontWeight:900}}>⚠️ {stats.unsignedUpcomingContracts} contrat{Number(stats.unsignedUpcomingContracts)>1?"s":""} non signé{Number(stats.unsignedUpcomingContracts)>1?"s":""}</div>
+              : <div style={{marginTop:8,color:"#16a34a",fontWeight:800}}>✅ Contrats à jour</div>}
+          </article>
           <article className="stat-card"><span>Galeries actives</span><strong>{stats.activeGalleries}</strong></article>
           <article className="stat-card"><span>Contrats signés</span><strong>{stats.signedContracts}</strong></article>
         </section>
@@ -4622,7 +4650,7 @@ function Dashboard({onLogout}) {
           </article>)}
         </div>
       </> : view==="planning" ? <>
-        <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}}/>
+        <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
