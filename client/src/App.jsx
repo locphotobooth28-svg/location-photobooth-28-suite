@@ -3170,18 +3170,13 @@ function AdminBooths(){
           <div>☁️ Galerie : {b.syncStatus||"—"}</div>
           {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
           <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
-          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&(()=>{
-            const isCitizen=String(b.printer.model||"").toUpperCase().includes("CITIZEN")||String(b.printer.model||"").toUpperCase().includes("CY-02");
-            const reportedCapacity=Number(b.printer.mediaCapacity);
-            const capacity=Number.isFinite(reportedCapacity)&&reportedCapacity>0?reportedCapacity:(isCitizen?700:null);
-            const reportedPct=Number(b.printer.mediaPercent);
-            const calculatedPct=capacity?Number(b.printer.mediaRemaining)*100/capacity:NaN;
-            const pct=Number.isFinite(reportedPct)&&reportedPct>0?reportedPct:calculatedPct;
+          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&b.printer?.mediaCapacity!==null&&typeof b.printer?.mediaCapacity!=="undefined"&&(()=>{
+            const pct=Number(b.printer.mediaPercent);
             const validPct=Number.isFinite(pct);
             const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";
             const barValue=validPct?Math.max(0,Math.min(100,pct)):0;
             return <div style={{marginTop:8,marginBottom:8}}>
-              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining}{capacity?` / ${capacity}`:""}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
+              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining} / {b.printer.mediaCapacity}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
               {validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}>
                 <div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/>
               </div>}
@@ -3192,7 +3187,6 @@ function AdminBooths(){
             </div>;
           })()}
           {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
-          {b.printer?.printCount&&<div>🔢 Compteur : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
           {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
           {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
           <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
