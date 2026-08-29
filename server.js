@@ -2986,6 +2986,7 @@ function safeMedia(m,token){
   return {
     id:m.id,
     url:`/api/guest/${encodeURIComponent(token)}/memories/${m.id}/file`,
+    thumbnailUrl:m.mediaType==="PHOTO"?`/api/guest/${encodeURIComponent(token)}/memories/${m.id}/thumbnail`:null,
     originalName:m.originalName,
     mimeType:m.mimeType,
     mediaType:m.mediaType,
@@ -3467,6 +3468,36 @@ app.get("/api/guest/:token/memories", async (req,res)=>{
     showOriginalsToGuests,
     media:media.map(m=>safeMedia(m,req.params.token))
   });
+});
+
+app.get("/api/guest/:token/memories/:id/thumbnail", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event?.portalEnabled)return res.status(404).end();
+
+    const media=await prisma.memoryMedia.findFirst({
+      where:{id:req.params.id,eventId:access.event.id}
+    });
+    if(!media)return res.status(404).end();
+    if(access.role!=="ORGANIZER"&&media.status!=="VISIBLE")return res.status(403).end();
+    if(access.role!=="ORGANIZER"&&media.uploadedBy==="LUMABOOTH_ORIGINAL"&&!(await getShowOriginalsToGuests(access.event.id)))return res.status(403).end();
+
+    // Drive fournit une miniature optimisée. Le navigateur la télécharge directement
+    // depuis Google : les octets de l'image ne transitent donc pas par Render.
+    if(media.storageType==="DRIVE"&&media.driveFileId&&media.mediaType==="PHOTO"){
+      const thumbnailLink=await googleService.getMemoryThumbnailLink(req,media.driveFileId);
+      if(thumbnailLink){
+        res.setHeader("Cache-Control","private, max-age=1800");
+        return res.redirect(302,thumbnailLink);
+      }
+    }
+
+    // Repli sûr : aucune galerie cassée si Drive ne propose pas de miniature.
+    return res.redirect(302,`/api/guest/${encodeURIComponent(req.params.token)}/memories/${encodeURIComponent(media.id)}/file`);
+  }catch(err){
+    console.error("Miniature souvenir :",err);
+    return res.redirect(302,`/api/guest/${encodeURIComponent(req.params.token)}/memories/${encodeURIComponent(req.params.id)}/file`);
+  }
 });
 
 app.get("/api/guest/:token/memories/:id/file", async (req,res)=>{
