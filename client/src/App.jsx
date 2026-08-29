@@ -2487,6 +2487,33 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     setSelected([]);
   }
 
+  async function downloadSelectedMemories(){
+    if(!selected.length)return;
+
+    const items=galleryMedia.filter(m=>selected.includes(m.id));
+    if(!items.length)return;
+
+    if(items.length>50){
+      const ok=window.confirm(
+        `Vous allez télécharger ${items.length} fichiers originaux.\n\n` +
+        `Le navigateur peut demander l’autorisation pour plusieurs téléchargements. Continuer ?`
+      );
+      if(!ok)return;
+    }
+
+    for(let i=0;i<items.length;i++){
+      const m=items[i];
+      const a=document.createElement("a");
+      a.href=m.url;
+      a.download=m.originalName||`souvenir-${i+1}`;
+      a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      await new Promise(resolve=>setTimeout(resolve,180));
+    }
+  }
+
   async function hideSelected(){
     if(!selected.length)return;
     for(const id of selected){
@@ -2977,6 +3004,13 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
             disabled={!selected.length}
           >
             ⬜ Tout désélectionner
+          </button>
+          <button
+            type="button"
+            disabled={!selected.length}
+            onClick={downloadSelectedMemories}
+          >
+            ⬇️ Télécharger la sélection
           </button>
           <button disabled={!selected.length} onClick={hideSelected}>👁️ Masquer la sélection</button>
         </div>
