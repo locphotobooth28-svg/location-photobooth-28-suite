@@ -1083,6 +1083,27 @@ function ShareModal({event,onClose}) {
 }
 
 
+function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent}){
+  const [blocks,setBlocks]=useState([]);
+  useEffect(()=>{
+    let alive=true;
+    fetch("/api/admin/family-planning/blocks")
+      .then(async r=>{const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.message||"Blocages indisponibles"); return d;})
+      .then(d=>{if(alive)setBlocks(d.blocks||[])})
+      .catch(err=>console.warn("Blocages planning:",err));
+    return ()=>{alive=false};
+  },[]);
+  const blockEvents=blocks.map(b=>({
+    id:`family-block-${b.id}`,
+    name:"NON RÉSERVABLE",
+    type:"BLOCAGE",
+    date:String(b.startAt||"").slice(0,10),
+    pickupDate:String(b.endAt||"").slice(0,10),
+    materials:[], archived:false, planningBlock:true
+  }));
+  return <CalendarView events={[...(events||[]),...blockEvents]} onOpenEvent={e=>{if(!e?.planningBlock)onOpenEvent?.(e)}} onDeleteEvent={onDeleteEvent}/>;
+}
+
 function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -1231,6 +1252,9 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
   // Planning visuel : une ligne par borne. Si aucune borne n'est louée
   // mais que le livre d'or audio est réservé seul, on affiche TÉLÉPHONE.
   const planningItems = event => {
+    if(event?.planningBlock){
+      return [{label:"🚫 NON RÉSERVABLE", background:"#991b1b", color:"#ffffff"}];
+    }
     const materials = Array.isArray(event?.materials) ? event.materials : [];
     const names = materials.map(m => typeof m === "string" ? m : (m?.name || m?.material?.name || ""));
     const items = [];
@@ -1330,7 +1354,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
                     </button>
                   ))}
                 </div>
-                {onDeleteEvent&&<button
+                {onDeleteEvent&&!event.planningBlock&&<button
                   type="button"
                   className="danger-btn"
                   onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}}
@@ -1368,7 +1392,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
                 style={{width:"100%",minWidth:0,display:"flex",alignItems:"center",gap:7,background:item.background,color:item.color,border:"none"}}
               ><strong style={{whiteSpace:"nowrap"}}>{item.label}</strong><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.name}</span></button>)}
             </div>
-            {onDeleteEvent&&<button type="button" className="danger-btn" onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}} title={`Supprimer définitivement ${event.name}`} aria-label={`Supprimer ${event.name}`} style={{padding:"4px 8px",minWidth:34,borderRadius:8}}>🗑️</button>}
+            {onDeleteEvent&&!event.planningBlock&&<button type="button" className="danger-btn" onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}} title={`Supprimer définitivement ${event.name}`} aria-label={`Supprimer ${event.name}`} style={{padding:"4px 8px",minWidth:34,borderRadius:8}}>🗑️</button>}
           </div>)}
         </div>;
       })}
@@ -4838,7 +4862,7 @@ function Dashboard({onLogout}) {
           </article>)}
         </div>
       </> : view==="planning" ? <>
-        <CalendarView events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
+        <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
