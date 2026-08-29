@@ -2534,7 +2534,10 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     setDeleteItem(null);setDeleteText("");await loadMemories();
   }
 
-  if(error)return <div className="portal-shell"><div className="portal-card"><img src="/logo.jpg"/><h1>Portail indisponible</h1><p>{error}</p></div></div>;
+  if(error){
+    const maintenance=/maintenance temporaire|momentanément verrouillé/i.test(error);
+    return <div className="portal-shell"><div className="portal-card"><img src="/logo.jpg"/><h1>{maintenance?"🔒 Galerie temporairement indisponible":"Portail indisponible"}</h1><p>{error}</p></div></div>;
+  }
   if(!data)return <div className="portal-shell"><div className="portal-card"><p>Chargement…</p></div></div>;
 
   const e=data.event,support=data.support||{};
@@ -3120,6 +3123,8 @@ function AdminGalleries(){
   const [galleries,setGalleries]=useState([]),[current,setCurrent]=useState(null),[detail,setDetail]=useState(null);
   const [deleteItem,setDeleteItem]=useState(null),[deleteText,setDeleteText]=useState("");
   const [lightbox,setLightbox]=useState(null),[filter,setFilter]=useState("ALL");
+  const [selectMode,setSelectMode]=useState(false),[selected,setSelected]=useState([]);
+  const [bulkDeleteOpen,setBulkDeleteOpen]=useState(false),[bulkDeleteText,setBulkDeleteText]=useState(""),[bulkBusy,setBulkBusy]=useState(false);
 
   async function load(){
     const r=await fetch("/api/admin/galleries");const d=await r.json();
@@ -3128,7 +3133,7 @@ function AdminGalleries(){
   async function openGallery(id){
     const r=await fetch(`/api/admin/galleries/${id}`);const d=await r.json();
     if(!r.ok)return alert(d.message||"Galerie indisponible.");
-    setCurrent(id);setDetail(d);setLightbox(null);
+    setCurrent(id);setDetail(d);setLightbox(null);setSelected([]);setSelectMode(false);
   }
   useEffect(()=>{load()},[]);
 
@@ -3152,6 +3157,89 @@ function AdminGalleries(){
     await openGallery(current);await load();
   }
 
+  async function setPortalAccessMode(mode){
+    if(!current)return;
+    const labels={
+      OPEN:"rouvrir la galerie",
+      GUEST_LOCKED:"verrouiller l’accès des invités",
+      ALL_LOCKED:"verrouiller l’accès des invités et de l’organisateur"
+    };
+    const ok=window.confirm(`Confirmer : ${labels[mode]} ?`);
+    if(!ok)return;
+
+    const r=await fetch(`/api/admin/galleries/${current}/access-mode`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({mode})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Modification impossible.");
+    await openGallery(current);await load();
+  }
+
+  function toggleAdminSelected(id){
+    setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  }
+
+  async function downloadAdminSelected(){
+    if(!selected.length||!detail)return;
+    const items=(detail.media||[]).filter(m=>selected.includes(m.id));
+    if(!items.length)return;
+
+    if(items.length>50){
+      const ok=window.confirm(
+        `Vous allez télécharger ${items.length} fichiers originaux.\n\n`+
+        `Le navigateur peut demander l’autorisation pour plusieurs téléchargements. Continuer ?`
+      );
+      if(!ok)return;
+    }
+
+    for(let i=0;i<items.length;i++){
+      const m=items[i];
+      const a=document.createElement("a");
+      a.href=m.url;
+      a.download=m.originalName||`souvenir-${i+1}`;
+      a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      await new Promise(resolve=>setTimeout(resolve,180));
+    }
+  }
+
+  async function removeSelected(){
+    if(bulkDeleteText!=="DELETE"||!selected.length||bulkBusy)return;
+    setBulkBusy(true);
+    try{
+      const ids=[...selected];
+      const r=await fetch("/api/admin/galleries/media/bulk-delete",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ids,confirmation:bulkDeleteText})
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok&&!d.deleted?.length){
+        return alert(d.message||"Suppression en lot impossible.");
+      }
+
+      setBulkDeleteOpen(false);
+      setBulkDeleteText("");
+      setSelected([]);
+      setSelectMode(false);
+      setLightbox(null);
+      await openGallery(current);
+      await load();
+
+      if(d.failed?.length){
+        alert(`${d.deleted?.length||0} fichier(s) supprimé(s). ${d.failed.length} échec(s) : les fichiers en erreur ont été conservés dans LP28.`);
+      }else{
+        alert(`${d.deleted?.length||ids.length} fichier(s) supprimé(s) de LP28 et Google Drive.`);
+      }
+    }finally{
+      setBulkBusy(false);
+    }
+  }
+
   if(detail){
     const list=(detail.media||[]).filter(m=>filter==="ALL"||m.status===filter);
     const originalList=list.filter(m=>m.sourceGroup==="ORIGINAL");
@@ -3169,6 +3257,40 @@ function AdminGalleries(){
         {detail.event.fotoshareUrl&&<a href={detail.event.fotoshareUrl} target="_blank" rel="noreferrer">📷 Ouvrir FotoShare</a>}
         {org&&<a href={org} target="_blank" rel="noreferrer">🔐 Portail organisateur</a>}
         {guest&&<a href={guest} target="_blank" rel="noreferrer">👥 Portail invité</a>}
+      </div>
+
+      <div className="qr-panel" style={{marginBottom:16,border:(detail.event.portalAccessMode||"OPEN")!=="OPEN"?"2px solid #d5b13f":undefined}}>
+        <div style={{minWidth:0,flex:1}}>
+          <strong>🔒 Sécurité de la galerie</strong>
+          <p className="muted" style={{marginTop:6}}>
+            {(detail.event.portalAccessMode||"OPEN")==="OPEN"
+              ? "La galerie est accessible normalement."
+              :(detail.event.portalAccessMode||"OPEN")==="GUEST_LOCKED"
+                ? "Les invités sont temporairement bloqués. L’organisateur conserve son accès."
+                : "Les invités et l’organisateur sont temporairement bloqués. L’Admin conserve son accès complet."}
+          </p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+            <button
+              type="button"
+              onClick={()=>setPortalAccessMode("OPEN")}
+              disabled={(detail.event.portalAccessMode||"OPEN")==="OPEN"}
+            >🟢 Accès ouvert</button>
+            <button
+              type="button"
+              onClick={()=>setPortalAccessMode("GUEST_LOCKED")}
+              disabled={detail.event.portalAccessMode==="GUEST_LOCKED"}
+            >🟠 Verrouiller les invités</button>
+            <button
+              type="button"
+              className="danger"
+              onClick={()=>setPortalAccessMode("ALL_LOCKED")}
+              disabled={detail.event.portalAccessMode==="ALL_LOCKED"}
+            >🔴 Verrouiller toute la galerie</button>
+          </div>
+          {(detail.event.portalAccessMode||"OPEN")!=="OPEN"&&<p style={{marginTop:10}}>
+            Message affiché : <em>« Suite à une maintenance temporaire, l’accès à cette galerie est momentanément verrouillé. Merci de réessayer ultérieurement. »</em>
+          </p>}
+        </div>
       </div>
 
       {detail.event.lumaboothWebhookPath&&<div className="qr-panel" style={{marginBottom:16}}>
@@ -3201,30 +3323,47 @@ function AdminGalleries(){
       </div>
 
       <div className="gallery-filters">
-        {["ALL","VISIBLE","HIDDEN","PENDING"].map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x==="ALL"?"Tout":x==="VISIBLE"?"Visibles":x==="HIDDEN"?"Masquées":"En attente"}</button>)}
+        {["ALL","VISIBLE","HIDDEN","PENDING"].map(x=><button key={x} className={filter===x?"active":""} onClick={()=>{setFilter(x);setSelected([])}}>{x==="ALL"?"Tout":x==="VISIBLE"?"Visibles":x==="HIDDEN"?"Masquées":"En attente"}</button>)}
       </div>
+
+      {list.length>0&&<div className="memories-heading" style={{marginTop:14}}>
+        <div><strong>Gestion des photos</strong><p className="muted">{list.length} élément{list.length>1?"s":""} dans ce filtre</p></div>
+        <button className="memory-select-toggle" onClick={()=>{setSelectMode(v=>!v);setSelected([])}}>{selectMode?"Annuler":"☑ Sélectionner"}</button>
+      </div>}
+
+      {selectMode&&<div className="memory-selection-bar">
+        <strong>{selected.length} sélectionnée{selected.length>1?"s":""} sur {list.length}</strong>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+          <button type="button" onClick={()=>setSelected(list.map(m=>m.id))} disabled={!list.length||selected.length===list.length}>☑ Tout sélectionner</button>
+          <button type="button" onClick={()=>setSelected([])} disabled={!selected.length}>⬜ Tout désélectionner</button>
+          <button type="button" onClick={downloadAdminSelected} disabled={!selected.length}>⬇️ Télécharger la sélection</button>
+          <button type="button" className="danger" onClick={()=>{setBulkDeleteText("");setBulkDeleteOpen(true)}} disabled={!selected.length}>🗑️ Supprimer la sélection</button>
+        </div>
+      </div>}
 
       {partyList.length>0&&<>
         <h3 style={{marginTop:18}}>🎉 Tirages & invités <span className="muted">({partyList.length})</span></h3>
-        <div className="memories-grid">{partyList.map(m=><article className={`memory-card ${m.status.toLowerCase()}`} key={m.id}>
-          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>setLightbox(m)}><img src={m.url} loading="lazy"/></button>}
+        <div className="memories-grid">{partyList.map(m=><article className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`} key={m.id}>
+          {selectMode&&<button className="memory-select-check" onClick={()=>toggleAdminSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
+          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.thumbnailUrl||m.url} loading="lazy" decoding="async"/></button>}
           <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
-          <div className="memory-actions">
+          {!selectMode&&<div className="memory-actions">
             {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
             <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
-          </div>
+          </div>}
         </article>)}</div>
       </>}
 
       {originalList.length>0&&<>
         <h3 style={{marginTop:28}}>📸 Originaux <span className="muted">({originalList.length})</span></h3>
-        <div className="memories-grid">{originalList.map(m=><article className={`memory-card ${m.status.toLowerCase()}`} key={m.id}>
-          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>setLightbox(m)}><img src={m.url} loading="lazy"/></button>}
+        <div className="memories-grid">{originalList.map(m=><article className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`} key={m.id}>
+          {selectMode&&<button className="memory-select-check" onClick={()=>toggleAdminSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
+          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.thumbnailUrl||m.url} loading="lazy" decoding="async"/></button>}
           <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
-          <div className="memory-actions">
+          {!selectMode&&<div className="memory-actions">
             {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
             <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
-          </div>
+          </div>}
         </article>)}</div>
       </>}
 
@@ -3236,6 +3375,17 @@ function AdminGalleries(){
           <button className="danger" onClick={()=>{setDeleteItem(lightbox);setDeleteText("")}}>🗑️ Supprimer</button>
         </div></div>
       </div>}
+
+      {bulkDeleteOpen&&<div className="memory-modal"><div className="memory-modal-card">
+        <h2>⚠️ Suppression définitive en lot</h2>
+        <p>Vous allez supprimer <strong>{selected.length} fichier{selected.length>1?"s":""}</strong> de LP28 <strong>et de Google Drive</strong>.</p>
+        <p>Saisissez <strong>DELETE</strong> pour confirmer.</p>
+        <input autoFocus value={bulkDeleteText} onChange={e=>setBulkDeleteText(e.target.value)} placeholder="DELETE"/>
+        <div className="memory-modal-actions">
+          <button disabled={bulkBusy} onClick={()=>{setBulkDeleteOpen(false);setBulkDeleteText("")}}>Annuler</button>
+          <button className="danger" disabled={bulkDeleteText!=="DELETE"||bulkBusy} onClick={removeSelected}>{bulkBusy?"Suppression…":"Supprimer définitivement"}</button>
+        </div>
+      </div></div>}
 
       {deleteItem&&<div className="memory-modal"><div className="memory-modal-card">
         <h2>⚠️ Suppression définitive</h2><p>Saisissez <strong>DELETE</strong> pour confirmer.</p>
