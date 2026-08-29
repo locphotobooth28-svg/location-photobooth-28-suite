@@ -1106,9 +1106,36 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
 
   const byDate = useMemo(() => {
     const map = {};
+
+    // Une prestation bloque le planning depuis sa date de début
+    // jusqu'à sa date de reprise incluse. Si aucune reprise n'est
+    // renseignée, elle reste affichée uniquement le jour de l'événement.
+    const parseLocalDate = value => {
+      const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+    };
+
+    const toIso = date =>
+      `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+
     for (const event of events.filter(e => !e.archived)) {
-      (map[event.date] ||= []).push(event);
+      const start = parseLocalDate(event.date);
+      if (!start) continue;
+
+      const requestedEnd = parseLocalDate(event.pickupDate);
+      const end = requestedEnd && requestedEnd >= start ? requestedEnd : start;
+
+      const day = new Date(start);
+      let safety = 0;
+      while (day <= end && safety < 370) {
+        const iso = toIso(day);
+        (map[iso] ||= []).push(event);
+        day.setDate(day.getDate() + 1);
+        safety += 1;
+      }
     }
+
     return map;
   }, [events]);
 
