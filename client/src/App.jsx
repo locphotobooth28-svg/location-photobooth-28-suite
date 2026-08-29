@@ -3360,7 +3360,7 @@ function AdminGalleries(){
         <h3 style={{marginTop:18}}>🎉 Tirages & invités <span className="muted">({partyList.length})</span></h3>
         <div className="memories-grid">{partyList.map(m=><article className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`} key={m.id}>
           {selectMode&&<button className="memory-select-check" onClick={()=>toggleAdminSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
-          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.thumbnailUrl||m.url} loading="lazy" decoding="async"/></button>}
+          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.url} loading="lazy" decoding="async"/></button>}
           <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
           {!selectMode&&<div className="memory-actions">
             {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
@@ -3373,7 +3373,7 @@ function AdminGalleries(){
         <h3 style={{marginTop:28}}>📸 Originaux <span className="muted">({originalList.length})</span></h3>
         <div className="memories-grid">{originalList.map(m=><article className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`} key={m.id}>
           {selectMode&&<button className="memory-select-check" onClick={()=>toggleAdminSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
-          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.thumbnailUrl||m.url} loading="lazy" decoding="async"/></button>}
+          {m.mediaType==="VIDEO"?<video src={m.url} controls preload="metadata"/>:<button className="memory-photo-button" onClick={()=>selectMode?toggleAdminSelected(m.id):setLightbox(m)}><img src={m.url} loading="lazy" decoding="async"/></button>}
           <div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"En attente"} · {m.mediaType==="VIDEO"?"Vidéo":"Photo"}</div>
           {!selectMode&&<div className="memory-actions">
             {m.status==="VISIBLE"?<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>:<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
