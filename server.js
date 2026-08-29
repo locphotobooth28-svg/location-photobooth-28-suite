@@ -1154,12 +1154,46 @@ app.post("/api/events/:id/google-sync", adminOnly, async (req, res) => {
 });
 
 app.get("/api/dashboard", adminOnly, async (req, res) => {
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(0,0,0,0);
 
-  const [events, upcoming, consumables] = await Promise.all([
-    prisma.event.count(),
-    prisma.event.count({ where: { archived: false, eventDate: { gte: today } } }),
+  // Fin de la semaine courante : dimanche 23:59:59.999.
+  // Le compteur "Événements à venir" représente donc ce qu'il reste à faire
+  // d'aujourd'hui jusqu'à dimanche soir.
+  const sundayEnd = new Date(today);
+  const daysUntilSunday = (7 - sundayEnd.getDay()) % 7;
+  sundayEnd.setDate(sundayEnd.getDate() + daysUntilSunday);
+  sundayEnd.setHours(23,59,59,999);
+
+  const upcomingWhere = {
+    archived: false,
+    eventDate: { gte: today, lte: sundayEnd },
+    bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] }
+  };
+
+  const [events, upcoming, unsignedUpcomingContracts, activeGalleries, signedContracts, consumables] = await Promise.all([
+    prisma.event.count({ where: { archived: false } }),
+    prisma.event.count({ where: upcomingWhere }),
+    prisma.event.count({
+      where: {
+        ...upcomingWhere,
+        contractStatus: { not: "SIGNED" }
+      }
+    }),
+    prisma.event.count({
+      where: {
+        archived: false,
+        portalEnabled: true,
+        bookingStatus: { notIn: ["DECLINED", "CANCELLED"] }
+      }
+    }),
+    prisma.event.count({
+      where: {
+        archived: false,
+        contractStatus: "SIGNED"
+      }
+    }),
     prisma.consumable.findMany({ orderBy: { printer: "asc" } })
   ]);
 
@@ -1167,8 +1201,10 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
     stats: {
       events,
       upcoming,
-      activeGalleries: 0,
-      signedContracts: 0
+      unsignedUpcomingContracts,
+      activeGalleries,
+      signedContracts,
+      upcomingUntil: sundayEnd.toISOString()
     },
     consumables
   });
