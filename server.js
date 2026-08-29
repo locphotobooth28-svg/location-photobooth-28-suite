@@ -2966,10 +2966,33 @@ app.post("/api/admin/assistance/settings", adminOnly, async (req,res)=>{
   res.json({ok:true});
 });
 
-async function portalAccess(token){
+function portalAccessMode(event){
+  const raw=event?.preparation && typeof event.preparation==="object"
+    ? event.preparation.portalAccessMode
+    : null;
+  return ["OPEN","GUEST_LOCKED","ALL_LOCKED"].includes(raw) ? raw : "OPEN";
+}
+
+function portalMaintenanceMessage(){
+  return "Suite à une maintenance temporaire, l’accès à cette galerie est momentanément verrouillé. Merci de réessayer ultérieurement.";
+}
+
+function isPortalAccessLocked(access){
+  if(!access?.event)return false;
+  const mode=portalAccessMode(access.event);
+  return mode==="ALL_LOCKED" || (mode==="GUEST_LOCKED" && access.role==="GUEST");
+}
+
+async function portalAccessRaw(token){
   const event=await prisma.event.findFirst({where:{OR:[{guestToken:token},{organizerToken:token}]}});
   if(!event)return null;
   return {event,role:event.organizerToken===token?"ORGANIZER":"GUEST"};
+}
+
+async function portalAccess(token){
+  const access=await portalAccessRaw(token);
+  if(!access || isPortalAccessLocked(access))return null;
+  return access;
 }
 
 function originalsSettingKey(eventId){
@@ -3071,13 +3094,21 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
   try{
     await ensureV82Settings();
 
-    const access=await portalAccess(req.params.token);
+    const access=await portalAccessRaw(req.params.token);
     const event=access?.event;
 
     if(!event || !event.portalEnabled){
       return res.status(404).json({
         ok:false,
         message:"Portail indisponible."
+      });
+    }
+
+    if(isPortalAccessLocked(access)){
+      return res.status(423).json({
+        ok:false,
+        code:"PORTAL_TEMPORARILY_LOCKED",
+        message:portalMaintenanceMessage()
       });
     }
 
@@ -3762,6 +3793,7 @@ app.get("/api/admin/galleries", adminOnly, async (req, res) => {
         organizerToken: e.organizerToken,
         guestToken: e.guestToken,
         fotoshareUrl: e.fotoshareUrl,
+        portalAccessMode: portalAccessMode(e),
         total: active.length,
         photos: active.filter(m => m.mediaType === "PHOTO").length,
         videos: active.filter(m => m.mediaType === "VIDEO").length,
@@ -3801,9 +3833,10 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
           ? "ANIMATED"
           : "PRINT_GUEST",
 
-  url:event.organizerToken
-    ? `/api/guest/${encodeURIComponent(event.organizerToken)}/memories/${m.id}/file`
-    : `/memories/${encodeURIComponent(m.fileName)}`
+  url:`/api/admin/galleries/media/${encodeURIComponent(m.id)}/file`,
+  thumbnailUrl:m.mediaType==="PHOTO"
+    ? `/api/admin/galleries/media/${encodeURIComponent(m.id)}/thumbnail`
+    : null
 }));
 
   res.json({
@@ -3819,6 +3852,7 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
       organizerToken: event.organizerToken,
       guestToken: event.guestToken,
       fotoshareUrl: event.fotoshareUrl,
+      portalAccessMode: portalAccessMode(event),
       showOriginalsToGuests: await getShowOriginalsToGuests(event.id),
       lumaboothWebhookPath: event.organizerToken
         ? `/api/lumabooth/event/${encodeURIComponent(event.organizerToken)}`
@@ -3826,6 +3860,108 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
     },
     media: mediaWithUrls
   });
+});
+
+app.get("/api/admin/galleries/media/:id/thumbnail", adminOnly, async (req,res)=>{
+  try{
+    const media=await prisma.memoryMedia.findUnique({where:{id:req.params.id}});
+    if(!media)return res.status(404).end();
+
+    if(media.storageType==="DRIVE"&&media.driveFileId&&media.mediaType==="PHOTO"){
+      const thumbnailLink=await googleService.getMemoryThumbnailLink(req,media.driveFileId);
+      if(thumbnailLink){
+        res.setHeader("Cache-Control","private, max-age=1800");
+        return res.redirect(302,thumbnailLink);
+      }
+    }
+    return res.redirect(302,`/api/admin/galleries/media/${encodeURIComponent(media.id)}/file`);
+  }catch(err){
+    console.error("Miniature admin souvenir :",err);
+    return res.status(500).end();
+  }
+});
+
+app.get("/api/admin/galleries/media/:id/file", adminOnly, async (req,res)=>{
+  try{
+    const media=await prisma.memoryMedia.findUnique({where:{id:req.params.id}});
+    if(!media)return res.status(404).end();
+
+    res.setHeader("Content-Type",media.mimeType||"application/octet-stream");
+    res.setHeader("Cache-Control","private, max-age=3600");
+
+    if(media.storageType==="DRIVE"&&media.driveFileId){
+      const stream=await googleService.getMemoryFromDrive(req,media.driveFileId);
+      stream.on("error",err=>{
+        console.error("Lecture souvenir Drive admin :",err);
+        if(!res.headersSent)res.status(500).end();
+      });
+      return stream.pipe(res);
+    }
+
+    const localPath=media.storagePath || path.join(MEMORIES_DIR,media.fileName);
+    if(!localPath||!fs.existsSync(localPath))return res.status(404).end();
+    return res.sendFile(localPath);
+  }catch(err){
+    console.error("Lecture souvenir admin :",err);
+    if(!res.headersSent)res.status(500).end();
+  }
+});
+
+app.post("/api/admin/galleries/:eventId/access-mode", adminOnly, async (req,res)=>{
+  const mode=String(req.body?.mode||"").trim();
+  if(!["OPEN","GUEST_LOCKED","ALL_LOCKED"].includes(mode)){
+    return res.status(400).json({ok:false,message:"Mode d’accès invalide."});
+  }
+
+  const event=await prisma.event.findUnique({where:{id:req.params.eventId}});
+  if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+
+  const preparation=event.preparation&&typeof event.preparation==="object"&&!Array.isArray(event.preparation)
+    ? {...event.preparation}
+    : {};
+  preparation.portalAccessMode=mode;
+
+  await prisma.event.update({
+    where:{id:event.id},
+    data:{preparation}
+  });
+
+  res.json({ok:true,portalAccessMode:mode});
+});
+
+app.post("/api/admin/galleries/media/bulk-delete", adminOnly, async (req,res)=>{
+  if(String(req.body?.confirmation||"")!=="DELETE"){
+    return res.status(400).json({ok:false,message:"Saisissez DELETE pour confirmer."});
+  }
+
+  const ids=Array.isArray(req.body?.ids)
+    ? [...new Set(req.body.ids.map(x=>String(x||"").trim()).filter(Boolean))].slice(0,1000)
+    : [];
+  if(!ids.length)return res.status(400).json({ok:false,message:"Aucun fichier sélectionné."});
+
+  const mediaList=await prisma.memoryMedia.findMany({where:{id:{in:ids}}});
+  const deleted=[];
+  const failed=[];
+
+  for(const media of mediaList){
+    try{
+      if(media.storageType==="DRIVE"&&media.driveFileId){
+        await googleService.deleteMemoryFromDrive(req,media.driveFileId);
+      }else{
+        const localPath=media.storagePath || (media.fileName?path.join(MEMORIES_DIR,media.fileName):null);
+        if(localPath&&fs.existsSync(localPath))fs.unlinkSync(localPath);
+      }
+
+      await prisma.memoryMedia.delete({where:{id:media.id}});
+      deleted.push(media.id);
+    }catch(err){
+      console.error("Suppression en lot Memories :",media.id,err.message);
+      failed.push({id:media.id,message:err.message||"Suppression impossible."});
+    }
+  }
+
+  const status=failed.length&&deleted.length===0?500:200;
+  res.status(status).json({ok:failed.length===0,deleted,failed});
 });
 
 app.post("/api/admin/galleries/media/:id/:action", adminOnly, async (req, res) => {
@@ -3850,36 +3986,29 @@ app.post("/api/admin/galleries/media/:id/:action", adminOnly, async (req, res) =
 
 app.delete("/api/admin/galleries/media/:id", adminOnly, async (req, res) => {
   if (String(req.body?.confirmation || "") !== "DELETE") {
-    return res.status(400).json({
-      ok: false,
-      message: "Saisissez DELETE pour confirmer."
-    });
+    return res.status(400).json({ok:false,message:"Saisissez DELETE pour confirmer."});
   }
 
-  const media = await prisma.memoryMedia.findUnique({
-    where: { id: req.params.id }
-  });
+  const media=await prisma.memoryMedia.findUnique({where:{id:req.params.id}});
+  if(!media)return res.status(404).json({ok:false,message:"Souvenir introuvable."});
 
-  if (!media) {
-    return res.status(404).json({
-      ok: false,
-      message: "Souvenir introuvable."
-    });
-  }
-
-  try {
-    if (media.storagePath && fs.existsSync(media.storagePath)) {
-      fs.unlinkSync(media.storagePath);
+  try{
+    if(media.storageType==="DRIVE"&&media.driveFileId){
+      await googleService.deleteMemoryFromDrive(req,media.driveFileId);
+    }else{
+      const localPath=media.storagePath || (media.fileName?path.join(MEMORIES_DIR,media.fileName):null);
+      if(localPath&&fs.existsSync(localPath))fs.unlinkSync(localPath);
     }
-  } catch (err) {
-    console.error("Suppression fichier Memories :", err.message);
+
+    await prisma.memoryMedia.delete({where:{id:media.id}});
+    res.json({ok:true});
+  }catch(err){
+    console.error("Suppression fichier Memories admin :",err);
+    return res.status(500).json({
+      ok:false,
+      message:"Suppression impossible. Le fichier a été conservé dans LP28 pour éviter une désynchronisation avec Google Drive."
+    });
   }
-
-  await prisma.memoryMedia.delete({
-    where: { id: media.id }
-  });
-
-  res.json({ ok: true });
 });
 
 app.post("/api/admin/galleries/:eventId/expiration", adminOnly, async (req, res) => {
