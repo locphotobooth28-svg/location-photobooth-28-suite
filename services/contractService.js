@@ -168,6 +168,48 @@ function getPrintPackage(event){
   };
 }
 
+function getFramePricing(event){
+  const source = String(event.frameSource || "NONE").toUpperCase();
+  const pricing = String(event.framePricing || "").toUpperCase();
+  const rawPrice = Number(event.framePrice);
+
+  if(source === "CLIENT"){
+    return {
+      source:"CLIENT",
+      label:"Cadre photo fourni par le client",
+      price:0,
+      priceLabel:"Gratuit"
+    };
+  }
+
+  if(source === "LP28"){
+    if(pricing === "OFFERED"){
+      return {
+        source:"LP28",
+        label:"Création du cadre photo par Location Photobooth 28",
+        price:0,
+        priceLabel:"Offert"
+      };
+    }
+
+    const price = Number.isFinite(rawPrice) && rawPrice >= 0 ? rawPrice : 25;
+
+    return {
+      source:"LP28",
+      label:"Création du cadre photo par Location Photobooth 28",
+      price,
+      priceLabel:money(price)
+    };
+  }
+
+  return {
+    source:"NONE",
+    label:"Cadre photo non renseigné",
+    price:0,
+    priceLabel:"Non renseigné"
+  };
+}
+
 function getOptions(event){
   const names = getMaterialNames(event);
 
@@ -326,6 +368,7 @@ async function generateContractPdf(event){
   const booths = getBooths(event);
   const printPackage = getPrintPackage(event);
   const options = getOptions(event);
+  const framePricing = getFramePricing(event);
 
   const signedAtValue = signatureSignedAt(event);
   const signedAt = signatureDateTimeFr(signedAtValue);
@@ -538,6 +581,10 @@ async function generateContractPdf(event){
   bullet("Flash et équipement d'éclairage");
   bullet("Câbles et alimentation nécessaires au fonctionnement");
 
+  if(framePricing.source !== "NONE"){
+    bullet(`${framePricing.label} — ${framePricing.priceLabel}`);
+  }
+
   if(options.length){
     drawText(
       "Options / matériel complémentaires :",
@@ -603,6 +650,13 @@ async function generateContractPdf(event){
         `Tarif catalogue correspondant : ${money(cataloguePrice)}.`
       );
     }
+  }
+
+  if(framePricing.source !== "NONE"){
+    drawText(
+      `Cadre photo : ${framePricing.label} — ${framePricing.priceLabel}.`,
+      { fontUsed:bold, gapAfter:5 }
+    );
   }
 
   drawText(
