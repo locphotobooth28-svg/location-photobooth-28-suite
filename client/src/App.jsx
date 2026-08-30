@@ -4690,6 +4690,204 @@ function AdminDocuments({events,onOpen}){
   );
 }
 
+function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
+  if(!event) return null;
+
+  const safeText = value => {
+    if(value === null || value === undefined || value === "") return "";
+    if(typeof value === "string" || typeof value === "number") return String(value);
+    if(typeof value === "boolean") return value ? "Oui" : "Non";
+    return "";
+  };
+
+  const dateFrSafe = value => {
+    const raw=safeText(value);
+    if(!raw) return "Non renseignée";
+    const iso=raw.slice(0,10);
+    const d=new Date(`${iso}T12:00:00`);
+    if(Number.isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString("fr-FR",{
+      weekday:"long",
+      day:"numeric",
+      month:"long",
+      year:"numeric"
+    });
+  };
+
+  const moneySafe = value => {
+    const n=Number(value);
+    return Number.isFinite(n)
+      ? `${n.toFixed(2).replace(".",",")} €`
+      : "Non renseigné";
+  };
+
+  const materialName = item => {
+    if(typeof item === "string") return item;
+    if(item && typeof item === "object"){
+      return safeText(item.material?.name || item.name);
+    }
+    return "";
+  };
+
+  const materials=(Array.isArray(event.materials)?event.materials:[])
+    .map(materialName)
+    .filter(Boolean);
+
+  const boothNames=[
+    materials.includes("Borne Photobooth Miroir Lola") ? "LOLA" : "",
+    materials.includes("Borne Photobooth Nina") ? "NINA" : "",
+    materials.includes("Borne Photobooth Gabin") ? "GABIN" : ""
+  ].filter(Boolean);
+
+  let printLabel="Non renseigné";
+  if(materials.includes("Forfait impressions personnalisé")){
+    const count=Number(event.customPrintCount||0);
+    printLabel=count>0 ? `${count} impressions` : "Forfait personnalisé";
+  }else if(materials.includes("Forfait sans aucune impression")){
+    printLabel="Sans impression";
+  }else{
+    const pack=materials.find(name=>/^Forfait \d+ impressions$/i.test(name));
+    if(pack){
+      const match=pack.match(/(\d+)/);
+      printLabel=match ? `${match[1]} impressions` : pack;
+    }
+  }
+
+  const excluded=new Set([
+    "Borne Photobooth Miroir Lola",
+    "Borne Photobooth Nina",
+    "Borne Photobooth Gabin",
+    "Forfait sans aucune impression",
+    "Forfait 100 impressions",
+    "Forfait 200 impressions",
+    "Forfait 300 impressions",
+    "Forfait 400 impressions",
+    "Forfait 700 impressions",
+    "Forfait impressions personnalisé"
+  ]);
+  const extraMaterials=materials.filter(name=>!excluded.has(name));
+
+  const prep=event.preparation && typeof event.preparation==="object"
+    ? event.preparation
+    : {};
+
+  let frameLabel="Pas de cadre";
+  if(event.frameSource==="CLIENT"){
+    frameLabel="Cadre fourni par le client · Gratuit";
+  }else if(event.frameSource==="LP28"){
+    if(prep.framePricing==="OFFERED"){
+      frameLabel="Cadre LP28 · Offert";
+    }else{
+      const price=Number(prep.framePrice ?? 25);
+      frameLabel=`Cadre LP28 · ${Number.isFinite(price)?price.toFixed(2).replace(".",","):"25,00"} €`;
+    }
+  }
+
+  const frameStatus =
+    event.frameSource==="NONE" || !event.frameSource
+      ? "Non requis"
+      : event.frameStatus==="DONE"
+        ? "🟢 Terminé"
+        : event.frameStatus==="IN_PROGRESS"
+          ? "🟡 En cours"
+          : "🔴 À faire";
+
+  const contractSigned=event.contractStatus==="SIGNED";
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="event-modal"
+        style={{maxWidth:980}}
+        onClick={e=>e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <div className="eyebrow">CONSULTATION ÉVÉNEMENT</div>
+            <h2>{safeText(event.name)||"Événement"}</h2>
+          </div>
+          <button type="button" className="icon-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",
+          gap:12
+        }}>
+          <div className="card">
+            <h3>📅 Prestation</h3>
+            <p><strong>{safeText(event.type)||"Non renseigné"}</strong></p>
+            <p>{dateFrSafe(event.date)}{event.time?` · Installation ${safeText(event.time)}`:""}</p>
+            <p>📍 {safeText(event.address)||"Adresse non renseignée"}</p>
+            {event.pickupDate && (
+              <p>↩️ Reprise {dateFrSafe(event.pickupDate)}
+                {event.pickupTime?` à ${safeText(event.pickupTime)}`:""}
+              </p>
+            )}
+          </div>
+
+          <div className="card">
+            <h3>👤 Client / organisateur</h3>
+            <p><strong>{safeText(event.organizerName)||"Non renseigné"}</strong></p>
+            <p>📞 {safeText(event.organizerPhone)||"—"}</p>
+            <p>✉️ {safeText(event.organizerEmail)||"—"}</p>
+            <p>👥 {safeText(event.guestCount)||"0"} invité(s)</p>
+          </div>
+
+          <div className="card">
+            <h3>🖥️ Matériel</h3>
+            <p><strong>Borne :</strong> {boothNames.join(" + ")||"Aucune"}</p>
+            <p><strong>Impressions :</strong> {printLabel}</p>
+            {extraMaterials.length===0
+              ? <p className="muted">Aucun matériel complémentaire.</p>
+              : extraMaterials.map((name,i)=><p key={`${name}-${i}`}>• {name}</p>)}
+          </div>
+
+          <div className="card">
+            <h3>🎨 Cadre photo</h3>
+            <p><strong>{frameLabel}</strong></p>
+            <p>Préparation : {frameStatus}</p>
+          </div>
+
+          <div className="card">
+            <h3>💶 Tarification</h3>
+            <p>Total : <strong>{moneySafe(event.totalPrice)}</strong></p>
+            <p>Acompte : {moneySafe(event.deposit)}</p>
+            <p>Reste : <strong>{moneySafe(event.balance)}</strong></p>
+            <p>Cadre : {frameLabel}</p>
+          </div>
+
+          <div className="card">
+            <h3>📑 Suivi</h3>
+            <p>{contractSigned?"🟢 Contrat signé":"🟠 Contrat non signé"}</p>
+            <p>{event.googleCalendarEventId?"📅 Agenda ✓":"📅 Agenda —"}</p>
+            <p>{event.googleDriveFolderId?"☁️ Drive ✓":"☁️ Drive —"}</p>
+          </div>
+        </div>
+
+        {safeText(event.notes) && (
+          <div className="card" style={{marginTop:12}}>
+            <h3>📝 Notes</h3>
+            <p style={{whiteSpace:"pre-wrap"}}>{safeText(event.notes)}</p>
+          </div>
+        )}
+
+        <div className="event-actions" style={{marginTop:18}}>
+          <button type="button" onClick={onClose}>← Retour aux événements</button>
+          <button type="button" className="primary" onClick={()=>onEdit(event)}>✏️ Modifier</button>
+          <button
+            type="button"
+            onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}
+          >
+            📄 Voir le contrat
+          </button>
+          <button type="button" onClick={()=>onDocuments(event)}>📁 Documents</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
@@ -4883,7 +5081,7 @@ function Dashboard({onLogout}) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.16</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.18</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
@@ -5049,19 +5247,21 @@ function Dashboard({onLogout}) {
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
-    {viewEvent&&<div className="modal-backdrop"><div className="event-modal" style={{maxWidth:980}}>
-      <div className="modal-head"><div><div className="eyebrow">CONSULTATION ÉVÉNEMENT</div><h2>{viewEvent.name}</h2></div><button className="icon-btn" onClick={()=>setViewEvent(null)}>×</button></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
-        <div className="card"><h3>📅 Prestation</h3><p><strong>{viewEvent.type}</strong></p><p>{viewEvent.date?new Date(viewEvent.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"Date non renseignée"}{viewEvent.time?` · Installation ${viewEvent.time}`:""}</p><p>📍 {viewEvent.address||"Adresse non renseignée"}</p>{viewEvent.pickupDate&&<p>↩️ Reprise {new Date(viewEvent.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{viewEvent.pickupTime?` à ${viewEvent.pickupTime}`:""}</p>}</div>
-        <div className="card"><h3>👤 Client / organisateur</h3><p><strong>{viewEvent.organizerName||"Non renseigné"}</strong></p><p>📞 {viewEvent.organizerPhone||"—"}</p><p>✉️ {viewEvent.organizerEmail||"—"}</p><p>👥 {viewEvent.guestCount||0} invité(s)</p></div>
-        <div className="card"><h3>🖥️ Matériel</h3><p><strong>Borne :</strong> {eventBooths(viewEvent).join(" + ")||"Aucune"}</p><p><strong>Impressions :</strong> {eventPrintChoice(viewEvent)}</p>{eventExtraMaterials(viewEvent).map((m,i)=><p key={i}>• {materialShortLabel(m)}</p>)}</div>
-        <div className="card"><h3>🎨 Cadre photo</h3><p><strong>{framePricingLabel(viewEvent)}</strong></p><p>Préparation : {viewEvent.frameSource==="NONE"?"Non requis":viewEvent.frameStatus==="DONE"?"🟢 Terminé":viewEvent.frameStatus==="IN_PROGRESS"?"🟡 En cours":"🔴 À faire"}</p></div>
-        <div className="card"><h3>💶 Tarification</h3><p>Total : <strong>{Number(viewEvent.totalPrice||0).toFixed(2).replace(".",",")} €</strong></p><p>Acompte : {Number(viewEvent.deposit||0).toFixed(2).replace(".",",")} €</p><p>Reste : <strong>{Number(viewEvent.balance||0).toFixed(2).replace(".",",")} €</strong></p><p>Cadre : {framePricingLabel(viewEvent)}</p></div>
-        <div className="card"><h3>📑 Suivi</h3><p>{viewEvent.contractStatus==="SIGNED"?"🟢 Contrat signé":"🟠 Contrat non signé"}</p><p>{viewEvent.googleCalendarEventId?"📅 Agenda ✓":"📅 Agenda —"}</p><p>{viewEvent.googleDriveFolderId?"☁️ Drive ✓":"☁️ Drive —"}</p></div>
-      </div>
-      {viewEvent.notes&&<div className="card" style={{marginTop:12}}><h3>📝 Notes</h3><p style={{whiteSpace:"pre-wrap"}}>{viewEvent.notes}</p></div>}
-      <div className="event-actions" style={{marginTop:18}}><button onClick={()=>setViewEvent(null)}>← Retour aux événements</button><button className="primary" onClick={()=>{const e=viewEvent;setViewEvent(null);setFormEvent(e);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>window.open(`/api/events/${viewEvent.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button><button onClick={()=>{setDocumentEvent(viewEvent);setViewEvent(null)}}>📁 Documents</button></div>
-    </div></div>}
+    {viewEvent&&(
+      <EventConsultationModal
+        event={viewEvent}
+        onClose={()=>setViewEvent(null)}
+        onEdit={event=>{
+          setViewEvent(null);
+          setFormEvent(event);
+          setShowForm(true);
+        }}
+        onDocuments={event=>{
+          setDocumentEvent(event);
+          setViewEvent(null);
+        }}
+      />
+    )}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
     {documentEvent&&<DocumentManager event={documentEvent} onClose={()=>setDocumentEvent(null)}/>}
   </div>;
