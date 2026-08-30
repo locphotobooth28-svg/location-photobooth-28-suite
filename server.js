@@ -1919,6 +1919,13 @@ function contractHash(event) {
         ? String(event.customPrintPrice)
         : null,
 
+    frameSource: event.frameSource || "NONE",
+    frameStatus: event.frameStatus || "NOT_REQUIRED",
+    framePricing: event.preparation?.framePricing || null,
+    framePrice: event.preparation?.framePrice != null
+      ? String(event.preparation.framePrice)
+      : null,
+
     client: event.client
       ? {
           firstName: event.client.firstName || null,
