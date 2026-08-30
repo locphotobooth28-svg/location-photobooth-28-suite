@@ -4643,7 +4643,7 @@ function AdminDocuments({events,onOpen}){
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [events,setEvents]=useState([]);
-  const [stats,setStats]=useState({events:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
+  const [stats,setStats]=useState({events:0,inProgress:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
@@ -4656,10 +4656,19 @@ function Dashboard({onLogout}) {
       fetch("/api/dashboard").then(r=>r.json())
     ]);
     setEvents(e.events||[]);
-    setStats(d.stats||{events:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
+    setStats(d.stats||{events:0,inProgress:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   }
 
   useEffect(()=>{load()},[]);
+
+  async function startEvent(event){
+    if(!confirm(`Démarrer maintenant la prestation "${event.name}" ?\n\nElle restera dans « En cours » jusqu'à ce que tu la marques terminée.`)) return;
+    const r=await fetch(`/api/events/${event.id}/start`,{method:"PATCH"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) return alert(d.message||"Impossible de démarrer la prestation.");
+    setEventTab("inProgress");
+    await load();
+  }
 
   async function completeEvent(event){
     if(!confirm(`Confirmer que la prestation "${event.name}" est terminée ?`)) return;
@@ -4741,10 +4750,10 @@ function Dashboard({onLogout}) {
 
   const eventTabCounts=useMemo(()=>{
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
+    const isInProgress=e=>e?.status==="IN_PROGRESS"&&!isCompleted(e);
     return {
-      // Une prestation reste dans « À venir » tant que Johan ne la marque pas terminée.
-      // La date ne fait plus disparaître automatiquement un événement.
-      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)).length,
+      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)&&!isInProgress(e)).length,
+      inProgress:events.filter(e=>!e.archived&&isInProgress(e)).length,
       completed:events.filter(e=>!e.archived&&isCompleted(e)).length,
       archived:events.filter(e=>e.archived).length
     };
@@ -4753,18 +4762,20 @@ function Dashboard({onLogout}) {
   const filtered=useMemo(()=>{
     const q=search.trim().toLowerCase();
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
+    const isInProgress=e=>e?.status==="IN_PROGRESS"&&!isCompleted(e);
 
     return events
       .filter(e=>{
+        if(eventTab==="inProgress")return !e.archived&&isInProgress(e);
         if(eventTab==="completed")return !e.archived&&isCompleted(e);
         if(eventTab==="archived")return !!e.archived;
-        return !e.archived&&!isCompleted(e);
+        return !e.archived&&!isCompleted(e)&&!isInProgress(e);
       })
       .filter(e=>(`${e.name||""} ${e.organizerName||""} ${e.type||""}`).toLowerCase().includes(q))
       .sort((a,b)=>{
         const da=String(a.date||"");
         const db=String(b.date||"");
-        if(eventTab==="upcoming")return da.localeCompare(db);
+        if(eventTab==="upcoming"||eventTab==="inProgress")return da.localeCompare(db);
         return db.localeCompare(da);
       });
   },[events,search,eventTab]);
@@ -4821,7 +4832,7 @@ function Dashboard({onLogout}) {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.12</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.16</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
@@ -4848,6 +4859,11 @@ function Dashboard({onLogout}) {
       {view==="dashboard" ? <>
         <section className="stats-grid">
           <article className="stat-card"><span>Événements</span><strong>{stats.events}</strong></article>
+          <article className="stat-card" style={{border:"1px solid rgba(245,158,11,.45)",background:"linear-gradient(135deg,rgba(120,72,18,.32),rgba(69,44,16,.24))"}}>
+            <span>🟠 Événements en cours</span>
+            <strong>{stats.inProgress||0}</strong>
+            <small className="muted">Jusqu'à « Prestation terminée »</small>
+          </article>
           <article className="stat-card">
             <span>Événements à venir</span>
             <strong>{stats.upcoming}</strong>
@@ -4867,6 +4883,10 @@ function Dashboard({onLogout}) {
             style={{border:`1px solid ${eventTab==="upcoming"?"#f4c542":"rgba(244,197,66,.55)"}`,background:eventTab==="upcoming"?"#d4ad2d":"rgba(244,197,66,.10)",color:eventTab==="upcoming"?"#111827":"#f8e6a0",fontWeight:900,boxShadow:eventTab==="upcoming"?"0 6px 18px rgba(212,173,45,.18)":"none"}}
           >📅 À venir <strong style={{marginLeft:6}}>{eventTabCounts.upcoming}</strong></button>
           <button
+            onClick={()=>setEventTab("inProgress")}
+            style={{border:`1px solid ${eventTab==="inProgress"?"#f59e0b":"rgba(245,158,11,.55)"}`,background:eventTab==="inProgress"?"#92400e":"rgba(146,64,14,.20)",color:eventTab==="inProgress"?"#fff7ed":"#fdba74",fontWeight:900,boxShadow:eventTab==="inProgress"?"0 6px 18px rgba(245,158,11,.18)":"none"}}
+          >🟠 En cours <strong style={{marginLeft:6}}>{eventTabCounts.inProgress}</strong></button>
+          <button
             onClick={()=>setEventTab("completed")}
             style={{border:`1px solid ${eventTab==="completed"?"#22c55e":"rgba(34,197,94,.55)"}`,background:eventTab==="completed"?"#166534":"rgba(34,197,94,.10)",color:eventTab==="completed"?"#ffffff":"#86efac",fontWeight:900,boxShadow:eventTab==="completed"?"0 6px 18px rgba(34,197,94,.18)":"none"}}
           >✅ Prestations terminées <strong style={{marginLeft:6}}>{eventTabCounts.completed}</strong></button>
@@ -4877,13 +4897,14 @@ function Dashboard({onLogout}) {
         </div>
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
-          {filtered.length===0 && <div className="empty-state"><span>{eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":"Aucun dossier dans cet onglet."}</p></div>}
-          {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id} style={{gridTemplateColumns:"250px minmax(0,1fr)"}}>
+          {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
+          {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id} style={{gridTemplateColumns:"250px minmax(0,1fr)",...(event.status==="IN_PROGRESS"?{background:"linear-gradient(135deg,rgba(120,72,18,.30),rgba(69,44,16,.24))",border:"1px solid rgba(245,158,11,.50)",boxShadow:"0 10px 28px rgba(120,72,18,.20)"}:{})}}>
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <strong>{event.name}</strong>
                 {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
+                {event.status==="IN_PROGRESS"&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:12,fontWeight:900}}>🟠 ÉVÉNEMENT EN COURS</span>}
                 {event.status==="COMPLETED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>✅ Prestation terminée</span>}
                 <span className={`booking-status status-${(event.bookingStatus||"CONFIRMED").toLowerCase()}`}>
                   {event.bookingStatus==="OPTION"?"🟠 Option":event.bookingStatus==="QUOTE_SENT"?"📤 Devis envoyé":event.bookingStatus==="QUOTE_DRAFT"?"📝 Devis":event.bookingStatus==="CONFIRMED"?"🟢 Confirmé":event.bookingStatus==="COMPLETED"?"🔵 Terminé":event.bookingStatus==="DECLINED"?"⚪ Refusé":event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
@@ -4960,7 +4981,8 @@ function Dashboard({onLogout}) {
                     }catch(err){console.error(err);alert("Erreur lors de la création du lien de signature.")}
                   }}>✍️ Faire signer</button>
                 )}
-                {event.status!=="COMPLETED"&&<button onClick={()=>completeEvent(event)}>✅ Prestation terminée</button>}
+                {event.status!=="COMPLETED"&&event.status!=="IN_PROGRESS"&&<button onClick={()=>startEvent(event)} style={{border:"1px solid #f59e0b",background:"rgba(146,64,14,.28)",color:"#fdba74",fontWeight:900}}>▶️ Début événement</button>}
+                {event.status==="IN_PROGRESS"&&<button onClick={()=>completeEvent(event)} style={{border:"1px solid #22c55e",background:"rgba(22,101,52,.24)",color:"#86efac",fontWeight:900}}>✅ Prestation terminée</button>}
                 <button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button>
                 <button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button>
                 <button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>
