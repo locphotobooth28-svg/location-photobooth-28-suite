@@ -534,8 +534,10 @@ async function generateContractPdf(event){
   drawText(BUSINESS.address1,{size:9,gapAfter:1});
   drawText(BUSINESS.address2,{size:9,gapAfter:1});
   drawText(`Tél : ${BUSINESS.phone}`,{size:9,gapAfter:1});
-  drawText(`E-mail : ${BUSINESS.email}`,{size:9,gapAfter:4});
+  drawText(`E-mail : ${BUSINESS.email}`,{size:9,gapAfter:10});
 
+  // En-tête du contrat : titre encadré par deux filets dorés.
+  // Cela évite l'effet de trait collé au texte observé sur l'ancien modèle.
   separator();
 
   drawText(
@@ -543,9 +545,11 @@ async function generateContractPdf(event){
     {
       size:20,
       fontUsed:bold,
-      gapAfter:4
+      gapAfter:8
     }
   );
+
+  separator();
 
   drawText(
     event.name || "Prestation Location Photobooth 28",
