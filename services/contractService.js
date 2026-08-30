@@ -854,21 +854,43 @@ async function generateContractPdf(event){
     "Les personnes concernées peuvent demander l'accès, la rectification ou, lorsque les conditions légales sont réunies, l'effacement de leurs données en contactant Location Photobooth 28 à l'adresse e-mail indiquée en tête du contrat. Les durées de conservation applicables tiennent compte de la durée nécessaire au service ainsi que des obligations légales de conservation."
   );
 
-  section(13,"Médiation de la consommation et litiges");
+  section(13,"Droit à l'image et utilisation des photographies");
+
+  drawText(
+    "Dans le cadre d'un événement privé ou professionnel dont l'accès est réservé aux participants, les photographies réalisées par le photobooth sont destinées à l'usage de l'organisateur et des participants. Location Photobooth 28 assure la fourniture du service, le traitement technique et, le cas échéant, la mise à disposition temporaire des photographies dans la galerie associée à l'événement."
+  );
+
+  drawText(
+    "Sauf autorisation spécifique des personnes concernées, Location Photobooth 28 n'utilise pas ces photographies à des fins publicitaires, commerciales ou de communication sur ses réseaux sociaux, son site Internet ou tout autre support."
+  );
+
+  drawText(
+    "Lorsque l'événement prévoit une utilisation ou une diffusion publique des photographies, notamment sur les réseaux sociaux, un site Internet ou des supports de communication de l'organisateur ou de Location Photobooth 28, le consentement des personnes concernées pourra être recueilli directement par l'intermédiaire du photobooth avant la prise de vue. Ce consentement précise les utilisations autorisées et leur destination."
+  );
+
+  drawText(
+    "L'autorisation donnée à l'organisateur et l'autorisation donnée à Location Photobooth 28 sont distinctes. Une personne peut accepter la prise de vue sans autoriser l'utilisation de son image à des fins de communication ou de promotion. Pour les personnes mineures, toute utilisation de leur image nécessitant une autorisation est soumise aux autorisations requises de leurs représentants légaux."
+  );
+
+  drawText(
+    "L'organisateur demeure responsable des utilisations et diffusions des photographies qu'il effectue après leur remise ou leur téléchargement. Les présentes dispositions ne portent pas atteinte aux droits des personnes photographiées concernant leur image et leurs données personnelles."
+  );
+
+  section(14,"Médiation de la consommation et litiges");
 
   drawText(
     "En cas de réclamation, le locataire est invité à contacter en priorité Location Photobooth 28 afin de rechercher une solution amiable."
   );
 
   drawText(
-    "Lorsqu'il agit en qualité de consommateur, le locataire peut, après réclamation écrite préalable restée sans solution satisfaisante, recourir gratuitement au médiateur de la consommation dont relève Location Photobooth 28. Les coordonnées du médiateur désigné par le professionnel doivent être communiquées au consommateur sur les supports contractuels et commerciaux applicables."
+    "Lorsqu'il agit en qualité de consommateur, le locataire peut, après une réclamation écrite préalable restée sans solution satisfaisante, recourir gratuitement au médiateur de la consommation dont relève Location Photobooth 28. Les coordonnées et le site Internet du médiateur désigné seront indiqués dans le présent contrat dès confirmation de l'organisme compétent et de l'adhésion de Location Photobooth 28 à son dispositif."
   );
 
   drawText(
     "À défaut d'accord amiable ou de médiation, les juridictions compétentes sont déterminées conformément aux règles légales applicables."
   );
 
-  section(14,"Acceptation");
+  section(15,"Acceptation");
 
   drawText(
     "Le locataire déclare avoir pris connaissance du présent contrat, des caractéristiques essentielles de la prestation, de son prix et des conditions applicables, et accepter l'ensemble de ses stipulations."
