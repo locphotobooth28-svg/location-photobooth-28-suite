@@ -687,6 +687,21 @@ async function generateContractPdf(event){
     );
   }
 
+  const specialNeed = event.preparation && typeof event.preparation === "object"
+    ? event.preparation
+    : {};
+  const specialNeedDescription = String(specialNeed.specialNeedDescription || "").trim();
+  const specialNeedPriceRaw = specialNeed.specialNeedPrice;
+  const specialNeedHasPrice = specialNeedPriceRaw !== undefined && specialNeedPriceRaw !== null && specialNeedPriceRaw !== "";
+  const specialNeedPrice = Math.max(Number(specialNeedPriceRaw || 0), 0);
+
+  if(specialNeedDescription){
+    drawText(
+      `Besoin particulier : ${specialNeedDescription}${specialNeedHasPrice ? ` — ${specialNeedPrice > 0 ? money(specialNeedPrice) : "Offert"}` : ""}.`,
+      { fontUsed:bold, gapAfter:5 }
+    );
+  }
+
   drawText(
     `Montant total de la prestation : ${money(event.totalPrice)}.`,
     {
