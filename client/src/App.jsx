@@ -4740,11 +4740,11 @@ function Dashboard({onLogout}) {
   const [eventTab,setEventTab]=useState("upcoming");
 
   const eventTabCounts=useMemo(()=>{
-    const today=new Date();
-    const todayIso=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
     return {
-      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)&&String(e.date||"")>=todayIso).length,
+      // Une prestation reste dans « À venir » tant que Johan ne la marque pas terminée.
+      // La date ne fait plus disparaître automatiquement un événement.
+      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)).length,
       completed:events.filter(e=>!e.archived&&isCompleted(e)).length,
       archived:events.filter(e=>e.archived).length
     };
@@ -4752,15 +4752,13 @@ function Dashboard({onLogout}) {
 
   const filtered=useMemo(()=>{
     const q=search.trim().toLowerCase();
-    const today=new Date();
-    const todayIso=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
 
     return events
       .filter(e=>{
         if(eventTab==="completed")return !e.archived&&isCompleted(e);
         if(eventTab==="archived")return !!e.archived;
-        return !e.archived&&!isCompleted(e)&&String(e.date||"")>=todayIso;
+        return !e.archived&&!isCompleted(e);
       })
       .filter(e=>(`${e.name||""} ${e.organizerName||""} ${e.type||""}`).toLowerCase().includes(q))
       .sort((a,b)=>{
