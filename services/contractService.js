@@ -423,14 +423,14 @@ async function generateContractPdf(event){
   }
 
   function drawText(text,{
-    size=10,
+    size=9.5,
     fontUsed=font,
     indent=0,
-    gapAfter=4,
+    gapAfter=5,
     lineHeight=null
   }={}){
     const actualLineHeight =
-      lineHeight || size + 4;
+      lineHeight || Math.round(size * 1.28 * 10) / 10;
 
     const maxWidth =
       contentWidth - indent;
@@ -462,25 +462,28 @@ async function generateContractPdf(event){
     y -= gapAfter;
   }
 
+  // Hiérarchie typographique harmonisée : 4 niveaux seulement.
   function title(text){
-    ensureSpace(35);
-
+    ensureSpace(38);
+    y -= 5;
     drawText(text,{
-      size:15,
+      size:14,
       fontUsed:bold,
-      gapAfter:8
+      gapAfter:10,
+      lineHeight:17
     });
   }
 
   function section(number,text){
-    ensureSpace(30);
-
+    ensureSpace(34);
+    y -= 7;
     drawText(
       `${number}. ${text}`,
       {
-        size:12,
+        size:11.5,
         fontUsed:bold,
-        gapAfter:7
+        gapAfter:8,
+        lineHeight:14
       }
     );
   }
@@ -489,9 +492,10 @@ async function generateContractPdf(event){
     drawText(
       `• ${text}`,
       {
-        size:10,
+        size:9.5,
         indent:10,
-        gapAfter:2
+        gapAfter:3,
+        lineHeight:12
       }
     );
   }
@@ -531,33 +535,35 @@ async function generateContractPdf(event){
 
   y -= 24;
 
-  drawText(BUSINESS.address1,{size:9,gapAfter:1});
-  drawText(BUSINESS.address2,{size:9,gapAfter:1});
-  drawText(`Tél : ${BUSINESS.phone}`,{size:9,gapAfter:1});
-  drawText(`E-mail : ${BUSINESS.email}`,{size:9,gapAfter:10});
+  drawText(BUSINESS.address1,{size:8.5,gapAfter:0,lineHeight:11});
+  drawText(BUSINESS.address2,{size:8.5,gapAfter:0,lineHeight:11});
+  drawText(`Tél : ${BUSINESS.phone}`,{size:8.5,gapAfter:0,lineHeight:11});
+  drawText(`E-mail : ${BUSINESS.email}`,{size:8.5,gapAfter:12,lineHeight:11});
 
   // En-tête du contrat : titre encadré par deux filets dorés.
   // Cela évite l'effet de trait collé au texte observé sur l'ancien modèle.
   // Espace renforcé sous le filet supérieur : le trait ne touche plus le titre.
-  separator(28);
+  separator(20);
 
   drawText(
     "CONTRAT DE LOCATION",
     {
-      size:20,
+      size:19,
       fontUsed:bold,
-      gapAfter:8
+      gapAfter:11,
+      lineHeight:22
     }
   );
 
-  separator();
+  separator(16);
 
   drawText(
     event.name || "Prestation Location Photobooth 28",
     {
-      size:12,
+      size:11.5,
       fontUsed:bold,
-      gapAfter:14
+      gapAfter:16,
+      lineHeight:14
     }
   );
 
@@ -905,9 +911,9 @@ async function generateContractPdf(event){
   ensureSpace(250);
   y -= 8;
   drawText("FORMULAIRE TYPE DE RÉTRACTATION",{
-    size:13,
+    size:12,
     fontUsed:bold,
-    gapAfter:7
+    gapAfter:9
   });
   drawText(
     "À utiliser uniquement si le locataire bénéficie légalement d'un droit de rétractation et souhaite l'exercer.",
