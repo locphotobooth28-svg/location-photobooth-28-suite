@@ -1159,23 +1159,34 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
   const today = new Date(now);
   today.setHours(0,0,0,0);
 
-  // Tableau de bord LP28 : uniquement les prestations restant à faire
-  // entre aujourd'hui et dimanche 23:59. Le lundi, la fenêtre repart
-  // automatiquement du lundi courant jusqu'au dimanche suivant.
+  // LP28 V8.5.16 : le statut EN COURS est manuel.
+  // Les événements à venir restent limités à aujourd'hui -> dimanche 23:59.
+  // Un événement démarré reste dans « En cours » jusqu'à l'action
+  // « Prestation terminée », même si la semaine change.
   const sundayEnd = new Date(today);
   const daysUntilSunday = (7 - sundayEnd.getDay()) % 7;
   sundayEnd.setDate(sundayEnd.getDate() + daysUntilSunday);
   sundayEnd.setHours(23,59,59,999);
 
-  const upcomingWhere = {
+  const activeBookingWhere = {
     archived: false,
-    eventDate: { gte: today, lte: sundayEnd },
-    bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] },
-    status: { not: "COMPLETED" }
+    bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] }
   };
 
-  const [events, upcoming, unsignedUpcomingContracts, activeGalleries, signedContracts, consumables] = await Promise.all([
+  const inProgressWhere = {
+    ...activeBookingWhere,
+    status: "IN_PROGRESS"
+  };
+
+  const upcomingWhere = {
+    ...activeBookingWhere,
+    eventDate: { gte: today, lte: sundayEnd },
+    status: { notIn: ["COMPLETED", "IN_PROGRESS"] }
+  };
+
+  const [events, inProgress, upcoming, unsignedUpcomingContracts, activeGalleries, signedContracts, consumables] = await Promise.all([
     prisma.event.count({ where: { archived: false } }),
+    prisma.event.count({ where: inProgressWhere }),
     prisma.event.count({ where: upcomingWhere }),
     prisma.event.count({
       where: {
@@ -1202,6 +1213,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
   res.json({
     stats: {
       events,
+      inProgress,
       upcoming,
       unsignedUpcomingContracts,
       activeGalleries,
@@ -1718,6 +1730,55 @@ googleDriveFolderId: e.googleDriveFolderId,
     }))
   });
 });
+app.patch("/api/events/:id/start", adminOnly, async (req,res)=>{
+  try{
+    const event = await prisma.event.findUnique({
+      where:{id:req.params.id}
+    });
+
+    if(!event){
+      return res.status(404).json({
+        ok:false,
+        message:"Événement introuvable."
+      });
+    }
+
+    if(event.archived){
+      return res.status(409).json({
+        ok:false,
+        message:"Impossible de démarrer un événement archivé."
+      });
+    }
+
+    if(["DECLINED","CANCELLED","COMPLETED"].includes(event.bookingStatus) || event.status==="COMPLETED"){
+      return res.status(409).json({
+        ok:false,
+        message:"Cet événement ne peut pas être démarré dans son statut actuel."
+      });
+    }
+
+    const updated = await prisma.event.update({
+      where:{id:event.id},
+      data:{status:"IN_PROGRESS"}
+    });
+
+    res.json({
+      ok:true,
+      id:updated.id,
+      status:updated.status,
+      bookingStatus:updated.bookingStatus
+    });
+
+  }catch(err){
+    console.error("Début de prestation :",err);
+
+    res.status(500).json({
+      ok:false,
+      message:"Impossible de démarrer la prestation."
+    });
+  }
+});
+
 app.patch("/api/events/:id/complete", adminOnly, async (req,res)=>{
   try{
     const event = await prisma.event.findUnique({
