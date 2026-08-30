@@ -534,7 +534,7 @@ async function generateContractPdf(event){
   drawText(BUSINESS.address1,{size:9,gapAfter:1});
   drawText(BUSINESS.address2,{size:9,gapAfter:1});
   drawText(`Tél : ${BUSINESS.phone}`,{size:9,gapAfter:1});
-  drawText(`E-mail : ${BUSINESS.email}`,{size:9,gapAfter:10});
+  drawText(`E-mail : ${BUSINESS.email}`,{size:9,gapAfter:4});
 
   separator();
 
@@ -798,20 +798,114 @@ async function generateContractPdf(event){
     "Le loueur reste responsable en cas de défaut technique non imputable au locataire."
   );
 
-  section(8,"Litiges");
+  section(9,"Conclusion du contrat et droit de rétractation");
 
   drawText(
-    "En cas de litige, les parties s'engagent à rechercher en priorité une solution amiable."
+    "La réservation devient ferme à la première des dates suivantes : signature ou acceptation du devis, ou paiement de l'acompte lorsque celui-ci vaut acceptation du devis. Cette date constitue la date de conclusion du contrat."
   );
 
   drawText(
-    "À défaut d'accord amiable, les juridictions compétentes seront déterminées conformément aux règles légales applicables."
+    "Lorsqu'il agit en qualité de consommateur et que le contrat est conclu à distance ou hors établissement, le locataire dispose, sauf exception légale, d'un délai de quatorze (14) jours à compter de la conclusion du contrat pour exercer son droit de rétractation, sans avoir à motiver sa décision."
   );
 
-  section(9,"Acceptation");
+  drawText(
+    "La rétractation peut être exercée au moyen d'une déclaration dénuée d'ambiguïté adressée à Location Photobooth 28, notamment par e-mail à l'adresse indiquée en tête du présent contrat. Le consommateur peut également utiliser le formulaire type de rétractation figurant à la fin du contrat."
+  );
 
   drawText(
-    "Le locataire déclare avoir pris connaissance du présent contrat et accepter sans réserve l'ensemble de ses conditions."
+    "Lorsque le consommateur demande que l'exécution de la prestation commence avant l'expiration du délai de rétractation, cette exécution anticipée nécessite sa demande expresse. S'il se rétracte après le commencement de l'exécution demandé expressément, il reste redevable du montant correspondant aux prestations effectivement fournies jusqu'à la communication de sa décision, calculé proportionnellement au prix convenu."
+  );
+
+  drawText(
+    "Lorsque la prestation a été entièrement exécutée avant la fin du délai de rétractation, après demande expresse du consommateur et reconnaissance de la perte de son droit de rétractation après exécution complète, le droit de rétractation ne peut plus être exercé."
+  );
+
+  section(10,"Annulation, report et force majeure");
+
+  drawText(
+    "Toute demande d'annulation ou de report doit être adressée au loueur par écrit. Les sommes éventuellement dues ou remboursables sont déterminées selon le devis accepté, les prestations déjà exécutées, les dépenses engagées et les dispositions légales applicables."
+  );
+
+  drawText(
+    "En cas de force majeure au sens de l'article 1218 du Code civil empêchant temporairement ou définitivement l'exécution de la prestation, les parties recherchent prioritairement une solution de report. Lorsque l'empêchement est définitif, les conséquences sont déterminées conformément aux dispositions légales applicables."
+  );
+
+  section(11,"Panne, alimentation et conditions techniques");
+
+  drawText(
+    "Le loueur s'engage à fournir un matériel en état de fonctionnement et à mettre en œuvre les moyens raisonnables permettant l'exécution de la prestation. En cas de panne technique non imputable au locataire, le loueur intervient dans la mesure du possible afin de rétablir le service ou de proposer une solution de remplacement."
+  );
+
+  drawText(
+    "Le locataire doit mettre à disposition une alimentation électrique conforme, stable et accessible ainsi qu'un emplacement adapté, sécurisé et protégé des intempéries. Une connexion Internet peut être nécessaire pour certaines fonctions en ligne ; son indisponibilité n'empêche pas nécessairement le fonctionnement local de la borne lorsque celui-ci est possible."
+  );
+
+  drawText(
+    "Aucune limitation de responsabilité prévue au présent contrat ne saurait priver le consommateur des droits et garanties impératifs prévus par la loi."
+  );
+
+  section(12,"Données personnelles et galerie photo");
+
+  drawText(
+    "Les données personnelles nécessaires à la réservation, à l'exécution de la prestation, à la facturation et à la gestion du contrat sont traitées par Location Photobooth 28 pour ces finalités. Les photographies et médias éventuellement déposés ou générés dans la galerie de l'événement sont utilisés pour fournir le service convenu et sont accessibles selon les modalités communiquées pour l'événement."
+  );
+
+  drawText(
+    "Les personnes concernées peuvent demander l'accès, la rectification ou, lorsque les conditions légales sont réunies, l'effacement de leurs données en contactant Location Photobooth 28 à l'adresse e-mail indiquée en tête du contrat. Les durées de conservation applicables tiennent compte de la durée nécessaire au service ainsi que des obligations légales de conservation."
+  );
+
+  section(13,"Médiation de la consommation et litiges");
+
+  drawText(
+    "En cas de réclamation, le locataire est invité à contacter en priorité Location Photobooth 28 afin de rechercher une solution amiable."
+  );
+
+  drawText(
+    "Lorsqu'il agit en qualité de consommateur, le locataire peut, après réclamation écrite préalable restée sans solution satisfaisante, recourir gratuitement au médiateur de la consommation dont relève Location Photobooth 28. Les coordonnées du médiateur désigné par le professionnel doivent être communiquées au consommateur sur les supports contractuels et commerciaux applicables."
+  );
+
+  drawText(
+    "À défaut d'accord amiable ou de médiation, les juridictions compétentes sont déterminées conformément aux règles légales applicables."
+  );
+
+  section(14,"Acceptation");
+
+  drawText(
+    "Le locataire déclare avoir pris connaissance du présent contrat, des caractéristiques essentielles de la prestation, de son prix et des conditions applicables, et accepter l'ensemble de ses stipulations."
+  );
+
+  // Formulaire de rétractation consommateur
+  ensureSpace(250);
+  y -= 8;
+  drawText("FORMULAIRE TYPE DE RÉTRACTATION",{
+    size:13,
+    fontUsed:bold,
+    gapAfter:7
+  });
+  drawText(
+    "À utiliser uniquement si le locataire bénéficie légalement d'un droit de rétractation et souhaite l'exercer.",
+    {size:9,gapAfter:7}
+  );
+  drawText(
+    "À l'attention de Location Photobooth 28, 20 Rue des Catalpas, 28630 Thivars — E-mail : loc.photobooth.28@gmail.com"
+  );
+  drawText(
+    "Je vous notifie par la présente ma rétractation du contrat portant sur la prestation suivante : ______________________________"
+  );
+  drawText(
+    "Devis / événement : ______________________________"
+  );
+  drawText(
+    "Contrat conclu le : ____ / ____ / ______"
+  );
+  drawText(
+    "Nom du consommateur : ______________________________"
+  );
+  drawText(
+    "Adresse du consommateur : ______________________________"
+  );
+  drawText(
+    "Date : ____ / ____ / ______     Signature (uniquement en cas d'envoi du formulaire sur papier) : __________________"
   );
 
   y -= 12;
@@ -1006,6 +1100,24 @@ async function generateContractPdf(event){
   drawText(BUSINESS.address1,{size:9,gapAfter:1});
   drawText(BUSINESS.address2,{size:9,gapAfter:1});
   drawText(BUSINESS.email,{size:9,gapAfter:1});
+
+  // Numérotation automatique de chaque page
+  const pages = pdfDoc.getPages();
+  const totalPages = pages.length;
+
+  pages.forEach((p,index)=>{
+    const label = `Page ${index+1} / ${totalPages}`;
+    const size = 8;
+    const width = font.widthOfTextAtSize(label,size);
+
+    p.drawText(label,{
+      x:pageWidth - margin - width,
+      y:20,
+      size,
+      font,
+      color:rgb(0.35,0.35,0.35)
+    });
+  });
 
   const bytes = await pdfDoc.save();
 
