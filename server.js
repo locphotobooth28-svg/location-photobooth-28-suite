@@ -4052,6 +4052,9 @@ app.get("/api/admin/galleries", adminOnly, async (req, res) => {
         name: e.name,
         type: e.type,
         date: e.eventDate.toISOString().slice(0, 10),
+        status: e.status || null,
+        bookingStatus: e.bookingStatus || null,
+        archived: Boolean(e.archived),
         portalExpiresAt: e.portalExpiresAt
           ? e.portalExpiresAt.toISOString().slice(0, 10)
           : null,
