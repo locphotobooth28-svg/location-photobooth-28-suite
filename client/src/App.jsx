@@ -241,6 +241,19 @@ const getTravelFee = (preparation) => {
 const withTravelFee = (basePrice, preparation) =>
   Number(basePrice || 0) + getTravelFee(preparation);
 
+const getFrameFee = (preparation) => {
+  const p = preparation && typeof preparation === "object" ? preparation : {};
+  return Math.max(Number(p.framePrice || 0), 0);
+};
+
+const framePricingLabel = (event) => {
+  if(!event || event.frameSource === "NONE") return "Pas de cadre";
+  if(event.frameSource === "CLIENT") return "Cadre fourni par le client · Gratuit";
+  const p=event.preparation||{};
+  if(p.framePricing === "OFFERED") return "Cadre LP28 · Offert";
+  return `Cadre LP28 · ${Number(p.framePrice ?? 25).toFixed(2).replace(".",",")} €`;
+};
+
 const toggleMaterial = (name) => {
   setForm(f => {
     const alreadySelected = f.materials.includes(name);
@@ -924,23 +937,38 @@ Johan — Location Photobooth 28`;
 )}
 
       <h3>🎨 Cadre photo</h3>
-      <div className="form-grid">
-        <div>
-          <label>Origine</label>
-          <div className="choice-row">
-            <button type="button" className={form.frameSource==="NONE"?"selected":""} onClick={()=>{set("frameSource","NONE");set("frameStatus","NOT_REQUIRED")}}>Pas de cadre</button>
-            <button type="button" className={form.frameSource==="CLIENT"?"selected":""} onClick={()=>{set("frameSource","CLIENT"); if(form.frameStatus==="NOT_REQUIRED") set("frameStatus","TO_DO")}}>Client</button>
-            <button type="button" className={form.frameSource==="LP28"?"selected":""} onClick={()=>{set("frameSource","LP28"); if(form.frameStatus==="NOT_REQUIRED") set("frameStatus","TO_DO")}}>LP28</button>
+      <div className="card" style={{marginBottom:16}}>
+        <div className="form-grid">
+          <div>
+            <label>Origine</label>
+            <div className="choice-row">
+              <button type="button" className={form.frameSource==="NONE"?"selected":""} onClick={()=>setForm(f=>{const old=getFrameFee(f.preparation);const prep={...(f.preparation||{}),framePricing:"NONE",framePrice:0};const total=Math.max(Number(f.totalPrice||0)-old,0);return {...f,frameSource:"NONE",frameStatus:"NOT_REQUIRED",preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}>Pas de cadre</button>
+              <button type="button" className={form.frameSource==="CLIENT"?"selected":""} onClick={()=>setForm(f=>{const old=getFrameFee(f.preparation);const prep={...(f.preparation||{}),framePricing:"CLIENT_FREE",framePrice:0};const total=Math.max(Number(f.totalPrice||0)-old,0);return {...f,frameSource:"CLIENT",frameStatus:f.frameStatus==="NOT_REQUIRED"?"TO_DO":f.frameStatus,preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}>Client · Gratuit</button>
+              <button type="button" className={form.frameSource==="LP28"?"selected":""} onClick={()=>setForm(f=>{const old=getFrameFee(f.preparation);const prep={...(f.preparation||{}),framePricing:"STANDARD",framePrice:25};const total=Math.max(Number(f.totalPrice||0)-old,0)+25;return {...f,frameSource:"LP28",frameStatus:f.frameStatus==="NOT_REQUIRED"?"TO_DO":f.frameStatus,preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}>LP28</button>
+            </div>
           </div>
+          {form.frameSource==="LP28" && <div>
+            <label>Tarification</label>
+            <div className="choice-row">
+              <button type="button" className={(form.preparation?.framePricing||"STANDARD")==="STANDARD"?"selected":""} onClick={()=>setForm(f=>{const old=getFrameFee(f.preparation);const prep={...(f.preparation||{}),framePricing:"STANDARD",framePrice:25};const total=Math.max(Number(f.totalPrice||0)-old,0)+25;return {...f,preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}>25 €</button>
+              <button type="button" className={form.preparation?.framePricing==="CUSTOM"?"selected":""} onClick={()=>setForm(f=>({...f,preparation:{...(f.preparation||{}),framePricing:"CUSTOM",framePrice:getFrameFee(f.preparation)||25}}))}>Autre prix</button>
+              <button type="button" className={form.preparation?.framePricing==="OFFERED"?"selected":""} onClick={()=>setForm(f=>{const old=getFrameFee(f.preparation);const prep={...(f.preparation||{}),framePricing:"OFFERED",framePrice:0};const total=Math.max(Number(f.totalPrice||0)-old,0);return {...f,preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}>🎁 Offert</button>
+            </div>
+          </div>}
+          {form.frameSource==="LP28" && form.preparation?.framePricing==="CUSTOM" && <div>
+            <label>Prix du cadre LP28 (€)</label>
+            <input type="number" min="0" step="0.01" value={form.preparation?.framePrice??""} onChange={e=>{const value=e.target.value;setForm(f=>{const old=getFrameFee(f.preparation);const next=Math.max(Number(value||0),0);const prep={...(f.preparation||{}),framePricing:"CUSTOM",framePrice:value};const total=Math.max(Number(f.totalPrice||0)-old,0)+next;return {...f,preparation:prep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)}})}} placeholder="Ex : 15"/>
+          </div>}
+          {form.frameSource!=="NONE" && <div>
+            <label>Statut de préparation</label>
+            <div className="choice-row">
+              <button type="button" className={form.frameStatus==="TO_DO"?"selected":""} onClick={()=>set("frameStatus","TO_DO")}>🔴 À faire</button>
+              <button type="button" className={form.frameStatus==="IN_PROGRESS"?"selected":""} onClick={()=>set("frameStatus","IN_PROGRESS")}>🟡 En cours</button>
+              <button type="button" className={form.frameStatus==="DONE"?"selected":""} onClick={()=>set("frameStatus","DONE")}>🟢 Terminé</button>
+            </div>
+          </div>}
+          {form.frameSource!=="NONE" && <div className="wide" style={{fontWeight:800}}>💶 {framePricingLabel(form)}</div>}
         </div>
-        {form.frameSource!=="NONE" && <div>
-          <label>Statut</label>
-          <div className="choice-row">
-            <button type="button" className={form.frameStatus==="TO_DO"?"selected":""} onClick={()=>set("frameStatus","TO_DO")}>🔴 À faire</button>
-            <button type="button" className={form.frameStatus==="IN_PROGRESS"?"selected":""} onClick={()=>set("frameStatus","IN_PROGRESS")}>🟡 En cours</button>
-            <button type="button" className={form.frameStatus==="DONE"?"selected":""} onClick={()=>set("frameStatus","DONE")}>🟢 Terminé</button>
-          </div>
-        </div>}
       </div>
 
       <details className="accordion-block">
@@ -4670,6 +4698,7 @@ function Dashboard({onLogout}) {
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
   const [documentEvent,setDocumentEvent]=useState(null);
+  const [viewEvent,setViewEvent]=useState(null);
   const [search,setSearch]=useState("");
 
   async function load(){
@@ -4924,7 +4953,7 @@ function Dashboard({onLogout}) {
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <strong>{event.name}</strong>
+                <button type="button" onClick={()=>setViewEvent(event)} style={{padding:0,border:0,background:"transparent",color:"inherit",fontWeight:900,fontSize:"inherit",cursor:"pointer",textAlign:"left"}}>👁️ {event.name}</button>
                 {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
                 {event.status==="IN_PROGRESS"&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:12,fontWeight:900}}>🟠 ÉVÉNEMENT EN COURS</span>}
                 {event.status==="COMPLETED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>✅ Prestation terminée</span>}
@@ -4981,6 +5010,7 @@ function Dashboard({onLogout}) {
                 {event.googleDriveFolderId&&<span>☁️ Drive ✓</span>}
               </div>
               <div className="event-actions">
+                <button onClick={()=>setViewEvent(event)} style={{border:"1px solid #60a5fa",background:"rgba(30,64,175,.22)",color:"#bfdbfe",fontWeight:900}}>👁️ Voir l'événement</button>
                 <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
                 <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
                 <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
@@ -5019,6 +5049,19 @@ function Dashboard({onLogout}) {
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
+    {viewEvent&&<div className="modal-backdrop"><div className="event-modal" style={{maxWidth:980}}>
+      <div className="modal-head"><div><div className="eyebrow">CONSULTATION ÉVÉNEMENT</div><h2>{viewEvent.name}</h2></div><button className="icon-btn" onClick={()=>setViewEvent(null)}>×</button></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
+        <div className="card"><h3>📅 Prestation</h3><p><strong>{viewEvent.type}</strong></p><p>{viewEvent.date?new Date(viewEvent.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"Date non renseignée"}{viewEvent.time?` · Installation ${viewEvent.time}`:""}</p><p>📍 {viewEvent.address||"Adresse non renseignée"}</p>{viewEvent.pickupDate&&<p>↩️ Reprise {new Date(viewEvent.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{viewEvent.pickupTime?` à ${viewEvent.pickupTime}`:""}</p>}</div>
+        <div className="card"><h3>👤 Client / organisateur</h3><p><strong>{viewEvent.organizerName||"Non renseigné"}</strong></p><p>📞 {viewEvent.organizerPhone||"—"}</p><p>✉️ {viewEvent.organizerEmail||"—"}</p><p>👥 {viewEvent.guestCount||0} invité(s)</p></div>
+        <div className="card"><h3>🖥️ Matériel</h3><p><strong>Borne :</strong> {eventBooths(viewEvent).join(" + ")||"Aucune"}</p><p><strong>Impressions :</strong> {eventPrintChoice(viewEvent)}</p>{eventExtraMaterials(viewEvent).map((m,i)=><p key={i}>• {materialShortLabel(m)}</p>)}</div>
+        <div className="card"><h3>🎨 Cadre photo</h3><p><strong>{framePricingLabel(viewEvent)}</strong></p><p>Préparation : {viewEvent.frameSource==="NONE"?"Non requis":viewEvent.frameStatus==="DONE"?"🟢 Terminé":viewEvent.frameStatus==="IN_PROGRESS"?"🟡 En cours":"🔴 À faire"}</p></div>
+        <div className="card"><h3>💶 Tarification</h3><p>Total : <strong>{Number(viewEvent.totalPrice||0).toFixed(2).replace(".",",")} €</strong></p><p>Acompte : {Number(viewEvent.deposit||0).toFixed(2).replace(".",",")} €</p><p>Reste : <strong>{Number(viewEvent.balance||0).toFixed(2).replace(".",",")} €</strong></p><p>Cadre : {framePricingLabel(viewEvent)}</p></div>
+        <div className="card"><h3>📑 Suivi</h3><p>{viewEvent.contractStatus==="SIGNED"?"🟢 Contrat signé":"🟠 Contrat non signé"}</p><p>{viewEvent.googleCalendarEventId?"📅 Agenda ✓":"📅 Agenda —"}</p><p>{viewEvent.googleDriveFolderId?"☁️ Drive ✓":"☁️ Drive —"}</p></div>
+      </div>
+      {viewEvent.notes&&<div className="card" style={{marginTop:12}}><h3>📝 Notes</h3><p style={{whiteSpace:"pre-wrap"}}>{viewEvent.notes}</p></div>}
+      <div className="event-actions" style={{marginTop:18}}><button onClick={()=>setViewEvent(null)}>← Retour aux événements</button><button className="primary" onClick={()=>{const e=viewEvent;setViewEvent(null);setFormEvent(e);setShowForm(true)}}>✏️ Modifier</button><button onClick={()=>window.open(`/api/events/${viewEvent.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button><button onClick={()=>{setDocumentEvent(viewEvent);setViewEvent(null)}}>📁 Documents</button></div>
+    </div></div>}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
     {documentEvent&&<DocumentManager event={documentEvent} onClose={()=>setDocumentEvent(null)}/>}
   </div>;
