@@ -3766,15 +3766,41 @@ function AdminGalleries(){
     </section>;
   }
 
+  const galleryState=g=>{
+    const completed=g?.status==="COMPLETED"||g?.bookingStatus==="COMPLETED";
+    if(completed)return "COMPLETED";
+    if(g?.status==="IN_PROGRESS")return "IN_PROGRESS";
+    return "UPCOMING";
+  };
+  const orderedGalleries=[...galleries].sort((a,b)=>{
+    const rank={IN_PROGRESS:0,UPCOMING:1,COMPLETED:2};
+    const sa=galleryState(a),sb=galleryState(b);
+    if(rank[sa]!==rank[sb])return rank[sa]-rank[sb];
+    const da=String(a.date||""),db=String(b.date||"");
+    return sa==="COMPLETED"?db.localeCompare(da):da.localeCompare(db);
+  });
+
   return <section className="admin-gallery">
-    <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR</div><h2>📸 Galeries</h2><p className="muted">Supervision complète de LP28 Memories.</p></div></div>
+    <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR</div><h2>📸 Galeries</h2><p className="muted">En cours en premier, puis à venir du plus proche au plus lointain et prestations terminées de la plus récente à la plus ancienne.</p></div></div>
     <div className="gallery-list">
-      {galleries.map(g=><button className="gallery-list-card" key={g.id} onClick={()=>openGallery(g.id)}>
-        <div><strong>{g.name}</strong><small>{new Date(g.date+"T12:00:00").toLocaleDateString("fr-FR")}</small></div>
-        <div className="gallery-stats"><span>📷 {g.photos}</span><span>🎥 {g.videos}</span><span>🙈 {g.hidden}</span></div>
-        <span className="gallery-open">Ouvrir →</span>
-      </button>)}
-      {!galleries.length&&<div className="empty-state"><span>📸</span><p>Aucune galerie active.</p></div>}
+      {orderedGalleries.map(g=>{
+        const state=galleryState(g);
+        const inProgress=state==="IN_PROGRESS";
+        const completed=state==="COMPLETED";
+        return <button className="gallery-list-card" key={g.id} onClick={()=>openGallery(g.id)} style={inProgress?{background:"linear-gradient(135deg,rgba(120,72,18,.30),rgba(69,44,16,.24))",border:"1px solid rgba(245,158,11,.50)",boxShadow:"0 8px 22px rgba(120,72,18,.18)"}:completed?{background:"rgba(22,101,52,.10)",border:"1px solid rgba(34,197,94,.30)"}:undefined}>
+          <div style={{minWidth:0}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <strong>{g.name}</strong>
+              {inProgress&&<span style={{padding:"4px 8px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:11,fontWeight:900}}>🟠 EN COURS</span>}
+              {completed&&<span style={{padding:"4px 8px",borderRadius:999,background:"#166534",color:"#dcfce7",border:"1px solid #22c55e",fontSize:11,fontWeight:900}}>✅ TERMINÉE</span>}
+            </div>
+            <small>{new Date(g.date+"T12:00:00").toLocaleDateString("fr-FR")}</small>
+          </div>
+          <div className="gallery-stats"><span>📷 {g.photos}</span><span>🎥 {g.videos}</span><span>🙈 {g.hidden}</span></div>
+          <span className="gallery-open">Ouvrir →</span>
+        </button>
+      })}
+      {!orderedGalleries.length&&<div className="empty-state"><span>📸</span><p>Aucune galerie active.</p></div>}
     </div>
   </section>;
 }
