@@ -20,6 +20,7 @@ const MATERIALS = [
   {group:"Options", icon:"☎️", name:"Location livre d'or audio"},
   {group:"Options", icon:"🍹", name:"Location Fontaine + 1 ou 2 contenant de 30L"},
   {group:"Options", icon:"💾", name:"Clé USB - support photos / audio"},
+  {group:"Options", icon:"🔊", name:"Enceinte LG 1000W"},
   {group:"Options", icon:"🔊", name:"Location enceinte LG 1000w + 2 micros"},
   {group:"Options", icon:"🎤", name:"2x micros sans fil JBL"},
   {group:"Options", icon:"🎬", name:"Support de fond + toile noire / verte"},
@@ -891,6 +892,46 @@ Johan — Location Photobooth 28`;
           <span className="material-icon">{m.icon}</span><span>{m.name}</span><b>{form.materials.includes(m.name)?"✓":"+"}</b>
         </button>)}
       </div></div>)}
+
+      <div className="card" style={{marginTop:16,marginBottom:16}}>
+        <div className="eyebrow">➕ BESOIN PARTICULIER</div>
+        <div className="form-grid">
+          <div>
+            <label>Description</label>
+            <input
+              value={form.preparation?.specialNeedDescription || ""}
+              onChange={e=>setForm(f=>({
+                ...f,
+                preparation:{...(f.preparation||{}),specialNeedDescription:e.target.value}
+              }))}
+              placeholder="Ex : décoration personnalisée"
+            />
+          </div>
+          <div>
+            <label>Tarif TTC (€)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.preparation?.specialNeedPrice ?? ""}
+              onChange={e=>{
+                const value=e.target.value;
+                setForm(f=>{
+                  const prep=f.preparation||{};
+                  const oldFee=Math.max(Number(prep.specialNeedPrice||0),0);
+                  const nextFee=value === "" ? 0 : Math.max(Number(value||0),0);
+                  const newPrep={...prep,specialNeedPrice:value};
+                  const base=Math.max(Number(f.totalPrice||0)-oldFee,0);
+                  const total=base+nextFee;
+                  return {...f,preparation:newPrep,totalPrice:total.toFixed(2),balance:Math.max(total-Number(f.deposit||0),0).toFixed(2)};
+                });
+              }}
+              placeholder="Ex : 35 (0 = offert)"
+            />
+          </div>
+        </div>
+        <div className="muted" style={{marginTop:8}}>Laisser vide si aucun besoin particulier. Un tarif à 0 € sera indiqué comme offert dans le contrat.</div>
+      </div>
 
 {form.materials.includes("Forfait impressions personnalisé") && (
   <div className="card" style={{marginTop:16}}>
