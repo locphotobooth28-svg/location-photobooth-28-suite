@@ -4572,27 +4572,33 @@ function DocumentManager({event,onClose}){
 function AdminDocuments({events,onOpen}){
   const [search,setSearch]=useState("");
 
-  const filtered=events.filter(event=>
-    (
+  const documentState=event=>{
+    const completed=event?.status==="COMPLETED"||event?.bookingStatus==="COMPLETED";
+    if(completed)return "COMPLETED";
+    if(event?.status==="IN_PROGRESS")return "IN_PROGRESS";
+    return "UPCOMING";
+  };
+
+  const filtered=[...events]
+    .filter(event=>(
       `${event.name} ${event.organizerName||""} ${event.type||""}`
-    )
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+    ).toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=>{
+      const rank={IN_PROGRESS:0,UPCOMING:1,COMPLETED:2};
+      const sa=documentState(a),sb=documentState(b);
+      if(rank[sa]!==rank[sb])return rank[sa]-rank[sb];
+      const da=String(a.date||""),db=String(b.date||"");
+      return sa==="COMPLETED"?db.localeCompare(da):da.localeCompare(db);
+    });
 
   return (
     <section>
       <div className="calendar-toolbar">
         <div>
-          <div className="eyebrow">
-            DOSSIERS CLIENTS
-          </div>
-
+          <div className="eyebrow">DOSSIERS CLIENTS</div>
           <h2>📄 Documents</h2>
-
           <p className="muted">
-            Devis, factures d'acompte, factures,
-            bons de commande et autres PDF.
+            En cours en premier, puis à venir du plus proche au plus lointain et prestations terminées de la plus récente à la plus ancienne.
           </p>
         </div>
       </div>
@@ -4603,64 +4609,54 @@ function AdminDocuments({events,onOpen}){
           value={search}
           onChange={e=>setSearch(e.target.value)}
         />
-
-        <span>
-          {filtered.length} dossier(s)
-        </span>
+        <span>{filtered.length} dossier(s)</span>
       </div>
 
       <div className="events-list">
-        {filtered.map(event=>(
-          <article
-            className="event-card"
-            key={event.id}
-          >
-            <div className="event-date">
-              <strong>
-                {event.date?.slice(8,10)||"--"}
-              </strong>
-
-              <span>
-                {new Date(
-                  event.date+"T12:00:00"
-                ).toLocaleDateString(
-                  "fr-FR",
-                  {month:"short"}
-                )}
-              </span>
-            </div>
-
-            <div className="event-content">
-              <strong>{event.name}</strong>
-
-              <div className="event-meta">
-                {event.organizerName&&(
-                  <span>
-                    👤 {event.organizerName}
-                  </span>
-                )}
-
+        {filtered.map(event=>{
+          const state=documentState(event);
+          const inProgress=state==="IN_PROGRESS";
+          const completed=state==="COMPLETED";
+          return (
+            <article
+              className="event-card"
+              key={event.id}
+              style={inProgress?{
+                background:"linear-gradient(135deg,rgba(120,72,18,.30),rgba(69,44,16,.24))",
+                border:"1px solid rgba(245,158,11,.50)",
+                boxShadow:"0 8px 22px rgba(120,72,18,.18)"
+              }:completed?{
+                background:"rgba(22,101,52,.10)",
+                border:"1px solid rgba(34,197,94,.30)"
+              }:undefined}
+            >
+              <div className="event-date">
+                <strong>{event.date?.slice(8,10)||"--"}</strong>
                 <span>
-                  {event.type}
+                  {event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{month:"short"}):"--"}
                 </span>
-
-                {event.contractStatus==="SIGNED"&&(
-                  <span>
-                    🟢 Contrat signé
-                  </span>
-                )}
               </div>
 
-              <div className="event-actions">
-                <button
-                  onClick={()=>onOpen(event)}
-                >
-                  📁 Gérer les documents
-                </button>
+              <div className="event-content">
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <strong>{event.name}</strong>
+                  {inProgress&&<span style={{padding:"4px 8px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:11,fontWeight:900}}>🟠 EN COURS</span>}
+                  {completed&&<span style={{padding:"4px 8px",borderRadius:999,background:"#166534",color:"#dcfce7",border:"1px solid #22c55e",fontSize:11,fontWeight:900}}>✅ TERMINÉE</span>}
+                </div>
+
+                <div className="event-meta">
+                  {event.organizerName&&<span>👤 {event.organizerName}</span>}
+                  <span>{event.type}</span>
+                  {event.contractStatus==="SIGNED"&&<span>🟢 Contrat signé</span>}
+                </div>
+
+                <div className="event-actions">
+                  <button onClick={()=>onOpen(event)}>📁 Gérer les documents</button>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
