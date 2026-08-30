@@ -496,8 +496,8 @@ async function generateContractPdf(event){
     );
   }
 
-  function separator(){
-    ensureSpace(15);
+  function separator(gapAfter=14){
+    ensureSpace(gapAfter + 1);
 
     page.drawLine({
       start:{
@@ -512,7 +512,7 @@ async function generateContractPdf(event){
       color:rgb(0.75,0.65,0.30)
     });
 
-    y -= 14;
+    y -= gapAfter;
   }
 
   // PAGE 1
@@ -538,7 +538,8 @@ async function generateContractPdf(event){
 
   // En-tête du contrat : titre encadré par deux filets dorés.
   // Cela évite l'effet de trait collé au texte observé sur l'ancien modèle.
-  separator();
+  // Espace renforcé sous le filet supérieur : le trait ne touche plus le titre.
+  separator(28);
 
   drawText(
     "CONTRAT DE LOCATION",
