@@ -170,8 +170,25 @@ function getPrintPackage(event){
 
 function getFramePricing(event){
   const source = String(event.frameSource || "NONE").toUpperCase();
-  const pricing = String(event.framePricing || "").toUpperCase();
-  const rawPrice = Number(event.framePrice);
+  const preparation =
+    event.preparation && typeof event.preparation === "object"
+      ? event.preparation
+      : {};
+
+  const pricing = String(
+    preparation.framePricing ||
+    event.framePricing ||
+    ""
+  ).toUpperCase();
+
+  const rawFramePrice =
+    preparation.framePrice !== undefined &&
+    preparation.framePrice !== null &&
+    preparation.framePrice !== ""
+      ? preparation.framePrice
+      : event.framePrice;
+
+  const rawPrice = Number(rawFramePrice);
 
   if(source === "CLIENT"){
     return {
