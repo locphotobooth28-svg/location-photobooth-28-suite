@@ -1155,10 +1155,21 @@ app.post("/api/events/:id/google-sync", adminOnly, async (req, res) => {
 });
 
 app.get("/api/dashboard", adminOnly, async (req, res) => {
-  // Règle LP28 V8.5.15 : une prestation reste active tant qu'elle n'est pas
-  // explicitement marquée terminée. La date ne la retire plus automatiquement.
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0,0,0,0);
+
+  // Tableau de bord LP28 : uniquement les prestations restant à faire
+  // entre aujourd'hui et dimanche 23:59. Le lundi, la fenêtre repart
+  // automatiquement du lundi courant jusqu'au dimanche suivant.
+  const sundayEnd = new Date(today);
+  const daysUntilSunday = (7 - sundayEnd.getDay()) % 7;
+  sundayEnd.setDate(sundayEnd.getDate() + daysUntilSunday);
+  sundayEnd.setHours(23,59,59,999);
+
   const upcomingWhere = {
     archived: false,
+    eventDate: { gte: today, lte: sundayEnd },
     bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] },
     status: { not: "COMPLETED" }
   };
@@ -1195,7 +1206,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
       unsignedUpcomingContracts,
       activeGalleries,
       signedContracts,
-      upcomingUntil: null
+      upcomingUntil: sundayEnd.toISOString()
     },
     consumables
   });
