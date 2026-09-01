@@ -5309,7 +5309,7 @@ function Dashboard({onLogout}) {
                 <button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>
               </div>
             </div>
-          </article>;})
+          </article>;})}
         </div>
       </> : view==="planning" ? <>
         <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
