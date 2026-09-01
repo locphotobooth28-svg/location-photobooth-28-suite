@@ -39,7 +39,7 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false}, notes:"", googleCalendarId:"",totalPrice:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
   customPrintCount:"",
@@ -666,6 +666,21 @@ Johan — Location Photobooth 28`;
   )}
 </div>
         <div><label>Nombre d'invités</label><input type="number" min="0" value={form.guestCount} onChange={e=>set("guestCount",e.target.value)}/></div>
+        <div className="wide">
+          <label style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:"1px solid rgba(168,85,247,.45)",background:"rgba(126,34,206,.10)",cursor:"pointer",fontWeight:800}}>
+            <input
+              type="checkbox"
+              checked={!!form.preparation?.gifted}
+              onChange={e=>setForm(f=>({
+                ...f,
+                preparation:{...(f.preparation||{}),gifted:e.target.checked}
+              }))}
+              style={{width:18,height:18}}
+            />
+            🎁 Don / prestation offerte
+          </label>
+          <div className="muted" style={{marginTop:6,fontSize:12}}>Coche cette case lorsque la prestation est offerte ou réalisée sous forme de don. L’événement sera identifié par une couleur différente dans la liste.</div>
+        </div>
       </div>
 
       <h3>Organisateur</h3>
@@ -5190,12 +5205,25 @@ function Dashboard({onLogout}) {
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
-          {filtered.map(event=><article className={`event-card ${event.archived?"archived":""}`} key={event.id} style={{gridTemplateColumns:"250px minmax(0,1fr)",...(event.status==="IN_PROGRESS"?{background:"linear-gradient(135deg,rgba(120,72,18,.30),rgba(69,44,16,.24))",border:"1px solid rgba(245,158,11,.50)",boxShadow:"0 10px 28px rgba(120,72,18,.20)"}:{})}}>
+          {filtered.map(event=>{
+            const isGifted=!!event.preparation?.gifted;
+            const giftedStyle=isGifted?{
+              background:"linear-gradient(135deg,rgba(88,28,135,.34),rgba(76,29,149,.24))",
+              border:"1px solid rgba(192,132,252,.58)",
+              boxShadow:"0 10px 28px rgba(126,34,206,.20)"
+            }:{};
+            const inProgressStyle=!isGifted&&event.status==="IN_PROGRESS"?{
+              background:"linear-gradient(135deg,rgba(120,72,18,.30),rgba(69,44,16,.24))",
+              border:"1px solid rgba(245,158,11,.50)",
+              boxShadow:"0 10px 28px rgba(120,72,18,.20)"
+            }:{};
+            return <article className={`event-card ${event.archived?"archived":""}`} key={event.id} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <button type="button" onClick={()=>setViewEvent(event)} style={{padding:0,border:0,background:"transparent",color:"inherit",fontWeight:900,fontSize:"inherit",cursor:"pointer",textAlign:"left"}}>👁️ {event.name}</button>
                 {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
+                {event.preparation?.gifted&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#7e22ce",color:"#faf5ff",border:"1px solid #c084fc",fontSize:12,fontWeight:900}}>🎁 DON / PRESTATION OFFERTE</span>}
                 {event.status==="IN_PROGRESS"&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:12,fontWeight:900}}>🟠 ÉVÉNEMENT EN COURS</span>}
                 {event.status==="COMPLETED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>✅ Prestation terminée</span>}
                 <span className={`booking-status status-${(event.bookingStatus||"CONFIRMED").toLowerCase()}`}>
@@ -5281,7 +5309,7 @@ function Dashboard({onLogout}) {
                 <button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>
               </div>
             </div>
-          </article>)}
+          </article>;})
         </div>
       </> : view==="planning" ? <>
         <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
