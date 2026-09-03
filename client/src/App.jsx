@@ -79,7 +79,25 @@ function LP28ThemeStyles(){
     html[data-lp28-theme="light"] .alert{background:#fff8dc !important;color:#402f00 !important;border-color:#e3c34b !important;}
     html[data-lp28-theme="dark"]{color-scheme:dark;}
     html[data-lp28-theme="light"]{color-scheme:light;}
-  `}</style>;
+  
+    /* v8.5.59 : la fenêtre événement reste sombre, même avec le thème clair. */
+    html[data-lp28-theme="light"] .event-modal{color:#f4f4f5 !important;}
+    html[data-lp28-theme="light"] .event-modal h1,
+    html[data-lp28-theme="light"] .event-modal h2,
+    html[data-lp28-theme="light"] .event-modal h3,
+    html[data-lp28-theme="light"] .event-modal h4,
+    html[data-lp28-theme="light"] .event-modal label{color:#f4f4f5 !important;}
+    html[data-lp28-theme="light"] .event-modal .muted{color:#b8b8bd !important;}
+    html[data-lp28-theme="light"] .event-modal input,
+    html[data-lp28-theme="light"] .event-modal select,
+    html[data-lp28-theme="light"] .event-modal textarea{
+      background:#fff !important;color:#171719 !important;border-color:#d6d3d1 !important;
+    }
+    html[data-lp28-theme="light"] .event-modal input::placeholder,
+    html[data-lp28-theme="light"] .event-modal textarea::placeholder{color:#777 !important;opacity:1;}
+    html[data-lp28-theme="light"] .event-modal .gift-toggle,
+    html[data-lp28-theme="light"] .event-modal .gift-box{color:#f4f4f5 !important;}
+`}</style>;
 }
 
 const MATERIALS = [
@@ -5863,7 +5881,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.58</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.59</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
