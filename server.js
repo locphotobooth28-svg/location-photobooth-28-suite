@@ -133,6 +133,17 @@ function eventIsGifted(event){
   if(typeof p==="string"){try{p=JSON.parse(p);}catch{p={};}}
   return Boolean(p&&typeof p==="object"&&p.gifted===true);
 }
+function eventOperationalRemaining(event){
+  if(!event || event.balancePaid || eventIsGifted(event))return 0;
+  const stored=Number(event.balance);
+  if(Number.isFinite(stored) && stored>0)return Math.max(stored,0);
+  const total=Number(event.totalPrice);
+  const deposit=Number(event.deposit);
+  if(Number.isFinite(total)){
+    return Math.max(total-(Number.isFinite(deposit)?deposit:0),0);
+  }
+  return 0;
+}
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -1965,7 +1976,7 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
 totalPrice: currentUser?.role==="ADMIN" && e.totalPrice != null ? Number(e.totalPrice) : null,
 deposit: currentUser?.role==="ADMIN" && e.deposit != null ? Number(e.deposit) : null,
 balance: currentUser?.role==="ADMIN" && e.balance != null ? Number(e.balance) : null,
-operationalBalance: canSeeOperationalBalance && e.balance != null ? Number(e.balance) : null,
+operationalBalance: canSeeOperationalBalance ? eventOperationalRemaining(e) : null,
 canSeeOperationalBalance,
 customPrintCount: e.customPrintCount != null ? Number(e.customPrintCount) : "",
 customPrintPrice: currentUser?.role==="ADMIN" && e.customPrintPrice != null ? Number(e.customPrintPrice) : null,
@@ -4732,6 +4743,29 @@ app.patch("/api/collaborators/:id", adminOnly, async (req, res) => {
     collaborator
   });
 });
+
+app.put("/api/events/:eventId/collaborator-access-permissions", adminOnly, async (req,res)=>{
+  const event=await prisma.event.findUnique({where:{id:req.params.eventId}});
+  if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+
+  const b=req.body||{};
+  const data={
+    canSeeClient:b.canSeeClient!==false,
+    canSeeContract:b.canSeeContract!==false,
+    canSeeInvoice:Boolean(b.canSeeInvoice),
+    canSeeBalance:!eventIsGifted(event)&&b.canSeeBalance!==false,
+    canManageCaution:b.canManageCaution!==false,
+    canSeeInstructions:b.canSeeInstructions!==false
+  };
+
+  const updated=await prisma.collaboratorAccess.updateMany({
+    where:{eventId:event.id,active:true},
+    data
+  });
+
+  res.json({ok:true,updated:updated.count,permissions:data});
+});
+
 app.post("/api/events/:eventId/collaborator-access", adminOnly, async (req, res) => {
   const b = req.body || {};
 
@@ -4805,7 +4839,7 @@ app.post("/api/events/:eventId/collaborator-access", adminOnly, async (req, res)
       canSeeClient: b.canSeeClient !== false,
       canSeeContract: b.canSeeContract !== false,
       canSeeInvoice: Boolean(b.canSeeInvoice),
-      canSeeBalance: !eventIsGifted(event) && b.canSeeBalance !== false,
+      canSeeBalance: !eventIsGifted(event) && Boolean(b.canSeeBalance),
       canManageCaution: b.canManageCaution !== false,
       canSeeInstructions: b.canSeeInstructions !== false,
 
@@ -4823,7 +4857,7 @@ app.post("/api/events/:eventId/collaborator-access", adminOnly, async (req, res)
       canSeeClient: b.canSeeClient !== false,
       canSeeContract: b.canSeeContract !== false,
       canSeeInvoice: Boolean(b.canSeeInvoice),
-      canSeeBalance: !eventIsGifted(event) && b.canSeeBalance !== false,
+      canSeeBalance: !eventIsGifted(event) && Boolean(b.canSeeBalance),
       canManageCaution: b.canManageCaution !== false,
       canSeeInstructions: b.canSeeInstructions !== false,
 
@@ -4960,7 +4994,7 @@ try {
       : null,
 
     balance: canSeeOperationalBalance
-      ? event.balance
+      ? eventOperationalRemaining(event)
       : null,
 
       balancePaid: canSeeOperationalBalance
