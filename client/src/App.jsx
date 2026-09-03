@@ -5240,14 +5240,22 @@ function Dashboard({onLogout}) {
 
     const billedEvents=weekEvents.filter(event=>!event?.preparation?.gifted);
     const giftedEvents=weekEvents.filter(event=>!!event?.preparation?.gifted);
-    const sum=items=>items.reduce((total,event)=>total+Math.max(Number(event?.totalPrice||0),0),0);
+    const sumTotal=items=>items.reduce((total,event)=>total+Math.max(Number(event?.totalPrice||0),0),0);
+    const remainingForEvent=event=>{
+      const balance=Number(event?.balance);
+      if(Number.isFinite(balance))return Math.max(balance,0);
+      const total=Math.max(Number(event?.totalPrice||0),0);
+      const deposit=Math.max(Number(event?.deposit||0),0);
+      return Math.max(total-deposit,0);
+    };
+    const sumRemaining=items=>items.reduce((total,event)=>total+remainingForEvent(event),0);
 
     return {
       count:weekEvents.length,
       billedCount:billedEvents.length,
       giftCount:giftedEvents.length,
-      billedAmount:sum(billedEvents),
-      giftAmount:sum(giftedEvents)
+      billedAmount:sumRemaining(billedEvents),
+      giftAmount:sumTotal(giftedEvents)
     };
   },[events]);
 
@@ -5376,7 +5384,7 @@ function Dashboard({onLogout}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.36</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.37</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
@@ -5427,9 +5435,9 @@ function Dashboard({onLogout}) {
 
           <article className="stat-card" style={{position:"relative",border:"1px solid rgba(168,85,247,.58)",background:"linear-gradient(135deg,rgba(126,34,206,.16),rgba(31,20,43,.32))"}}>
             <button type="button" aria-label={showWeeklyBilledAmount?"Masquer le montant facturé":"Afficher le montant facturé"} title={showWeeklyBilledAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
-            <span>📄 Facturé cette semaine</span>
+            <span>💶 Reste à encaisser cette semaine</span>
             <strong style={{color:"#c084fc",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyBilledAmount?dashboardMoney(weeklyDashboard.billedAmount):"****.** €"}</strong>
-            <small className="muted">{weeklyDashboard.billedCount} prestation{weeklyDashboard.billedCount>1?"s":""} facturée{weeklyDashboard.billedCount>1?"s":""}</small>
+            <small className="muted">{weeklyDashboard.billedCount} prestation{weeklyDashboard.billedCount>1?"s":""} · après déduction des règlements reçus</small>
           </article>
 
           <article className="stat-card" style={{position:"relative",border:"1px solid rgba(34,197,94,.55)",background:"linear-gradient(135deg,rgba(22,101,52,.18),rgba(13,36,25,.34))"}}>
