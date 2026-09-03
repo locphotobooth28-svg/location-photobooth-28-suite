@@ -1361,21 +1361,24 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     .calendar-weekdays { display:grid; grid-template-columns:repeat(7,1fr); border:1px solid #cbd5e1; border-bottom:0; }
     .calendar-weekdays > div { padding:5px 4px; text-align:center; font-size:10px; font-weight:800; background:#f1f5f9; border-right:1px solid #cbd5e1; }
     .calendar-weekdays > div:last-child { border-right:0; }
-    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); border-left:1px solid #cbd5e1; border-top:1px solid #cbd5e1; }
-    .calendar-cell { min-width:0; height:25.5mm; padding:3px; overflow:hidden; border-right:1px solid #cbd5e1; border-bottom:1px solid #cbd5e1; background:#fff; }
+    .calendar-grid { display:flex; flex-direction:column; border-left:1px solid #cbd5e1; border-top:1px solid #cbd5e1; }
+    .calendar-week { position:relative; min-height:22mm; border-bottom:1px solid #cbd5e1; overflow:hidden; }
+    .calendar-week-days { position:absolute; inset:0; display:grid; grid-template-columns:repeat(7,1fr); }
+    .calendar-week-day { min-width:0; padding:3px; border-right:1px solid #cbd5e1; background:#fff; }
+    .calendar-week-day:last-child { border-right:0; }
     .muted-cell { background:#f8fafc; }
     .today-cell { box-shadow: inset 0 0 0 1.5px #0f172a; }
-    .calendar-day-number { font-size:10px; font-weight:800; margin-bottom:3px; }
-    .calendar-events { display:flex; flex-direction:column; gap:3px; }
-    .calendar-events > div { min-width:0; }
-    .calendar-event { width:100%; min-width:0; min-height:0; margin:0; padding:3px 4px !important; border-radius:4px !important; font:inherit; text-align:left; line-height:1.1; }
-    .calendar-event strong { font-size:7.5px !important; }
-    .calendar-event span { font-size:7.5px !important; }
-    .more-events { font-size:7px; color:#475569; }
+    .calendar-day-number { font-size:9px; font-weight:800; margin-bottom:3px; }
+    .calendar-week-bars { position:absolute; left:0; right:0; top:8mm; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:5.5mm; row-gap:1mm; }
+    .calendar-span-event { min-width:0; height:5.5mm; margin:0 1mm; padding:1mm 1.5mm; border-radius:2mm; display:flex; align-items:center; gap:1.2mm; overflow:hidden; font-size:6.8px; font-weight:700; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .calendar-span-label { flex:0 0 auto; font-size:6.5px; font-weight:800; white-space:nowrap; }
+    .calendar-span-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .calendar-span-gift { flex:0 0 auto; font-size:5.5px; font-weight:800; }
+    .calendar-span-delete { display:none !important; }
     button { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     @media print {
       html, body { width:100%; }
-      .calendar-cell { break-inside:avoid; }
+      .calendar-week { break-inside:avoid; }
     }
   </style>
 </head>
@@ -1434,9 +1437,82 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     return items;
   };
 
+
+  // Affichage desktop : une prestation multi-jours devient un seul bloc continu
+  // dans chaque semaine du calendrier, au lieu d'être répétée dans chaque case.
+  const parsePlanningDate = value => {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+  };
+
+  const weekSegments = weekCells => {
+    const segments = [];
+
+    for (const event of (events || []).filter(e => !e.archived)) {
+      const start = parsePlanningDate(event.date);
+      if (!start) continue;
+      const requestedEnd = parsePlanningDate(event.pickupDate);
+      const end = requestedEnd && requestedEnd >= start ? requestedEnd : start;
+
+      const coveredColumns = [];
+      weekCells.forEach((date, index) => {
+        if (!date) return;
+        const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+        if (d >= start && d <= end) coveredColumns.push(index + 1);
+      });
+      if (!coveredColumns.length) continue;
+
+      const items = planningItems(event);
+      const labels = items.map(item => item.label).join(" + ");
+      const primary = items[0] || {background:"#475569",color:"#ffffff"};
+      segments.push({
+        event,
+        startCol:Math.min(...coveredColumns),
+        endCol:Math.max(...coveredColumns),
+        label:labels,
+        background:primary.background,
+        color:primary.color,
+        gifted:!!event?.preparation?.gifted,
+        lane:0
+      });
+    }
+
+    segments.sort((a,b) => a.startCol - b.startCol || (b.endCol-b.startCol) - (a.endCol-a.startCol));
+    const lanes = [];
+    for (const segment of segments) {
+      let lane = 0;
+      while (true) {
+        const occupied = (lanes[lane] || []).some(other => !(segment.endCol < other.startCol || segment.startCol > other.endCol));
+        if (!occupied) break;
+        lane += 1;
+      }
+      segment.lane = lane;
+      (lanes[lane] ||= []).push(segment);
+    }
+    return {segments,laneCount:Math.max(1,lanes.length)};
+  };
+
+  const calendarWeeks = Array.from({length:cells.length/7},(_,weekIndex)=>cells.slice(weekIndex*7,weekIndex*7+7));
+
   return <>
     <style>{`
       .calendar-mobile-list{display:none;}
+      .calendar-grid{display:flex !important;flex-direction:column;border-left:1px solid #28303a;border-top:1px solid #28303a;}
+      .calendar-week{position:relative;min-height:150px;border-bottom:1px solid #28303a;overflow:hidden;}
+      .calendar-week-days{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));}
+      .calendar-week-day{min-width:0;padding:12px 10px;border-right:1px solid #28303a;background:transparent;}
+      .calendar-week-day:last-child{border-right:0;}
+      .calendar-week-day.muted-cell{background:rgba(255,255,255,.015);}
+      .calendar-week-day.today-cell{box-shadow:inset 0 0 0 2px #e7c84a;}
+      .calendar-week-day.today-cell .calendar-day-number{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 8px;border-radius:999px;background:#e7c84a;color:#111827;}
+      .calendar-week-bars{position:absolute;left:0;right:0;top:46px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-auto-rows:30px;row-gap:7px;pointer-events:none;}
+      .calendar-span-event{min-width:0;height:30px;margin:0 5px;display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:9px;overflow:hidden;cursor:pointer;pointer-events:auto;font-size:11px;font-weight:700;box-shadow:0 1px 0 rgba(255,255,255,.08) inset;}
+      .calendar-span-event:hover{filter:brightness(1.08);}
+      .calendar-span-label{flex:0 0 auto;font-size:10px;font-weight:900;white-space:nowrap;}
+      .calendar-span-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .calendar-span-gift{flex:0 0 auto;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.2);font-size:9px;font-weight:900;white-space:nowrap;}
+      .calendar-span-delete{flex:0 0 auto;min-width:24px;height:22px;padding:0 5px !important;border-radius:6px !important;font-size:12px !important;line-height:1 !important;}
       @media (max-width: 760px){
         .calendar-shell{padding:10px !important;border-radius:14px !important;}
         .calendar-toolbar{align-items:flex-start !important;gap:10px !important;}
@@ -1477,48 +1553,55 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
     </div>
 
     <div className="calendar-grid">
-      {cells.map((date, idx) => {
-        if (!date) return <div className="calendar-cell muted-cell" key={`empty-${idx}`} />;
-        const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-        const dayEvents = byDate[iso] || [];
-        const now = new Date();
-        const isToday = iso === `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+      {calendarWeeks.map((weekCells,weekIndex)=>{
+        const {segments,laneCount}=weekSegments(weekCells);
+        const weekHeight=Math.max(150,58 + laneCount*37);
+        return <div className="calendar-week" key={`week-${weekIndex}`} style={{height:weekHeight}}>
+          <div className="calendar-week-days">
+            {weekCells.map((date,dayIndex)=>{
+              if(!date) return <div className="calendar-week-day muted-cell" key={`week-${weekIndex}-empty-${dayIndex}`} />;
+              const iso=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+              const now=new Date();
+              const isToday=iso===`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+              return <div className={`calendar-week-day ${isToday?"today-cell":""}`} key={iso}>
+                <div className="calendar-day-number">{date.getDate()}</div>
+              </div>;
+            })}
+          </div>
 
-        return <div className={`calendar-cell ${isToday ? "today-cell" : ""}`} key={iso}>
-          <div className="calendar-day-number">{date.getDate()}</div>
-          <div className="calendar-events">
-            {dayEvents.slice(0,4).map(event =>
-              <div key={event.id} style={{display:"flex",alignItems:"stretch",gap:4}}>
-                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
-                  {planningItems(event).map((item,itemIndex)=>(
-                    <button
-                      key={`${event.id}-${item.label}-${itemIndex}`}
-                      className="calendar-event"
-                      onClick={() => onOpenEvent(event)}
-                      title={`${item.label} — ${event.name}${event.time ? ` — installation ${event.time}` : ""}`}
-                      style={{
-                        width:"100%",minWidth:0,display:"flex",alignItems:"center",gap:7,
-                        background:item.background,color:item.color,border:"none"
-                      }}
-                    >
-                      <strong style={{minWidth:"auto",whiteSpace:"nowrap"}}>{item.label}</strong>
-                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.name}</span>
-                    </button>
-                  ))}
-                </div>
+          <div className="calendar-week-bars">
+            {segments.map((segment,index)=>{
+              const event=segment.event;
+              const title=`${segment.label} — ${event.name}${segment.gifted?" — Don / prestation offerte":""}${event.date?` — du ${event.date}${event.pickupDate?` au ${event.pickupDate}`:""}`:""}`;
+              return <div
+                key={`${event.id}-${weekIndex}-${index}`}
+                className="calendar-span-event"
+                role="button"
+                tabIndex={0}
+                onClick={()=>onOpenEvent(event)}
+                onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpenEvent(event)}}}
+                title={title}
+                style={{
+                  gridColumn:`${segment.startCol} / ${segment.endCol+1}`,
+                  gridRow:segment.lane+1,
+                  background:segment.background,
+                  color:segment.color
+                }}
+              >
+                <strong className="calendar-span-label">{segment.label}</strong>
+                <span className="calendar-span-name">{event.name}</span>
+                {segment.gifted&&<span className="calendar-span-gift">🎁 OFFERT</span>}
                 {onDeleteEvent&&!event.planningBlock&&<button
                   type="button"
-                  className="danger-btn"
-                  onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}}
+                  className="danger-btn calendar-span-delete"
+                  onClick={e=>{e.stopPropagation();onDeleteEvent(event)}}
                   title={`Supprimer définitivement ${event.name}`}
                   aria-label={`Supprimer ${event.name}`}
-                  style={{padding:"4px 7px",minWidth:30,borderRadius:8}}
                 >🗑️</button>}
-              </div>
-            )}
-            {dayEvents.length > 4 && <small className="more-events">+ {dayEvents.length-4} autre(s)</small>}
+              </div>;
+            })}
           </div>
-        </div>
+        </div>;
       })}
     </div>
 
@@ -1542,7 +1625,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
                 onClick={() => onOpenEvent(event)}
                 title={`${item.label} — ${event.name}${event.time ? ` — installation ${event.time}` : ""}`}
                 style={{width:"100%",minWidth:0,display:"flex",alignItems:"center",gap:7,background:item.background,color:item.color,border:"none"}}
-              ><strong style={{whiteSpace:"nowrap"}}>{item.label}</strong><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.name}</span></button>)}
+              ><strong style={{whiteSpace:"nowrap"}}>{item.label}</strong><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{event.preparation?.gifted?"🎁 ":""}{event.name}</span></button>)}
             </div>
             {onDeleteEvent&&!event.planningBlock&&<button type="button" className="danger-btn" onClick={(e)=>{e.stopPropagation();onDeleteEvent(event)}} title={`Supprimer définitivement ${event.name}`} aria-label={`Supprimer ${event.name}`} style={{padding:"4px 8px",minWidth:34,borderRadius:8}}>🗑️</button>}
           </div>)}
@@ -4875,6 +4958,9 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
           <div className="card">
             <h3>📅 Prestation</h3>
             <p><strong>{safeText(event.type)||"Non renseigné"}</strong></p>
+            {prep.gifted && (
+              <p><span style={{display:"inline-block",padding:"5px 9px",borderRadius:999,background:"#6d28d9",color:"#fff",fontSize:12,fontWeight:900}}>🎁 DON / PRESTATION OFFERTE</span></p>
+            )}
             <p>{dateFrSafe(event.date)}{event.time?` · Installation ${safeText(event.time)}`:""}</p>
             <p>📍 {safeText(event.address)||"Adresse non renseignée"}</p>
             {event.pickupDate && (
@@ -4917,6 +5003,7 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
 
           <div className="card">
             <h3>📑 Suivi</h3>
+            <p>{prep.gifted?"🎁 Don / prestation offerte":"💼 Prestation facturée"}</p>
             <p>{contractSigned?"🟢 Contrat signé":"🟠 Contrat non signé"}</p>
             <p>{event.googleCalendarEventId?"📅 Agenda ✓":"📅 Agenda —"}</p>
             <p>{event.googleDriveFolderId?"☁️ Drive ✓":"☁️ Drive —"}</p>
@@ -5313,7 +5400,7 @@ function Dashboard({onLogout}) {
         </div>
       </> : view==="planning" ? <>
         <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
-        <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span></section>
+        <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span><span style={{fontWeight:800}}>🎁 Don / prestation offerte</span></section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
