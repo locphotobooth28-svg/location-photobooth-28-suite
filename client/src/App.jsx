@@ -5241,7 +5241,9 @@ function Dashboard({onLogout}) {
         .app-shell .sidebar{position:fixed !important;left:0;top:0;bottom:0;width:min(86vw,330px) !important;max-width:330px;z-index:1202;transform:translateX(-105%);transition:transform .22s ease;box-shadow:18px 0 45px rgba(0,0,0,.42);overflow-y:auto;}
         .app-shell .sidebar.mobile-open{transform:translateX(0);}
         .lp28-mobile-topbar{display:flex;position:fixed;left:0;right:0;top:0;height:62px;z-index:1200;align-items:center;gap:12px;padding:8px 12px;background:rgba(10,10,12,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
-        .lp28-mobile-menu-btn{width:44px;height:44px;display:grid;place-items:center;flex:0 0 auto;border:1px solid rgba(255,255,255,.13);border-radius:12px;background:#151519;color:#fff;font-size:24px;line-height:1;cursor:pointer;}
+        .lp28-mobile-menu-btn{min-width:112px;height:46px;display:flex;align-items:center;justify-content:center;gap:9px;flex:0 0 auto;padding:0 16px;border:1px solid rgba(214,185,79,.55);border-radius:13px;background:linear-gradient(135deg,rgba(214,185,79,.18),rgba(21,21,25,.96));color:#fff;font-size:15px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.20);}
+        .lp28-mobile-menu-btn .menu-bars{font-size:24px;line-height:1;}
+        .lp28-mobile-menu-btn .menu-label{letter-spacing:.04em;}
         .lp28-mobile-title{min-width:0;display:flex;flex-direction:column;line-height:1.12;}
         .lp28-mobile-title strong{font-size:.96rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .lp28-mobile-title span{margin-top:3px;font-size:.69rem;font-weight:800;letter-spacing:.08em;color:#d6b94f;text-transform:uppercase;}
@@ -5255,12 +5257,12 @@ function Dashboard({onLogout}) {
     `}</style>
 
     <div className="lp28-mobile-topbar">
-      <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}>☰</button>
+      <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}><span className="menu-bars">☰</span><span className="menu-label">MENU</span></button>
       <div className="lp28-mobile-title"><strong>{currentViewTitle}</strong><span>LP28 Suite</span></div>
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.32</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.33</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
@@ -5401,6 +5403,7 @@ function Dashboard({onLogout}) {
               </div>
               <div className="event-actions">
                 <button onClick={()=>setViewEvent(event)} style={{border:"1px solid #60a5fa",background:"rgba(30,64,175,.22)",color:"#bfdbfe",fontWeight:900}}>👁️ Voir l'événement</button>
+                {event.address&&<button onClick={()=>window.open(`https://waze.com/ul?q=${encodeURIComponent(event.address)}&navigate=yes&utm_source=lp28-suite`,`_blank`,`noopener,noreferrer`)} style={{border:"1px solid #38bdf8",background:"rgba(14,116,144,.20)",color:"#bae6fd",fontWeight:900}}>🚗 Se rendre à l’événement</button>}
                 <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
                 <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
                 <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
