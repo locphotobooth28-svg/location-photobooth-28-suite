@@ -192,6 +192,7 @@ function RegisterPage({token}){
 
 function SettingsPage({user}){
   const isAdmin=user?.role==="ADMIN";
+  const [planningRefresh,setPlanningRefresh]=useState(0);
   const [settingsTab,setSettingsTab]=useState(isAdmin?"general":"security");
   const [users,setUsers]=useState([]),[collaborators,setCollaborators]=useState([]),[invite,setInvite]=useState({firstName:"",lastName:"",email:"",phone:"",role:"VIEWER",collaboratorId:""}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
   const [appearance,setAppearance]=useState(()=>{try{return normalizeAppearance(JSON.parse(localStorage.getItem("lp28.appearance")||"{}"));}catch{return DEFAULT_APPEARANCE;}});
@@ -1573,16 +1574,16 @@ function ShareModal({event,onClose}) {
 }
 
 
-function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent}){
+function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent,refreshKey=0}){
   const [blocks,setBlocks]=useState([]);
   useEffect(()=>{
     let alive=true;
-    fetch("/api/admin/family-planning/blocks")
+    fetch("/api/account/family-planning/blocks")
       .then(async r=>{const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.message||"Blocages indisponibles"); return d;})
       .then(d=>{if(alive)setBlocks(d.blocks||[])})
       .catch(err=>console.warn("Blocages planning:",err));
     return ()=>{alive=false};
-  },[]);
+  },[refreshKey]);
   const blockEvents=blocks.map(b=>({
     id:`family-block-${b.id}`,
     name:"NON RÉSERVABLE",
@@ -1592,6 +1593,63 @@ function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent}){
     materials:[], archived:false, planningBlock:true
   }));
   return <CalendarView events={[...(events||[]),...blockEvents]} onOpenEvent={e=>{if(!e?.planningBlock)onOpenEvent?.(e)}} onDeleteEvent={onDeleteEvent}/>;
+}
+
+
+function FamilyPlanningAccountControls({onChanged}){
+  const [capability,setCapability]=useState(null);
+  const [blocks,setBlocks]=useState([]);
+  const [open,setOpen]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [form,setForm]=useState({startDate:"",endDate:"",notes:""});
+
+  async function loadBlocks(){
+    try{
+      const r=await fetch("/api/account/family-planning/blocks");
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok){setCapability(false);return;}
+      setCapability(Boolean(d.canManage));
+      setBlocks(d.blocks||[]);
+    }catch{setCapability(false)}
+  }
+  useEffect(()=>{loadBlocks()},[]);
+
+  async function createBlock(e){
+    e.preventDefault();
+    if(!form.startDate||!form.endDate)return;
+    setSaving(true);
+    try{
+      const r=await fetch("/api/account/family-planning/blocks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Impossible de créer l'indisponibilité.");
+      setForm({startDate:"",endDate:"",notes:""}); setOpen(false);
+      await loadBlocks(); onChanged?.();
+    }catch(err){alert(err.message||"Impossible de créer l'indisponibilité.")}
+    finally{setSaving(false)}
+  }
+
+  async function removeBlock(id){
+    if(!confirm("Rendre cette période de nouveau réservable ?"))return;
+    const r=await fetch(`/api/account/family-planning/blocks/${id}`,{method:"DELETE"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Impossible de libérer cette période.");
+    await loadBlocks(); onChanged?.();
+  }
+
+  if(capability!==true)return null;
+  return <section className="panel family-planning-controls" style={{marginBottom:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div><div className="eyebrow">DISPONIBILITÉS</div><h2 style={{margin:"4px 0"}}>🚫 Blocage / indisponibilité</h2><p className="muted" style={{margin:0}}>Bloque une date ou une période afin qu'aucune réservation ne puisse être prise.</p></div>
+      <button className="primary" type="button" onClick={()=>setOpen(v=>!v)}>{open?"✕ Fermer":"🚫 Créer une indisponibilité"}</button>
+    </div>
+    {open&&<form onSubmit={createBlock} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginTop:14}}>
+      <div><label>Du</label><input type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})} required/></div>
+      <div><label>Au</label><input type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})} required/></div>
+      <div><label>Motif</label><input value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Vacances, famille, indisponible…"/></div>
+      <button className="primary" disabled={saving}>{saving?"Enregistrement…":"✅ Bloquer la période"}</button>
+    </form>}
+    {blocks.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8,marginTop:14}}>{blocks.map(b=><div key={b.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:10,border:"1px solid #475569",borderRadius:10,flexWrap:"wrap"}}><div><strong>🚫 {new Date(b.startAt).toLocaleDateString("fr-FR")} → {new Date(b.endAt).toLocaleDateString("fr-FR")}</strong>{b.notes&&<div className="muted">{b.notes}</div>}</div><button className="secondary-btn" type="button" onClick={()=>removeBlock(b.id)}>🔓 Libérer</button></div>)}</div>}
+  </section>;
 }
 
 function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
@@ -1851,7 +1909,7 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
       .calendar-span-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
       .calendar-span-gift{flex:0 0 auto;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.2);font-size:9px;font-weight:900;white-space:nowrap;}
       .calendar-span-delete{flex:0 0 auto;min-width:24px;height:22px;padding:0 5px !important;border-radius:6px !important;font-size:12px !important;line-height:1 !important;}
-      @media (max-width: 760px){
+      @media (max-width: 1100px){
         .calendar-shell{padding:10px !important;border-radius:14px !important;}
         .calendar-toolbar{align-items:flex-start !important;gap:10px !important;}
         .calendar-toolbar h2{font-size:1.35rem !important;margin:2px 0 0 !important;}
@@ -5910,7 +5968,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.62</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.63</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -6102,7 +6160,7 @@ function Dashboard({onLogout,user}) {
           </article>;})}
         </div>
       </> : view==="planning" ? <>
-        <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
+        <FamilyPlanningAccountControls onChanged={()=>setPlanningRefresh(v=>v+1)}/><AdminPlanningCalendar events={events} refreshKey={planningRefresh} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={isAdmin?remove:undefined}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span>{isAdmin&&<span style={{fontWeight:800}}>🎁 Don / prestation offerte</span>}</section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
