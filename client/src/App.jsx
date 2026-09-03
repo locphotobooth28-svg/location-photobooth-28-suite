@@ -94,15 +94,43 @@ function RegisterPage({token}){
 }
 
 function SettingsPage(){
+  const [settingsTab,setSettingsTab]=useState("general");
   const [users,setUsers]=useState([]),[collaborators,setCollaborators]=useState([]),[invite,setInvite]=useState({firstName:"",lastName:"",email:"",phone:"",role:"VIEWER",collaboratorId:""}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
+  const DEFAULT_MODULES=[
+    {id:"dashboard",label:"Tableau de bord",icon:"🏠",locked:true},
+    {id:"events",label:"Événements",icon:"📅",locked:true},
+    {id:"planning",label:"Planning",icon:"🗓️",locked:true},
+    {id:"materialPlanning",label:"Planning matériel",icon:"📦",locked:true},
+    {id:"inventory",label:"Inventaire admin",icon:"🔐",locked:true},
+    {id:"longPlanning",label:"Planning 24 mois",icon:"🗓️",locked:true},
+    {id:"documents",label:"Documents",icon:"📄",locked:true},
+    {id:"galleries",label:"Galeries",icon:"📸",locked:true},
+    {id:"booths",label:"Mes bornes",icon:"🖥️",locked:false},
+    {id:"collaborators",label:"Collaborateurs",icon:"👷",locked:false},
+    {id:"google",label:"Google",icon:"☁️",locked:false},
+    {id:"assistance",label:"Assistance",icon:"🆘",locked:true},
+    {id:"settings",label:"Paramètres",icon:"⚙️",locked:true}
+  ];
+  function normalizePrefs(input){
+    const byId=new Map((Array.isArray(input)?input:[]).map(x=>[x.id,x]));
+    return DEFAULT_MODULES.map((m,i)=>({...m,visible:m.locked?true:(byId.get(m.id)?.visible!==false),order:Number.isFinite(Number(byId.get(m.id)?.order))?Number(byId.get(m.id).order):i}))
+      .sort((a,b)=>a.order-b.order).map((m,i)=>({...m,order:i}));
+  }
+  const [modulePrefs,setModulePrefs]=useState(()=>{
+    try{return normalizePrefs(JSON.parse(localStorage.getItem("lp28.modulePrefs")||"[]"));}catch{return normalizePrefs([]);}
+  });
+  const [dragModuleId,setDragModuleId]=useState(null);
+
   async function load(){
-    const [u,se,d,c]=await Promise.all([
+    const [u,se,d,c,p]=await Promise.all([
       fetch("/api/admin/users").then(r=>r.json()),
       fetch("/api/session").then(r=>r.json()),
       fetch("/api/account/trusted-devices").then(r=>r.json()),
-      fetch("/api/collaborators").then(r=>r.json()).catch(()=>({collaborators:[]}))
+      fetch("/api/collaborators").then(r=>r.json()).catch(()=>({collaborators:[]})),
+      fetch("/api/account/module-preferences").then(r=>r.json()).catch(()=>({}))
     ]);
     setUsers(u.users||[]);setSession(se);setDevices(d.devices||[]);setCollaborators(c.collaborators||[]);
+    if(p?.ok&&Array.isArray(p.modules)){const next=normalizePrefs(p.modules);setModulePrefs(next);localStorage.setItem("lp28.modulePrefs",JSON.stringify(next));}
   }
   useEffect(()=>{load()},[]);
   async function createInvite(){
@@ -116,11 +144,63 @@ function SettingsPage(){
   async function setup2fa(){const r=await fetch("/api/account/2fa/setup",{method:"POST"});const d=await r.json();if(!r.ok)return alert(d.message||"Impossible d'activer la 2FA.");setQr(d);setCodes([]);}
   async function enable2fa(){const r=await fetch("/api/account/2fa/enable",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:totpCode})});const d=await r.json();if(!r.ok)return alert(d.message);setCodes(d.recoveryCodes||[]);setQr(null);setTotpCode("");await load();}
   async function revoke(id){await fetch(`/api/account/trusted-devices/${id}`,{method:"DELETE"});load();}
-  return <section><div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATION LP28</div><h2>⚙️ Paramètres</h2><p className="muted">Comptes utilisateurs, invitations et sécurité.</p></div></div>
-    <div className="panel" style={{marginBottom:16}}><h2>👥 Comptes utilisateurs</h2><div style={{display:"grid",gap:8}}>{users.map(u=><div key={u.id} className="card" style={{padding:12}}><strong>{u.displayName||u.name||u.username||u.email}</strong> · {u.role} {u.totpEnabled?" · 🔐 2FA":""}{u.collaboratorId?" · 👷 Intervenant lié":""}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div>)}</div></div>
-    <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation calendrier</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
-    <div className="panel" style={{marginBottom:16}}><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>
-    <div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Les appareils sont regroupés par personne. Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revoke(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>
+  function dropModule(targetId){
+    if(!dragModuleId||dragModuleId===targetId)return;
+    const from=modulePrefs.findIndex(x=>x.id===dragModuleId),to=modulePrefs.findIndex(x=>x.id===targetId);
+    if(from<0||to<0)return;
+    const next=[...modulePrefs];const [moved]=next.splice(from,1);next.splice(to,0,moved);
+    setModulePrefs(next.map((x,i)=>({...x,order:i})));setDragModuleId(null);
+  }
+  async function saveModulePrefs(){
+    const saved=modulePrefs.map((x,i)=>({id:x.id,order:i,visible:x.locked?true:x.visible!==false}));
+    localStorage.setItem("lp28.modulePrefs",JSON.stringify(saved));
+    const r=await fetch("/api/account/module-preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({modules:saved})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Impossible d'enregistrer l'ordre.");
+    window.dispatchEvent(new CustomEvent("lp28-module-prefs-changed",{detail:saved}));
+    alert("✅ Ordre des modules enregistré.");
+  }
+  async function resetModulePrefs(){
+    const fresh=normalizePrefs([]);setModulePrefs(fresh);localStorage.setItem("lp28.modulePrefs",JSON.stringify(fresh));
+    await fetch("/api/account/module-preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({modules:fresh.map(({id,order,visible})=>({id,order,visible}))})}).catch(()=>{});
+    window.dispatchEvent(new CustomEvent("lp28-module-prefs-changed",{detail:fresh}));
+  }
+
+  return <section>
+    <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATION LP28</div><h2>⚙️ Paramètres</h2><p className="muted">Comptes utilisateurs, sécurité et personnalisation de LP28.</p></div></div>
+
+    <div className="settings-tabs">
+      <button className={settingsTab==="general"?"active":""} onClick={()=>setSettingsTab("general")}>Général</button>
+      <button className={settingsTab==="security"?"active":""} onClick={()=>setSettingsTab("security")}>Sécurité</button>
+      <button className={settingsTab==="devices"?"active":""} onClick={()=>setSettingsTab("devices")}>Appareils de confiance</button>
+      <button className={settingsTab==="modules"?"active":""} onClick={()=>setSettingsTab("modules")}>Ordre des modules</button>
+    </div>
+
+    {settingsTab==="general"&&<>
+      <div className="panel" style={{marginBottom:16}}><h2>👥 Comptes utilisateurs</h2><div style={{display:"grid",gap:8}}>{users.map(u=><div key={u.id} className="card" style={{padding:12}}><strong>{u.displayName||u.name||u.username||u.email}</strong> · {u.role} {u.totpEnabled?" · 🔐 2FA":""}{u.collaboratorId?" · 👷 Intervenant lié":""}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div>)}</div></div>
+      <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation calendrier</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
+    </>}
+
+    {settingsTab==="security"&&<div className="panel" style={{marginBottom:16}}><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>}
+
+    {settingsTab==="devices"&&<div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Les appareils sont regroupés par personne. Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revoke(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>}
+
+    {settingsTab==="modules"&&<>
+      <div className="panel module-order-help">
+        <div><h2>🔐 Ordre des modules</h2><p className="muted">Glisse-dépose les modules pour choisir leur ordre dans le menu. Le cadenas signifie que le module est obligatoire et ne peut pas être masqué.</p></div>
+        <div className="module-order-legend"><span>🔒 Obligatoire</span><span>⠿ Glisser pour réorganiser</span></div>
+      </div>
+      <div className="panel module-order-panel">
+        <div className="module-order-head"><span>Ordre</span><span>Module</span><span>Visible</span><span>État</span></div>
+        {modulePrefs.map((m,i)=><div key={m.id} className="module-order-row" draggable onDragStart={()=>setDragModuleId(m.id)} onDragEnd={()=>setDragModuleId(null)} onDragOver={e=>e.preventDefault()} onDrop={()=>dropModule(m.id)}>
+          <span className="module-drag">⠿ <b>{i+1}</b></span>
+          <span className="module-name">{m.icon} {m.label}</span>
+          <span>{m.locked?<span title="Module obligatoire">🔒</span>:<label className="module-switch"><input type="checkbox" checked={m.visible!==false} onChange={e=>setModulePrefs(v=>v.map(x=>x.id===m.id?{...x,visible:e.target.checked}:x))}/><span></span></label>}</span>
+          <span className="muted">{m.locked?"Verrouillé":"Optionnel"}</span>
+        </div>)}
+      </div>
+      <div className="module-order-actions"><button onClick={resetModulePrefs}>↶ Réinitialiser l’ordre par défaut</button><button className="primary" onClick={saveModulePrefs}>💾 Enregistrer l’ordre</button></div>
+    </>}
   </section>;
 }
 
@@ -5151,6 +5231,37 @@ function Dashboard({onLogout,user}) {
   const [search,setSearch]=useState("");
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
+  const NAV_DEFAULT=[
+    {id:"dashboard",label:"Tableau de bord",icon:"🏠",locked:true},
+    {id:"events",label:"Événements",icon:"📅",locked:true},
+    {id:"planning",label:"Planning",icon:"🗓️",locked:true},
+    {id:"materialPlanning",label:"Planning matériel",icon:"📦",locked:true},
+    {id:"inventory",label:"Inventaire admin",icon:"🔐",locked:true},
+    {id:"longPlanning",label:"Planning 24 mois",icon:"🗓️",locked:true},
+    {id:"documents",label:"Documents",icon:"📄",locked:true},
+    {id:"galleries",label:"Galeries",icon:"📸",locked:true},
+    {id:"booths",label:"Mes bornes",icon:"🖥️",locked:false},
+    {id:"collaborators",label:"Collaborateurs",icon:"👷",locked:false},
+    {id:"google",label:"Google",icon:"☁️",locked:false},
+    {id:"assistance",label:"Assistance",icon:"🆘",locked:true},
+    {id:"settings",label:"Paramètres",icon:"⚙️",locked:true}
+  ];
+  const normalizeNavPrefs=input=>{
+    const byId=new Map((Array.isArray(input)?input:[]).map(x=>[x.id,x]));
+    return NAV_DEFAULT.map((m,i)=>({...m,visible:m.locked?true:(byId.get(m.id)?.visible!==false),order:Number.isFinite(Number(byId.get(m.id)?.order))?Number(byId.get(m.id).order):i}))
+      .sort((a,b)=>a.order-b.order).map((m,i)=>({...m,order:i}));
+  };
+  const readLocalNavPrefs=()=>{try{return normalizeNavPrefs(JSON.parse(localStorage.getItem("lp28.modulePrefs")||"[]"));}catch{return normalizeNavPrefs([]);}};
+  const [navModules,setNavModules]=useState(readLocalNavPrefs);
+  useEffect(()=>{
+    fetch("/api/account/module-preferences").then(r=>r.json()).then(d=>{
+      if(d?.ok&&Array.isArray(d.modules)){const next=normalizeNavPrefs(d.modules);setNavModules(next);localStorage.setItem("lp28.modulePrefs",JSON.stringify(next));}
+    }).catch(()=>{});
+    const sync=e=>setNavModules(e?.detail?normalizeNavPrefs(e.detail):readLocalNavPrefs());
+    window.addEventListener("lp28-module-prefs-changed",sync);window.addEventListener("storage",sync);
+    return()=>{window.removeEventListener("lp28-module-prefs-changed",sync);window.removeEventListener("storage",sync);};
+  },[]);
+
 
   async function load(){
     const [e,d]=await Promise.all([
@@ -5436,6 +5547,34 @@ function Dashboard({onLogout,user}) {
         .trusted-table th{color:#d6b94f;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
         .trusted-table td:last-child,.trusted-table th:last-child{text-align:right;}
         .trusted-table button{min-height:42px;padding:8px 14px;}
+        .settings-tabs{display:flex;overflow-x:auto;margin:0 0 16px;border-bottom:1px solid rgba(214,185,79,.28);scrollbar-width:thin;}
+        .settings-tabs button{min-width:170px;padding:13px 18px;border:1px solid rgba(255,255,255,.09);border-bottom:0;border-radius:0;background:#151518;color:#ddd;font-weight:800;white-space:nowrap;}
+        .settings-tabs button.active{color:#f1d45b;background:rgba(214,185,79,.09);box-shadow:inset 0 -2px 0 #d6b94f;}
+        .module-order-help{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px;}
+        .module-order-legend{display:flex;gap:18px;flex-wrap:wrap;white-space:nowrap;}
+        .module-order-panel{padding:8px 14px;}
+        .module-order-head,.module-order-row{display:grid;grid-template-columns:110px minmax(240px,1fr) 120px 120px;gap:12px;align-items:center;}
+        .module-order-head{padding:10px 8px;color:#d6b94f;font-weight:900;border-bottom:1px solid rgba(214,185,79,.25);}
+        .module-order-row{padding:10px 8px;border-bottom:1px solid rgba(214,185,79,.16);cursor:grab;}
+        .module-order-row:hover{background:rgba(214,185,79,.035);}
+        .module-order-row:active{cursor:grabbing;}
+        .module-drag{display:flex;gap:10px;align-items:center;}
+        .module-drag b{display:inline-flex;min-width:30px;height:30px;align-items:center;justify-content:center;border-radius:7px;background:#c5a62d;color:#090909;}
+        .module-name{font-weight:800;}
+        .module-switch{position:relative;display:inline-block;width:48px;height:26px;}
+        .module-switch input{opacity:0;width:0;height:0;}
+        .module-switch span{position:absolute;inset:0;background:#444;border-radius:20px;cursor:pointer;}
+        .module-switch span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.18s;}
+        .module-switch input:checked + span{background:#d6b94f;}
+        .module-switch input:checked + span:before{transform:translateX(22px);}
+        .module-order-actions{display:flex;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap;}
+        @media (max-width:760px){
+          .module-order-help{align-items:flex-start;flex-direction:column;}
+          .module-order-head{display:none;}
+          .module-order-row{grid-template-columns:82px minmax(150px,1fr) 64px;gap:8px;}
+          .module-order-row>span:last-child{display:none;}
+          .settings-tabs button{min-width:155px;}
+        }
       }
       @media (min-width:1025px){
         .app-shell .sidebar{transform:none !important;}
@@ -5449,21 +5588,9 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.41</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.43</span></div></div>
       <nav>
-        <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
-        <button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>navigate("settings")}>⚙️ Paramètres</button>
-        <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
-        <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>navigate("planning")}>🗓️ Planning</button>
-        <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>navigate("materialPlanning")}>📦 Planning matériel</button>
-        <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>navigate("inventory")}>🔐 Inventaire admin</button>
-        <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>navigate("longPlanning")}>🗓️ Planning 24 mois</button>
-        <button className={`nav-item ${view==="documents"?"active":""}`} onClick={()=>navigate("documents")}>📄 Documents</button>
-        <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>navigate("galleries")}>📸 Galeries</button>
-        <button className={`nav-item ${view==="booths"?"active":""}`} onClick={()=>navigate("booths")}>🖥️ Mes bornes</button>
-        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>navigate("collaborators")}>👷 Collaborateurs</button>
-        <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>navigate("google")}>☁️ Google</button>
-        <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>navigate("assistance")}>🆘 Assistance</button>
+        {navModules.filter(m=>m.visible!==false).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""}`} onClick={()=>navigate(m.id)}>{m.icon} {m.label}</button>)}
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
