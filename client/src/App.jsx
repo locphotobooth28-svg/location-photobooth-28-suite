@@ -201,6 +201,8 @@ function SettingsPage({user}){
   const [notificationSound,setNotificationSound]=useState(()=>localStorage.getItem("lp28.notifications.sound")!=="false");
   const [notificationPopup,setNotificationPopup]=useState(()=>localStorage.getItem("lp28.notifications.popup")!=="false");
   const [systemPushStatus,setSystemPushStatus]=useState("unknown");
+  const [pushHistory,setPushHistory]=useState([]);
+  async function loadPushHistory(){if(!isAdmin)return;try{const r=await fetch("/api/admin/push-history");const d=await r.json();if(d?.ok)setPushHistory(d.history||[]);}catch{}}
   async function activateSystemPush(){try{await enableLp28SystemPush();setSystemPushStatus("enabled");alert("📱 Notifications système activées sur cet appareil.");}catch(err){setSystemPushStatus("error");alert(err.message||"Activation impossible.");}}
   function setNotifSound(v){setNotificationSound(v);localStorage.setItem("lp28.notifications.sound",String(v));}
   function setNotifPopup(v){setNotificationPopup(v);localStorage.setItem("lp28.notifications.popup",String(v));}
@@ -233,6 +235,7 @@ function SettingsPage({user}){
     setSession(all[0]);setDevices(all[1].devices||[]);
     fetch("/api/account/appearance").then(r=>r.json()).then(d=>{if(d?.ok&&d.appearance){const p=normalizeAppearance(d.appearance);setAppearance(p);setAppearancePreview(applyAppearance(p));}}).catch(()=>{});
     if(isAdmin){
+      loadPushHistory();
       const us=all[2].users||[];setUsers(us);setCollaborators(all[3].collaborators||[]);
       const map={};for(const u of us)map[u.id]=Array.isArray(u.permissions?.allowedModules)?u.permissions.allowedModules:(u.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
       setUserModules(map);
@@ -376,6 +379,7 @@ function SettingsPage({user}){
         {systemPushStatus==="enabled"&&<p style={{marginTop:10}}>✅ Notifications Android/PWA activées sur cet appareil.</p>}
         <p className="muted" style={{marginTop:10}}>Le navigateur peut demander une première interaction avant d’autoriser le son. Le bouton de test permet de l’activer.</p>
       </div>
+      {isAdmin&&<div className="card" style={{padding:14,marginTop:14}}><div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}><div><h3 style={{margin:0}}>📬 Historique Push</h3><p className="muted" style={{margin:"5px 0 0"}}>Suivi des notifications envoyées aux comptes et appareils. « Reçue » signifie que le service worker de l’appareil a confirmé la réception ; « Ouverte » signifie que la notification a été touchée.</p></div><button onClick={loadPushHistory}>↻ Actualiser</button></div><div style={{overflowX:"auto",marginTop:12}}><table className="trusted-table"><thead><tr><th>Notification</th><th>Destinataire</th><th>Appareil</th><th>État</th><th>Date</th></tr></thead><tbody>{pushHistory.length===0?<tr><td colSpan="5" className="muted">Aucun envoi Push enregistré.</td></tr>:pushHistory.map(h=><tr key={h.id}><td><strong>{h.title}</strong><div className="muted" style={{fontSize:12}}>{h.message}</div></td><td>{h.userName}<div className="muted" style={{fontSize:12}}>{h.role}</div></td><td>{h.deviceLabel}</td><td>{h.status==="OPENED"?"👁️ Ouverte":h.status==="RECEIVED"?"✅ Reçue":h.status==="SENT"?"📤 Envoyée":h.status==="FAILED"?"❌ Échec":"⏳ En attente"}{h.error&&<div className="muted" style={{fontSize:11}}>{h.error}</div>}</td><td>{dateFr(h.openedAt||h.receivedAt||h.sentAt||h.createdAt)}</td></tr>)}</tbody></table></div></div>}
       <div className="card" style={{padding:14,marginTop:14}}><h3>⚙️ Automatique</h3><p>✅ <strong>Contrat signé</strong> → notification ADMIN automatique.</p>
         <p>💳 <strong>Chèque de caution reçu</strong> → notification quand l’intervenant confirme sa réception.</p>
         <p>↩️ <strong>Chèque de caution rendu</strong> → notification quand l’intervenant confirme sa restitution au client.</p>
@@ -5524,6 +5528,9 @@ function Dashboard({onLogout,user}) {
   const [notificationOpen,setNotificationOpen]=useState(false),[notificationItems,setNotificationItems]=useState([]);
   async function openNotifications(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setNotificationItems(d.notifications||[])}catch{}setNotificationOpen(true)}
   async function readNotification(n){if(!n.read)await fetch(`/api/notifications/${n.id}/read`,{method:"POST"});setNotificationItems(v=>v.map(x=>x.id===n.id?{...x,read:true}:x));if(n.eventId){setSelectedEventId(n.eventId);setView("events");setNotificationOpen(false)}}
+  async function deleteNotification(id){await fetch(`/api/notifications/${id}`,{method:"DELETE"});setNotificationItems(v=>v.filter(x=>x.id!==id));}
+  async function deleteAllNotifications(){if(!notificationItems.length)return;if(!confirm("Supprimer toutes tes notifications de la liste ?"))return;const r=await fetch("/api/notifications",{method:"DELETE"});if(r.ok)setNotificationItems([]);}
+  async function readAllNotifications(){const r=await fetch("/api/notifications/read-all",{method:"POST"});if(r.ok)setNotificationItems(v=>v.map(x=>({...x,read:true})));}
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
   const [events,setEvents]=useState([]);
@@ -5833,7 +5840,7 @@ function Dashboard({onLogout,user}) {
 
   return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
     <div style={{position:"fixed",right:18,top:16,zIndex:10020}}><NotificationBell onOpen={openNotifications}/></div>
-    {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(440px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",color:"#f8fafc",border:"1px solid #d6b94f",borderRadius:16,padding:14,boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><strong style={{color:"#f8fafc"}}>🔔 Notifications</strong><button onClick={()=>setNotificationOpen(false)} style={{background:"#fff",color:"#111827",minWidth:34,height:34}}>✕</button></div>{notificationItems.length===0&&<p style={{color:"#cbd5e1"}}>Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} onClick={()=>readNotification(n)} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.16)":"#d6b94f"}`,background:n.read?"rgba(255,255,255,.03)":"rgba(214,185,79,.08)",borderRadius:12,marginTop:9,cursor:"pointer",color:"#f8fafc"}}><strong style={{display:"block",color:"#f8fafc"}}>{n.title}</strong><div style={{marginTop:5,color:"#e5e7eb",lineHeight:1.45}}>{n.message}</div><small style={{display:"block",marginTop:7,color:"#94a3b8"}}>{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div>)}</div>}
+    {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(480px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",color:"#f8fafc",border:"1px solid #d6b94f",borderRadius:16,padding:14,boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}><strong style={{color:"#f8fafc"}}>🔔 Notifications</strong><div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{notificationItems.some(n=>!n.read)&&<button onClick={readAllNotifications} style={{background:"#334155",color:"#fff"}}>✓ Tout lire</button>}{notificationItems.length>0&&<button onClick={deleteAllNotifications} style={{background:"#7f1d1d",color:"#fff"}}>🗑️ Tout supprimer</button>}<button onClick={()=>setNotificationOpen(false)} style={{background:"#fff",color:"#111827",minWidth:34,height:34}}>✕</button></div></div>{notificationItems.length===0&&<p style={{color:"#cbd5e1"}}>Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.16)":"#d6b94f"}`,background:n.read?"rgba(255,255,255,.03)":"rgba(214,185,79,.08)",borderRadius:12,marginTop:9,color:"#f8fafc"}}><div onClick={()=>readNotification(n)} style={{cursor:"pointer"}}><strong style={{display:"block",color:"#f8fafc"}}>{n.title}</strong><div style={{marginTop:5,color:"#e5e7eb",lineHeight:1.45}}>{n.message}</div><small style={{display:"block",marginTop:7,color:"#94a3b8"}}>{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div><div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}><button onClick={()=>deleteNotification(n.id)} style={{background:"#3f1d1d",color:"#fecaca",padding:"7px 10px",minHeight:34}}>🗑️ Supprimer</button></div></div>)}</div>}
     <style>{`
       .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
       @media (max-width:1024px){
@@ -5903,7 +5910,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.61</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.62</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
