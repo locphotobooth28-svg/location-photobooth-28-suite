@@ -200,6 +200,8 @@ function SettingsPage({user}){
   const [testUserId,setTestUserId]=useState("");
   const [notificationSound,setNotificationSound]=useState(()=>localStorage.getItem("lp28.notifications.sound")!=="false");
   const [notificationPopup,setNotificationPopup]=useState(()=>localStorage.getItem("lp28.notifications.popup")!=="false");
+  const [systemPushStatus,setSystemPushStatus]=useState("unknown");
+  async function activateSystemPush(){try{await enableLp28SystemPush();setSystemPushStatus("enabled");alert("📱 Notifications système activées sur cet appareil.");}catch(err){setSystemPushStatus("error");alert(err.message||"Activation impossible.");}}
   function setNotifSound(v){setNotificationSound(v);localStorage.setItem("lp28.notifications.sound",String(v));}
   function setNotifPopup(v){setNotificationPopup(v);localStorage.setItem("lp28.notifications.popup",String(v));}
   function testLocalNotification(){
@@ -369,7 +371,9 @@ function SettingsPage({user}){
         <p className="muted">Ces réglages concernent uniquement ce navigateur/appareil.</p>
         <label style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}><input type="checkbox" checked={notificationSound} onChange={e=>setNotifSound(e.target.checked)}/> 🔊 Son des nouvelles notifications</label>
         <label style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}><input type="checkbox" checked={notificationPopup} onChange={e=>setNotifPopup(e.target.checked)}/> 🪟 Fenêtre pop-up automatique</label>
+        <button className="primary" style={{marginTop:14,marginRight:8}} onClick={activateSystemPush}>📱 Activer les notifications système</button>
         <button style={{marginTop:14}} onClick={testLocalNotification}>🧪 Tester son + pop-up</button>
+        {systemPushStatus==="enabled"&&<p style={{marginTop:10}}>✅ Notifications Android/PWA activées sur cet appareil.</p>}
         <p className="muted" style={{marginTop:10}}>Le navigateur peut demander une première interaction avant d’autoriser le son. Le bouton de test permet de l’activer.</p>
       </div>
       <div className="card" style={{padding:14,marginTop:14}}><h3>⚙️ Automatique</h3><p>✅ <strong>Contrat signé</strong> → notification ADMIN automatique.</p>
@@ -5437,6 +5441,24 @@ function playLp28NotificationSound(){
     setTimeout(()=>ctx.close().catch(()=>{}),700);
   }catch{}
 }
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=window.atob(base64);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+async function enableLp28SystemPush(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))throw new Error("Les notifications Push ne sont pas prises en charge sur cet appareil.");
+  const status=await fetch("/api/push/status").then(r=>r.json());
+  if(!status.configured||!status.publicKey)throw new Error("Le serveur Push LP28 n'est pas encore configuré.");
+  const permission=await Notification.requestPermission();
+  if(permission!=="granted")throw new Error("Autorisation de notification refusée sur cet appareil.");
+  const reg=await navigator.serviceWorker.register("/sw.js");await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(status.publicKey)});
+  const deviceLabel=/Android/i.test(navigator.userAgent)?"Android LP28":"Appareil LP28";
+  const r=await fetch("/api/push/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub.toJSON(),deviceLabel})});
+  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Impossible d'activer les notifications système.");
+  return true;
+}
 function NotificationBell({onOpen}){
   const [count,setCount]=useState(0);
   const [toast,setToast]=useState(null);
@@ -5881,7 +5903,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.59</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.60</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
