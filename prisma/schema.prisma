@@ -13,6 +13,10 @@ model User {
   username            String?  @unique
   passwordHash        String
   name                 String?
+  firstName            String?
+  lastName             String?
+  collaboratorId       String?  @unique
+  collaborator         Collaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
   role                 String   @default("VIEWER")
   active               Boolean  @default(true)
   permissions          Json?
@@ -30,8 +34,11 @@ model UserInvitation {
   id          String   @id @default(uuid())
   tokenHash   String   @unique
   name        String?
+  firstName   String?
+  lastName    String?
   email       String?
   phone       String?
+  collaboratorId String?
   role        String   @default("VIEWER")
   permissions Json?
   expiresAt   DateTime
@@ -376,6 +383,7 @@ model Collaborator {
 
   accesses CollaboratorAccess[]
   actions  CollaboratorAction[]
+  user     User?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
