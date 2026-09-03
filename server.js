@@ -160,6 +160,11 @@ function effectiveCollaboratorPermissions(event,access){
     canSeeInstructions:pick("canSeeInstructions",access?.canSeeInstructions)
   };
 }
+function notificationWhere(user){
+ const now=new Date(),aud=["ALL"];if(user?.role==="ADMIN")aud.push("ADMIN");if(user?.role==="INTERVENANT")aud.push("INTERVENANTS");if(user?.role==="VIEWER")aud.push("VIEWERS");
+ return {startsAt:{lte:now},AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]},{OR:[{audience:{in:aud}},{targetUserId:user?.id||"__none__"}]}]};
+}
+async function addNotification(d){return prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});}
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -1237,6 +1242,19 @@ app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{
 app.delete("/api/account/trusted-devices/:id",userOnly,async(req,res)=>{await prisma.trustedDevice.deleteMany({where:{id:req.params.id,userId:req.session.userId}});res.json({ok:true});});
 
 
+app.get("/api/notifications",userOnly,async(req,res)=>{
+ const user=req.currentUser||await sessionUser(req);const rows=await prisma.appNotification.findMany({where:notificationWhere(user),include:{reads:{where:{userId:user.id}}},orderBy:{createdAt:"desc"},take:100});
+ res.json({ok:true,notifications:rows.map(n=>({id:n.id,title:n.title,message:n.message,type:n.type,source:n.source,eventId:n.eventId,createdAt:n.createdAt,read:n.reads.length>0}))});
+});
+app.post("/api/notifications/:id/read",userOnly,async(req,res)=>{
+ const user=req.currentUser||await sessionUser(req);const n=await prisma.appNotification.findFirst({where:{id:req.params.id,...notificationWhere(user)}});if(!n)return res.status(404).json({ok:false});
+ await prisma.appNotificationRead.upsert({where:{notificationId_userId:{notificationId:n.id,userId:user.id}},update:{readAt:new Date()},create:{notificationId:n.id,userId:user.id}});res.json({ok:true});
+});
+app.post("/api/admin/notifications",adminOnly,async(req,res)=>{
+ const b=req.body||{};if(!String(b.title||"").trim()||!String(b.message||"").trim())return res.status(400).json({ok:false,message:"Titre et message obligatoires."});
+ const audience=["ADMIN","ALL","INTERVENANTS","VIEWERS","USER"].includes(b.audience)?b.audience:"ADMIN";if(audience==="USER"&&!b.targetUserId)return res.status(400).json({ok:false,message:"Choisis un utilisateur."});
+ res.json({ok:true,notification:await addNotification({...b,audience,targetUserId:audience==="USER"?b.targetUserId:null,source:"MANUAL"})});
+});
 app.get("/api/account/appearance",userOnly,async(req,res)=>{
   const user=req.currentUser||await sessionUser(req);
   if(!user)return res.status(401).json({ok:false,message:"Non autorisé."});
@@ -2106,6 +2124,12 @@ app.patch("/api/events/:id/start", adminOnly, async (req,res)=>{
       data:{status:"IN_PROGRESS"}
     });
 
+    await addNotification({
+      title:"▶️ Événement commencé",
+      message:`${event.name || "Événement"} — la prestation vient d'être passée en cours.`,
+      type:"INFO",source:"EVENT_STARTED",audience:"ADMIN",eventId:event.id
+    }).catch(err=>console.error("Notification début événement :",err));
+
     res.json({
       ok:true,
       id:updated.id,
@@ -2654,6 +2678,7 @@ if (
       }
     });
 
+    await addNotification({title:"✅ Contrat signé",message:`${event.name||"Événement"} — contrat signé par ${signerName}.`,type:"SUCCESS",source:"CONTRACT_SIGNED",audience:"ADMIN",eventId:event.id}).catch(err=>console.error("Notification contrat signé :",err));
     res.json({
       ok: true,
       status: "SIGNED",
@@ -5335,6 +5360,13 @@ app.post("/api/collaborator-portal/:token/payment-received", async (req, res) =>
 
     return { event, action };
   });
+
+  const receivedAmount=eventOperationalRemaining(access.event);
+  await addNotification({
+    title:"💶 Règlement reçu",
+    message:`${access.event.name || "Événement"} — ${access.collaborator.firstName}${access.collaborator.lastName?` ${access.collaborator.lastName}`:""} confirme la réception du règlement${receivedAmount>0?` de ${receivedAmount.toFixed(2).replace(".",",")} €`:""}.`,
+    type:"SUCCESS",source:"PAYMENT_RECEIVED",audience:"ADMIN",eventId:access.eventId
+  }).catch(err=>console.error("Notification règlement reçu :",err));
 
   res.json({
     ok: true,
