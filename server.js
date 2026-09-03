@@ -2040,7 +2040,18 @@ app.get("/api/family-planning/data",familyPlanningOnly,async(req,res)=>{
 });
 
 // Planning Admin : mêmes blocages familiaux, sans exposer le motif privé.
-app.get("/api/admin/family-planning/blocks",adminOnly,async(req,res)=>{
+function canManageFamilyPlanningAccount(user){
+  if(!user)return false;
+  if(user.role==="ADMIN")return true;
+  const email=String(user.email||"").trim().toLowerCase();
+  if(FAMILY_PLANNING_EMAIL && email===FAMILY_PLANNING_EMAIL)return true;
+  const identity=`${user.firstName||""} ${user.name||""}`.toLowerCase();
+  return identity.includes("lydie");
+}
+
+app.get("/api/account/family-planning/blocks",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  const canManage=canManageFamilyPlanningAccount(user);
   const blocks=await prisma.materialUnavailability.findMany({
     where:{status:"ACTIVE",reason:"VACATION",notes:{startsWith:"FAMILY_PLANNING|"}},
     orderBy:{startAt:"asc"}
@@ -2049,10 +2060,41 @@ app.get("/api/admin/family-planning/blocks",adminOnly,async(req,res)=>{
   for(const b of blocks){
     const key=`${new Date(b.startAt).toISOString()}|${new Date(b.endAt).toISOString()}|${String(b.notes||"")}`;
     if(seen.has(key)) continue; seen.add(key);
-    grouped.push({id:b.id,startAt:b.startAt,endAt:b.endAt,label:"NON RÉSERVABLE"});
+    const privateNote=String(b.notes||"").replace(/^FAMILY_PLANNING\|/,"");
+    grouped.push({id:b.id,startAt:b.startAt,endAt:b.endAt,label:"NON RÉSERVABLE",notes:canManage?privateNote:""});
   }
-  res.json({ok:true,blocks:grouped});
+  res.json({ok:true,canManage,blocks:grouped});
 });
+
+app.post("/api/account/family-planning/blocks",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  if(!canManageFamilyPlanningAccount(user))return res.status(403).json({ok:false,message:"Ce compte ne peut pas bloquer le planning."});
+  const startDate=String(req.body?.startDate||""); const endDate=String(req.body?.endDate||""); const note=String(req.body?.notes||"").trim();
+  const start=new Date(`${startDate}T00:00:00`); const end=new Date(`${endDate}T23:59:59`);
+  if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<start) return res.status(400).json({ok:false,message:"Période invalide."});
+  await ensureCatalog(prisma);
+  const materials=await prisma.material.findMany({where:{active:true,blocksPlanning:true}});
+  if(!materials.length)return res.status(400).json({ok:false,message:"Aucun matériel bloquant n'est configuré."});
+  const created=await prisma.$transaction(materials.map(m=>prisma.materialUnavailability.create({data:{materialId:m.id,startAt:start,endAt:end,reason:"VACATION",notes:`FAMILY_PLANNING|${note}`,status:"ACTIVE"}})));
+  const actor=user?.firstName||user?.name||"Lydie";
+  const sameDay=startDate===endDate;
+  await addNotification({title:"⛔ Date bloquée dans le planning",message:`${actor} a bloqué ${sameDay?`le ${frDateShort(start)}`:`du ${frDateShort(start)} au ${frDateShort(end)}`}${note?` — Motif : ${note}`:" — Sans motif renseigné"}.`,type:"WARNING",source:"FAMILY_DATE_BLOCKED",audience:"ADMIN"}).catch(err=>console.error("Notification blocage planning compte :",err));
+  res.json({ok:true,count:created.length});
+});
+
+app.delete("/api/account/family-planning/blocks/:id",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  if(!canManageFamilyPlanningAccount(user))return res.status(403).json({ok:false,message:"Ce compte ne peut pas libérer le planning."});
+  const first=await prisma.materialUnavailability.findUnique({where:{id:req.params.id}});
+  if(!first||first.reason!=="VACATION"||!String(first.notes||"").startsWith("FAMILY_PLANNING|"))return res.status(404).json({ok:false,message:"Blocage introuvable."});
+  const note=String(first.notes||"");
+  await prisma.materialUnavailability.deleteMany({where:{reason:"VACATION",notes:note,startAt:first.startAt,endAt:first.endAt}});
+  const actor=user?.firstName||user?.name||"Lydie";
+  const privateNote=note.replace(/^FAMILY_PLANNING\|/,"").trim();
+  await addNotification({title:"✅ Date libérée dans le planning",message:`${actor} a libéré ${frDateShort(first.startAt)}${frDateShort(first.startAt)!==frDateShort(first.endAt)?` au ${frDateShort(first.endAt)}`:""}${privateNote?` — Motif précédent : ${privateNote}`:""}.`,type:"SUCCESS",source:"FAMILY_DATE_RELEASED",audience:"ADMIN"}).catch(err=>console.error("Notification libération planning compte :",err));
+  res.json({ok:true});
+});
+
 app.post("/api/family-planning/blocks",familyPlanningOnly,async(req,res)=>{
   const startDate=String(req.body?.startDate||""); const endDate=String(req.body?.endDate||""); const note=String(req.body?.notes||"").trim();
   const start=new Date(`${startDate}T00:00:00`); const end=new Date(`${endDate}T23:59:59`);
