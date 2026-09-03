@@ -5517,10 +5517,16 @@ function Dashboard({onLogout,user}) {
       return date>=monday&&date<=sunday;
     });
 
-    const billedEvents=weekEvents.filter(event=>!event?.preparation?.gifted);
-    const giftedEvents=weekEvents.filter(event=>!!event?.preparation?.gifted);
+    const billedEvents=isAdmin
+      ? weekEvents.filter(event=>!event?.preparation?.gifted)
+      : weekEvents.filter(event=>event?.canSeeOperationalBalance===true);
+    const giftedEvents=isAdmin?weekEvents.filter(event=>!!event?.preparation?.gifted):[];
     const sumTotal=items=>items.reduce((total,event)=>total+Math.max(Number(event?.totalPrice||0),0),0);
     const remainingForEvent=event=>{
+      if(!isAdmin){
+        const operational=Number(event?.operationalBalance);
+        return Number.isFinite(operational)?Math.max(operational,0):0;
+      }
       const balance=Number(event?.balance);
       if(Number.isFinite(balance))return Math.max(balance,0);
       const total=Math.max(Number(event?.totalPrice||0),0);
@@ -5536,7 +5542,7 @@ function Dashboard({onLogout,user}) {
       billedAmount:sumRemaining(billedEvents),
       giftAmount:sumTotal(giftedEvents)
     };
-  },[events]);
+  },[events,isAdmin]);
 
   const dashboardMoney=value=>Number(value||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 
@@ -5701,7 +5707,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.47</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.48</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -5745,19 +5751,22 @@ function Dashboard({onLogout,user}) {
             <small className="muted">Du lundi au dimanche</small>
           </article>
 
+          {(isAdmin||user?.role==="INTERVENANT")&&<>
           <article className="stat-card" style={{position:"relative",border:"1px solid rgba(168,85,247,.58)",background:"linear-gradient(135deg,rgba(126,34,206,.16),rgba(31,20,43,.32))"}}>
             <button type="button" aria-label={showWeeklyBilledAmount?"Masquer le montant facturé":"Afficher le montant facturé"} title={showWeeklyBilledAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
-            <span>💶 Reste à encaisser cette semaine</span>
+            <span>{isAdmin?"💶 Reste à encaisser cette semaine":"💶 Règlement à récupérer cette semaine"}</span>
             <strong style={{color:"#c084fc",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyBilledAmount?dashboardMoney(weeklyDashboard.billedAmount):"****.** €"}</strong>
-            <small className="muted">{weeklyDashboard.billedCount} prestation{weeklyDashboard.billedCount>1?"s":""} · après déduction des règlements reçus</small>
+            <small className="muted">{isAdmin?`${weeklyDashboard.billedCount} prestation${weeklyDashboard.billedCount>1?"s":""} · après déduction des règlements reçus`:`${weeklyDashboard.billedCount} mission${weeklyDashboard.billedCount>1?"s":""} avec règlement autorisé`}</small>
           </article>
 
+          </>}
+          {isAdmin&&<>
           <article className="stat-card" style={{position:"relative",border:"1px solid rgba(34,197,94,.55)",background:"linear-gradient(135deg,rgba(22,101,52,.18),rgba(13,36,25,.34))"}}>
             <button type="button" aria-label={showWeeklyGiftAmount?"Masquer le montant des dons":"Afficher le montant des dons"} title={showWeeklyGiftAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
             <span>🎁 Don / prestation offerte</span>
             <strong style={{color:"#4ade80",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyGiftAmount?dashboardMoney(weeklyDashboard.giftAmount):"****.** €"}</strong>
             <small className="muted">{weeklyDashboard.giftCount} prestation{weeklyDashboard.giftCount>1?"s":""} offerte{weeklyDashboard.giftCount>1?"s":""}</small>
-          </article>
+          </article>          </>}
         </section>
         <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo.jpg"/></section>
       </> : view==="events" ? <>
