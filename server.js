@@ -164,7 +164,7 @@ function effectiveCollaboratorPermissions(event,access){
 }
 function notificationWhere(user){
  const now=new Date(),aud=["ALL"];if(user?.role==="ADMIN")aud.push("ADMIN");if(user?.role==="INTERVENANT")aud.push("INTERVENANTS");if(user?.role==="VIEWER")aud.push("VIEWERS");
- return {startsAt:{lte:now},AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]},{OR:[{audience:{in:aud}},{targetUserId:user?.id||"__none__"}]}]};
+ return {startsAt:{lte:now},AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]},{OR:[{audience:{in:aud}},{targetUserId:user?.id||"__none__"}]},{reads:{none:{userId:user?.id||"__none__",dismissedAt:{not:null}}}}]};
 }
 async function addNotification(d){
   const notification=await prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});
@@ -222,11 +222,15 @@ async function sendPushForNotification(n){
   const userIds=await notificationRecipientUserIds(n);
   if(!userIds.length)return;
   const subs=await prisma.pushSubscription.findMany({where:{active:true,userId:{in:userIds}}});
-  const payload=JSON.stringify({title:n.title,message:n.message,eventId:n.eventId||null,notificationId:n.id,url:n.eventId?`/?event=${encodeURIComponent(n.eventId)}`:"/"});
   await Promise.allSettled(subs.map(async s=>{
+    const receiptToken=randomToken(24);
+    const delivery=await prisma.pushDelivery.create({data:{notificationId:n.id,userId:s.userId,subscriptionId:s.id,receiptToken,deviceLabel:s.deviceLabel||null,status:"PENDING"}});
+    const payload=JSON.stringify({title:n.title,message:n.message,eventId:n.eventId||null,notificationId:n.id,deliveryToken:receiptToken,url:n.eventId?`/?event=${encodeURIComponent(n.eventId)}`:"/"});
     try{
       await webpush.sendNotification({endpoint:s.endpoint,keys:{p256dh:s.p256dh,auth:s.auth}},payload,{TTL:3600,urgency:n.type==="URGENT"?"high":"normal"});
+      await prisma.pushDelivery.update({where:{id:delivery.id},data:{status:"SENT",sentAt:new Date()}}).catch(()=>{});
     }catch(err){
+      await prisma.pushDelivery.update({where:{id:delivery.id},data:{status:"FAILED",failedAt:new Date(),error:String(err?.message||"Échec Push").slice(0,500)}}).catch(()=>{});
       if(err?.statusCode===404||err?.statusCode===410){await prisma.pushSubscription.update({where:{endpoint:s.endpoint},data:{active:false}}).catch(()=>{});return;}
       throw err;
     }
@@ -1316,6 +1320,37 @@ app.get("/api/notifications",userOnly,async(req,res)=>{
 app.post("/api/notifications/:id/read",userOnly,async(req,res)=>{
  const user=req.currentUser||await sessionUser(req);const n=await prisma.appNotification.findFirst({where:{id:req.params.id,...notificationWhere(user)}});if(!n)return res.status(404).json({ok:false});
  await prisma.appNotificationRead.upsert({where:{notificationId_userId:{notificationId:n.id,userId:user.id}},update:{readAt:new Date()},create:{notificationId:n.id,userId:user.id}});res.json({ok:true});
+});
+app.post("/api/notifications/read-all",userOnly,async(req,res)=>{
+ const user=req.currentUser||await sessionUser(req);const rows=await prisma.appNotification.findMany({where:notificationWhere(user),select:{id:true}});const now=new Date();
+ await Promise.all(rows.map(n=>prisma.appNotificationRead.upsert({where:{notificationId_userId:{notificationId:n.id,userId:user.id}},update:{readAt:now,dismissedAt:null},create:{notificationId:n.id,userId:user.id,readAt:now}})));
+ res.json({ok:true,count:rows.length});
+});
+app.delete("/api/notifications/:id",userOnly,async(req,res)=>{
+ const user=req.currentUser||await sessionUser(req);const n=await prisma.appNotification.findFirst({where:{id:req.params.id,...notificationWhere(user)}});if(!n)return res.status(404).json({ok:false,message:"Notification introuvable."});
+ await prisma.appNotificationRead.upsert({where:{notificationId_userId:{notificationId:n.id,userId:user.id}},update:{dismissedAt:new Date()},create:{notificationId:n.id,userId:user.id,dismissedAt:new Date()}});res.json({ok:true});
+});
+app.delete("/api/notifications",userOnly,async(req,res)=>{
+ const user=req.currentUser||await sessionUser(req);const rows=await prisma.appNotification.findMany({where:notificationWhere(user),select:{id:true}});const now=new Date();
+ await Promise.all(rows.map(n=>prisma.appNotificationRead.upsert({where:{notificationId_userId:{notificationId:n.id,userId:user.id}},update:{dismissedAt:now},create:{notificationId:n.id,userId:user.id,dismissedAt:now}})));
+ res.json({ok:true,count:rows.length});
+});
+app.post("/api/push/delivery/:token/received",async(req,res)=>{
+ const token=String(req.params.token||"");if(!token)return res.status(400).json({ok:false});
+ const d=await prisma.pushDelivery.findUnique({where:{receiptToken:token}}).catch(()=>null);if(!d)return res.status(404).json({ok:false});
+ await prisma.pushDelivery.update({where:{id:d.id},data:{status:d.openedAt?"OPENED":"RECEIVED",receivedAt:d.receivedAt||new Date()}});res.json({ok:true});
+});
+app.post("/api/push/delivery/:token/opened",async(req,res)=>{
+ const token=String(req.params.token||"");if(!token)return res.status(400).json({ok:false});
+ const d=await prisma.pushDelivery.findUnique({where:{receiptToken:token}}).catch(()=>null);if(!d)return res.status(404).json({ok:false});
+ const now=new Date();await prisma.pushDelivery.update({where:{id:d.id},data:{status:"OPENED",receivedAt:d.receivedAt||now,openedAt:now}});res.json({ok:true});
+});
+app.get("/api/admin/push-history",adminOnly,async(req,res)=>{
+ const rows=await prisma.pushDelivery.findMany({orderBy:{createdAt:"desc"},take:250});
+ const userIds=[...new Set(rows.map(x=>x.userId))],notificationIds=[...new Set(rows.map(x=>x.notificationId))];
+ const [users,notifications]=await Promise.all([prisma.user.findMany({where:{id:{in:userIds}},select:{id:true,firstName:true,lastName:true,name:true,email:true,role:true}}),prisma.appNotification.findMany({where:{id:{in:notificationIds}},select:{id:true,title:true,message:true,eventId:true,source:true}})]);
+ const um=new Map(users.map(u=>[u.id,u])),nm=new Map(notifications.map(n=>[n.id,n]));
+ res.json({ok:true,history:rows.map(d=>{const u=um.get(d.userId)||{},n=nm.get(d.notificationId)||{};return {id:d.id,notificationId:d.notificationId,title:n.title||"Notification",message:n.message||"",eventId:n.eventId||null,source:n.source||"",userId:d.userId,userName:[u.firstName,u.lastName].filter(Boolean).join(" ")||u.name||u.email||"Utilisateur",role:u.role||"",deviceLabel:d.deviceLabel||"Appareil",status:d.status,sentAt:d.sentAt,receivedAt:d.receivedAt,openedAt:d.openedAt,failedAt:d.failedAt,error:d.error,createdAt:d.createdAt};})});
 });
 app.post("/api/admin/notifications",adminOnly,async(req,res)=>{
  const b=req.body||{};if(!String(b.title||"").trim()||!String(b.message||"").trim())return res.status(400).json({ok:false,message:"Titre et message obligatoires."});
@@ -5522,12 +5557,14 @@ app.get("/sw.js",(req,res)=>{
 self.addEventListener("push",event=>{
   let data={};try{data=event.data?event.data.json():{};}catch{}
   const title=data.title||"LP28 Suite";
-  const options={body:data.message||"Nouvelle notification",icon:"/icon-192.png",badge:"/icon-192.png",tag:data.notificationId||undefined,renotify:true,data:{url:data.url||"/",eventId:data.eventId||null}};
-  event.waitUntil(self.registration.showNotification(title,options));
+  const options={body:data.message||"Nouvelle notification",icon:"/icon-192.png",badge:"/icon-192.png",tag:data.notificationId||undefined,renotify:true,data:{url:data.url||"/",eventId:data.eventId||null,deliveryToken:data.deliveryToken||null}};
+  const ack=data.deliveryToken?fetch("/api/push/delivery/"+encodeURIComponent(data.deliveryToken)+"/received",{method:"POST"}).catch(()=>null):Promise.resolve();
+  event.waitUntil(Promise.all([self.registration.showNotification(title,options),ack]));
 });
 self.addEventListener("notificationclick",event=>{
-  event.notification.close();const url=event.notification.data?.url||"/";
-  event.waitUntil(clients.matchAll({type:"window",includeUncontrolled:true}).then(list=>{for(const c of list){if("focus" in c){c.navigate(url).catch(()=>{});return c.focus();}}return clients.openWindow?clients.openWindow(url):null;}));
+  event.notification.close();const url=event.notification.data?.url||"/",token=event.notification.data?.deliveryToken||null;
+  const ack=token?fetch("/api/push/delivery/"+encodeURIComponent(token)+"/opened",{method:"POST"}).catch(()=>null):Promise.resolve();
+  event.waitUntil(Promise.all([ack,clients.matchAll({type:"window",includeUncontrolled:true}).then(list=>{for(const c of list){if("focus" in c){c.navigate(url).catch(()=>{});return c.focus();}}return clients.openWindow?clients.openWindow(url):null;})]));
 });
 `);
 });
