@@ -5377,7 +5377,32 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
   );
 }
 
-function NotificationBell({onOpen}){const [count,setCount]=useState(0);async function load(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setCount((d.notifications||[]).filter(n=>!n.read).length)}catch{}}useEffect(()=>{load();const t=setInterval(load,30000);return()=>clearInterval(t)},[]);return <button onClick={onOpen} style={{position:"relative",fontSize:"1.25rem",minWidth:46,height:46,borderRadius:14}} title="Notifications">🔔{count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}</button>}
+function NotificationBell({onOpen}){
+  const [count,setCount]=useState(0);
+  async function load(){
+    try{
+      const r=await fetch("/api/notifications");
+      const d=await r.json();
+      if(d?.ok)setCount((d.notifications||[]).filter(n=>!n.read).length);
+    }catch{}
+  }
+  useEffect(()=>{load();const t=setInterval(load,30000);return()=>clearInterval(t)},[]);
+  return <>
+    <style>{`
+      @keyframes lp28BellPulse{
+        0%,100%{transform:rotate(0deg) scale(1);box-shadow:0 0 0 rgba(214,185,79,0)}
+        25%{transform:rotate(-9deg) scale(1.08)}
+        50%{transform:rotate(9deg) scale(1.08);box-shadow:0 0 20px rgba(214,185,79,.8)}
+        75%{transform:rotate(-5deg) scale(1.04)}
+      }
+      .lp28-notification-bell.unread{animation:lp28BellPulse 1.15s ease-in-out infinite;border-color:#d6b94f !important}
+    `}</style>
+    <button onClick={onOpen} className={`lp28-notification-bell ${count>0?"unread":""}`} style={{position:"relative",fontSize:"1.25rem",minWidth:46,height:46,borderRadius:14}} title="Notifications">
+      🔔
+      {count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}
+    </button>
+  </>;
+}
 function Dashboard({onLogout,user}) {
   const [view,setView]=useState("dashboard");
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
@@ -5693,7 +5718,7 @@ function Dashboard({onLogout,user}) {
 
   return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
     <div style={{position:"fixed",right:18,top:16,zIndex:10020}}><NotificationBell onOpen={openNotifications}/></div>
-    {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(440px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",border:"1px solid #d6b94f",borderRadius:16,padding:14}}><div style={{display:"flex",justifyContent:"space-between"}}><strong>🔔 Notifications</strong><button onClick={()=>setNotificationOpen(false)}>✕</button></div>{notificationItems.length===0&&<p className="muted">Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} onClick={()=>readNotification(n)} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.12)":"#d6b94f"}`,borderRadius:12,marginTop:9,cursor:"pointer"}}><strong>{n.title}</strong><div>{n.message}</div><small className="muted">{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div>)}</div>}
+    {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(440px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",color:"#f8fafc",border:"1px solid #d6b94f",borderRadius:16,padding:14,boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><strong style={{color:"#f8fafc"}}>🔔 Notifications</strong><button onClick={()=>setNotificationOpen(false)} style={{background:"#fff",color:"#111827",minWidth:34,height:34}}>✕</button></div>{notificationItems.length===0&&<p style={{color:"#cbd5e1"}}>Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} onClick={()=>readNotification(n)} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.16)":"#d6b94f"}`,background:n.read?"rgba(255,255,255,.03)":"rgba(214,185,79,.08)",borderRadius:12,marginTop:9,cursor:"pointer",color:"#f8fafc"}}><strong style={{display:"block",color:"#f8fafc"}}>{n.title}</strong><div style={{marginTop:5,color:"#e5e7eb",lineHeight:1.45}}>{n.message}</div><small style={{display:"block",marginTop:7,color:"#94a3b8"}}>{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div>)}</div>}
     <style>{`
       .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
       @media (max-width:1024px){
@@ -5763,7 +5788,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.55</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.56</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
