@@ -192,7 +192,6 @@ function RegisterPage({token}){
 
 function SettingsPage({user}){
   const isAdmin=user?.role==="ADMIN";
-  const [planningRefresh,setPlanningRefresh]=useState(0);
   const [settingsTab,setSettingsTab]=useState(isAdmin?"general":"security");
   const [users,setUsers]=useState([]),[collaborators,setCollaborators]=useState([]),[invite,setInvite]=useState({firstName:"",lastName:"",email:"",phone:"",role:"VIEWER",collaboratorId:""}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
   const [appearance,setAppearance]=useState(()=>{try{return normalizeAppearance(JSON.parse(localStorage.getItem("lp28.appearance")||"{}"));}catch{return DEFAULT_APPEARANCE;}});
@@ -5616,6 +5615,7 @@ function NotificationBell({onOpen}){
 }
 function Dashboard({onLogout,user}) {
   const [view,setView]=useState("dashboard");
+  const [planningRefresh,setPlanningRefresh]=useState(0);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [notificationOpen,setNotificationOpen]=useState(false),[notificationItems,setNotificationItems]=useState([]);
   async function openNotifications(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setNotificationItems(d.notifications||[])}catch{}setNotificationOpen(true)}
@@ -5994,7 +5994,7 @@ function Dashboard({onLogout,user}) {
         .app-shell .sidebar{transform:none !important;}
       }
 
-      /* v8.5.64 — consultation Lydie : mobile/tablette plus compacte */
+      /* v8.5.65 — consultation Lydie : mobile/tablette plus compacte */
       @media (max-width:1100px){
         .role-viewer .events-list .event-card{
           grid-template-columns:180px minmax(0,1fr) !important;
@@ -6116,7 +6116,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.64</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.65</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
