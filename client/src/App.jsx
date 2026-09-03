@@ -178,6 +178,8 @@ function SettingsPage({user}){
   const [users,setUsers]=useState([]),[collaborators,setCollaborators]=useState([]),[invite,setInvite]=useState({firstName:"",lastName:"",email:"",phone:"",role:"VIEWER",collaboratorId:""}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
   const [appearance,setAppearance]=useState(()=>{try{return normalizeAppearance(JSON.parse(localStorage.getItem("lp28.appearance")||"{}"));}catch{return DEFAULT_APPEARANCE;}});
   const [appearancePreview,setAppearancePreview]=useState(()=>resolveAppearanceMode(appearance));
+  const [adminNotif,setAdminNotif]=useState({title:"",message:"",type:"INFO",audience:"ADMIN",targetUserId:"",startsAt:"",expiresAt:""});
+  const [testUserId,setTestUserId]=useState("");
   const SAFE_MODULES=[
     {id:"dashboard",label:"Tableau de bord",icon:"🏠"},
     {id:"events",label:"Événements",icon:"📅"},
@@ -231,6 +233,8 @@ function SettingsPage({user}){
   function statusLabel(u){return u.accountStatus==="REVOKED"?"⛔ Révoqué":u.accountStatus==="BLOCKED"?"🔒 Bloqué":"✅ Actif";}
   function dateFr(v){return v?new Date(v).toLocaleString("fr-FR"):"—";}
   function previewAppearance(next){const p=normalizeAppearance(next);setAppearance(p);setAppearancePreview(applyAppearance(p));}
+  async function sendAdminNotification(){const r=await fetch("/api/admin/notifications",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(adminNotif)});const d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.message||"Impossible de créer la notification.");setAdminNotif(p=>({...p,title:"",message:""}));alert("🔔 Notification créée.");}
+  function runAccountTest(){const u=users.find(x=>x.id===testUserId);if(!u)return alert("Choisis un compte.");const mods=Array.isArray(u.permissions?.allowedModules)?u.permissions.allowedModules:[];alert(`🧪 ${u.displayName||u.firstName||u.email}\nRôle : ${u.role}\nStatut : ${u.accountStatus||"ACTIVE"}\nModules : ${mods.length?mods.join(", "):"droits par défaut"}`);}
   async function saveAppearance(){
     const p=normalizeAppearance(appearance);applyAppearance(p);
     const r=await fetch("/api/account/appearance",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appearance:p})});
@@ -274,6 +278,7 @@ function SettingsPage({user}){
       <button className={settingsTab==="security"?"active":""} onClick={()=>setSettingsTab("security")}>Sécurité</button>
       <button className={settingsTab==="devices"?"active":""} onClick={()=>setSettingsTab("devices")}>Appareils de confiance</button>
       <button className={settingsTab==="appearance"?"active":""} onClick={()=>setSettingsTab("appearance")}>Affichage</button>
+      {isAdmin&&<button className={settingsTab==="tests-notifications"?"active":""} onClick={()=>setSettingsTab("tests-notifications")}>🧪 Tests & notifications</button>}
     </div>
 
     {isAdmin&&settingsTab==="general"&&<>
@@ -317,6 +322,18 @@ function SettingsPage({user}){
       </div>}
       <div className="card" style={{marginTop:14,padding:12}}><strong>Aperçu actuel : {appearancePreview==="light"?"☀️ Mode clair":"🌙 Mode sombre"}</strong>{appearance.mode==="auto"&&<div className="muted">Clair de {appearance.lightStart} à {appearance.darkStart}, sombre le reste du temps.</div>}</div>
       <button className="primary" style={{marginTop:14}} onClick={saveAppearance}>💾 Enregistrer l'affichage</button>
+    </div>}
+    {isAdmin&&settingsTab==="tests-notifications"&&<div className="panel">
+      <h2>🧪 Tests & notifications</h2>
+      <div className="card" style={{padding:14,marginTop:12}}><h3>🧪 Mode test</h3><p className="muted">Contrôle rapidement les droits d'un compte sans te déconnecter.</p><select value={testUserId} onChange={e=>setTestUserId(e.target.value)}><option value="">Choisir un compte…</option>{users.filter(u=>u.role!=="ADMIN").map(u=><option key={u.id} value={u.id}>{u.displayName||u.firstName||u.email} — {u.role}</option>)}</select><button style={{marginLeft:8}} onClick={runAccountTest}>▶️ Tester</button></div>
+      <div className="card" style={{padding:14,marginTop:14}}><h3>🔔 Créer une notification</h3><div className="form-grid">
+        <div><label>Titre</label><input value={adminNotif.title} onChange={e=>setAdminNotif(p=>({...p,title:e.target.value}))}/></div>
+        <div><label>Type</label><select value={adminNotif.type} onChange={e=>setAdminNotif(p=>({...p,type:e.target.value}))}><option value="INFO">ℹ️ Information</option><option value="SUCCESS">✅ Succès</option><option value="WARNING">⚠️ Avertissement</option><option value="URGENT">🚨 Urgent</option></select></div>
+        <div><label>Destinataires</label><select value={adminNotif.audience} onChange={e=>setAdminNotif(p=>({...p,audience:e.target.value,targetUserId:""}))}><option value="ADMIN">Administrateur</option><option value="ALL">Tous</option><option value="INTERVENANTS">Intervenants</option><option value="VIEWERS">Consultation</option><option value="USER">Une personne</option></select></div>
+        {adminNotif.audience==="USER"&&<div><label>Personne</label><select value={adminNotif.targetUserId} onChange={e=>setAdminNotif(p=>({...p,targetUserId:e.target.value}))}><option value="">Choisir…</option>{users.map(u=><option key={u.id} value={u.id}>{u.displayName||u.firstName||u.email}</option>)}</select></div>}
+        <div><label>Début</label><input type="datetime-local" value={adminNotif.startsAt} onChange={e=>setAdminNotif(p=>({...p,startsAt:e.target.value}))}/></div><div><label>Fin</label><input type="datetime-local" value={adminNotif.expiresAt} onChange={e=>setAdminNotif(p=>({...p,expiresAt:e.target.value}))}/></div>
+      </div><label>Message</label><textarea rows="4" value={adminNotif.message} onChange={e=>setAdminNotif(p=>({...p,message:e.target.value}))}/><button className="primary" style={{marginTop:12}} onClick={sendAdminNotification}>🔔 Publier</button></div>
+      <div className="card" style={{padding:14,marginTop:14}}><h3>⚙️ Automatique</h3><p>✅ <strong>Contrat signé</strong> → notification ADMIN automatique.</p></div>
     </div>}
   </section>;
 }
@@ -5356,9 +5373,13 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
   );
 }
 
+function NotificationBell({onOpen}){const [count,setCount]=useState(0);async function load(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setCount((d.notifications||[]).filter(n=>!n.read).length)}catch{}}useEffect(()=>{load();const t=setInterval(load,30000);return()=>clearInterval(t)},[]);return <button onClick={onOpen} style={{position:"relative",fontSize:"1.25rem",minWidth:46,height:46,borderRadius:14}} title="Notifications">🔔{count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}</button>}
 function Dashboard({onLogout,user}) {
   const [view,setView]=useState("dashboard");
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [notificationOpen,setNotificationOpen]=useState(false),[notificationItems,setNotificationItems]=useState([]);
+  async function openNotifications(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setNotificationItems(d.notifications||[])}catch{}setNotificationOpen(true)}
+  async function readNotification(n){if(!n.read)await fetch(`/api/notifications/${n.id}/read`,{method:"POST"});setNotificationItems(v=>v.map(x=>x.id===n.id?{...x,read:true}:x));if(n.eventId){setSelectedEventId(n.eventId);setView("events");setNotificationOpen(false)}}
   const [installPrompt,setInstallPrompt]=useState(null);
   const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
   const [events,setEvents]=useState([]);
@@ -5667,6 +5688,8 @@ function Dashboard({onLogout,user}) {
   };
 
   return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
+    <div style={{position:"fixed",right:18,top:16,zIndex:10020}}><NotificationBell onOpen={openNotifications}/></div>
+    {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(440px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",border:"1px solid #d6b94f",borderRadius:16,padding:14}}><div style={{display:"flex",justifyContent:"space-between"}}><strong>🔔 Notifications</strong><button onClick={()=>setNotificationOpen(false)}>✕</button></div>{notificationItems.length===0&&<p className="muted">Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} onClick={()=>readNotification(n)} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.12)":"#d6b94f"}`,borderRadius:12,marginTop:9,cursor:"pointer"}}><strong>{n.title}</strong><div>{n.message}</div><small className="muted">{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div>)}</div>}
     <style>{`
       .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
       @media (max-width:1024px){
@@ -5736,7 +5759,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.52</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.53</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
