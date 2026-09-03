@@ -5304,21 +5304,29 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
 
           <div className="card">
             <h3>🎨 Cadre photo</h3>
-            <p><strong>{frameLabel}</strong></p>
+            <p><strong>{isAdmin?frameLabel:(event.frameSource==="LP28"?"Cadre LP28":"Cadre photo")}</strong></p>
             <p>Préparation : {frameStatus}</p>
           </div>
 
-          <div className="card">
-            <h3>💶 Tarification</h3>
-            <p>Total : <strong>{moneySafe(event.totalPrice)}</strong></p>
-            <p>Acompte : {moneySafe(event.deposit)}</p>
-            <p>Reste : <strong>{moneySafe(event.balance)}</strong></p>
-            <p>Cadre : {frameLabel}</p>
-          </div>
+          {isAdmin
+            ? <div className="card">
+                <h3>💶 Tarification</h3>
+                <p>Total : <strong>{moneySafe(event.totalPrice)}</strong></p>
+                <p>Acompte : {moneySafe(event.deposit)}</p>
+                <p>Reste : <strong>{moneySafe(event.balance)}</strong></p>
+                <p>Cadre : {frameLabel}</p>
+              </div>
+            : event.canSeeOperationalBalance
+              ? <div className="card">
+                  <h3>💶 Règlement à récupérer</h3>
+                  <p>Montant à récupérer : <strong>{moneySafe(event.operationalBalance)}</strong></p>
+                  <p className="muted">Information autorisée par l’administrateur pour cette mission.</p>
+                </div>
+              : null}
 
           <div className="card">
             <h3>📑 Suivi</h3>
-            <p>{prep.gifted?"🎁 Don / prestation offerte":"💼 Prestation facturée"}</p>
+            {isAdmin&&<p>{prep.gifted?"🎁 Don / prestation offerte":"💼 Prestation facturée"}</p>}
             <p>{contractSigned?"🟢 Contrat signé":"🟠 Contrat non signé"}</p>
             <p>{event.googleCalendarEventId?"📅 Agenda ✓":"📅 Agenda —"}</p>
             <p>{event.googleDriveFolderId?"☁️ Drive ✓":"☁️ Drive —"}</p>
@@ -5728,7 +5736,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.49</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.51</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
