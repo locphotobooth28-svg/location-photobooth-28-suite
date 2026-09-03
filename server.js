@@ -2160,19 +2160,16 @@ app.patch("/api/events/:id/complete", adminOnly, async (req,res)=>{
     });
   }
 });
-app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
+app.get("/api/events/:id/contract.pdf", userOnly, async (req, res) => {
   try {
+    const currentUser=req.currentUser||await sessionUser(req);
+
     const event = await prisma.event.findUnique({
-      where: {
-        id: req.params.id
-      },
+      where: { id: req.params.id },
       include: {
         client: true,
-        materials: {
-          include: {
-            material: true
-          }
-        }
+        materials: { include: { material: true } },
+        collaboratorAccesses: true
       }
     });
 
@@ -2183,29 +2180,56 @@ app.get("/api/events/:id/contract.pdf", adminOnly, async (req, res) => {
       });
     }
 
+    if(currentUser?.role!=="ADMIN"){
+      if(currentUser?.role!=="INTERVENANT" || !currentUser?.collaboratorId){
+        return res.status(403).json({
+          ok:false,
+          message:"Contrat non autorisé pour ce compte."
+        });
+      }
+
+      const assignedIds=[
+        event.responsibleCollaboratorId,
+        event.installerCollaboratorId,
+        event.pickupCollaboratorId
+      ].filter(Boolean);
+
+      if(!assignedIds.includes(currentUser.collaboratorId)){
+        return res.status(403).json({
+          ok:false,
+          message:"Cette prestation ne t'est pas attribuée."
+        });
+      }
+
+      const access=(event.collaboratorAccesses||[])
+        .find(a=>a.collaboratorId===currentUser.collaboratorId&&a.active);
+
+      const permissions=effectiveCollaboratorPermissions(event,access);
+
+      if(!permissions.canSeeContract){
+        return res.status(403).json({
+          ok:false,
+          message:"Contrat non autorisé pour cette mission."
+        });
+      }
+    }
+
     const pdf = await contractService.generateContractPdf(event);
 
     const safeName = String(event.name || "contrat")
       .replace(/[^a-z0-9_-]+/gi, "_")
       .replace(/^_+|_+$/g, "");
 
-    res.setHeader(
-      "Content-Type",
-      "application/pdf"
-    );
-
+    res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `inline; filename="Contrat_${safeName || "evenement"}.pdf"`
+      `inline; filename="Contrat_${safeName || "evenement"}${event.contractStatus==="SIGNED"?"_signe":""}.pdf"`
     );
 
     res.send(pdf);
 
   } catch (err) {
-    console.error(
-      "Génération contrat PDF :",
-      err
-    );
+    console.error("Génération contrat PDF compte connecté :", err);
 
     res.status(500).json({
       ok: false,
