@@ -144,6 +144,22 @@ function eventOperationalRemaining(event){
   }
   return 0;
 }
+function effectiveCollaboratorPermissions(event,access){
+  let prep=event?.preparation;
+  if(typeof prep==="string"){try{prep=JSON.parse(prep);}catch{prep={};}}
+  const saved=prep?.collaboratorPermissions&&typeof prep.collaboratorPermissions==="object"
+    ? prep.collaboratorPermissions
+    : {};
+  const pick=(key,fallback)=>saved[key]!==undefined ? saved[key]===true : fallback===true;
+  return {
+    canSeeClient:pick("canSeeClient",access?.canSeeClient),
+    canSeeContract:pick("canSeeContract",access?.canSeeContract),
+    canSeeInvoice:pick("canSeeInvoice",access?.canSeeInvoice),
+    canSeeBalance:!eventIsGifted(event)&&pick("canSeeBalance",access?.canSeeBalance),
+    canManageCaution:pick("canManageCaution",access?.canManageCaution),
+    canSeeInstructions:pick("canSeeInstructions",access?.canSeeInstructions)
+  };
+}
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -1959,7 +1975,17 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
         ? (e.collaboratorAccesses||[]).find(a=>a.collaboratorId===currentUser.collaboratorId&&a.active)
         : null;
       const gifted=eventIsGifted(e);
-      const canSeeOperationalBalance=currentUser?.role==="ADMIN" || Boolean(access?.canSeeBalance&&!gifted);
+      const prep=e?.preparation&&typeof e.preparation==="object"?e.preparation:{};
+      const savedMissionPermissions=prep?.collaboratorPermissions&&typeof prep.collaboratorPermissions==="object"
+        ? prep.collaboratorPermissions
+        : {};
+      const isAssignedIntervenant=currentUser?.role==="INTERVENANT"&&currentUser?.collaboratorId&&[
+        e.responsibleCollaboratorId,e.installerCollaboratorId,e.pickupCollaboratorId
+      ].filter(Boolean).includes(currentUser.collaboratorId);
+      const missionAllowsBalance=savedMissionPermissions.canSeeBalance!==undefined
+        ? savedMissionPermissions.canSeeBalance===true
+        : access?.canSeeBalance===true;
+      const canSeeOperationalBalance=currentUser?.role==="ADMIN" || Boolean(isAssignedIntervenant&&missionAllowsBalance&&!gifted);
       return ({
       id: e.id,
       name: e.name,
@@ -4938,7 +4964,8 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
   }
 
   const event = access.event;
-  const canSeeOperationalBalance = access.canSeeBalance && !eventIsGifted(event);
+  const effectivePermissions=effectiveCollaboratorPermissions(event,access);
+  const canSeeOperationalBalance=effectivePermissions.canSeeBalance;
 let driveDocuments = [];
 
 try {
@@ -4985,7 +5012,7 @@ try {
       }))
     },
 
-    client: access.canSeeClient
+    client: effectivePermissions.canSeeClient
       ? {
           name: event.organizerName,
           phone: event.organizerPhone,
@@ -5001,7 +5028,7 @@ try {
   ? event.balancePaid
   : null,
 
-    caution: access.canManageCaution
+    caution: effectivePermissions.canManageCaution
       ? {
           received: event.cautionReceived,
           returned: event.cautionReturned
@@ -5013,11 +5040,11 @@ actions: (event.collaboratorActions || []).map(a => ({
   createdAt: a.createdAt
 })),
 
-    instructions: access.canSeeInstructions
+    instructions: effectivePermissions.canSeeInstructions
       ? access.missionNotes
       : null,
 documents: {
-  contract: access.canSeeContract
+  contract: effectivePermissions.canSeeContract
     ? {
         available: true,
         signed: event.contractStatus === "SIGNED",
@@ -5029,19 +5056,19 @@ documents: {
       }
     : null,
 
-  invoice: access.canSeeInvoice
+  invoice: effectivePermissions.canSeeInvoice
     ? driveDocuments.find(f =>
         /facture|invoice/i.test(f.name)
       ) || null
     : null
 },
     permissions: {
-      contract: access.canSeeContract,
-      invoice: access.canSeeInvoice,
+      contract: effectivePermissions.canSeeContract,
+      invoice: effectivePermissions.canSeeInvoice,
       balance: canSeeOperationalBalance,
-      caution: access.canManageCaution,
-      client: access.canSeeClient,
-      instructions: access.canSeeInstructions
+      caution: effectivePermissions.canManageCaution,
+      client: effectivePermissions.canSeeClient,
+      instructions: effectivePermissions.canSeeInstructions
     }
   });
 });
@@ -5072,19 +5099,21 @@ app.get(
         });
       }
 
-      if(!access.canSeeContract){
-        return res.status(403).json({
-          ok:false,
-          message:"Contrat non autorisé pour ce collaborateur."
-        });
-      }
-
       const event=access.event;
 
       if(!event){
         return res.status(404).json({
           ok:false,
           message:"Événement introuvable."
+        });
+      }
+
+      const effectivePermissions=effectiveCollaboratorPermissions(event,access);
+
+      if(!effectivePermissions.canSeeContract){
+        return res.status(403).json({
+          ok:false,
+          message:"Contrat non autorisé pour ce collaborateur."
         });
       }
 
@@ -5138,7 +5167,7 @@ app.post("/api/collaborator-portal/:token/caution-received", async (req, res) =>
     });
   }
 
-  if (!access.canManageCaution) {
+  if (!effectiveCollaboratorPermissions(access.event,access).canManageCaution) {
     return res.status(403).json({
       ok: false,
       message: "Gestion de la caution non autorisée."
@@ -5192,7 +5221,7 @@ app.post("/api/collaborator-portal/:token/caution-returned", async (req, res) =>
     });
   }
 
-  if (!access.canManageCaution) {
+  if (!effectiveCollaboratorPermissions(access.event,access).canManageCaution) {
     return res.status(403).json({
       ok: false,
       message: "Gestion de la caution non autorisée."
@@ -5248,7 +5277,8 @@ app.post("/api/collaborator-portal/:token/payment-received", async (req, res) =>
     });
   }
 
-  if (!access.canSeeBalance || eventIsGifted(access.event)) {
+  const effectivePermissions=effectiveCollaboratorPermissions(access.event,access);
+  if (!effectivePermissions.canSeeBalance) {
     return res.status(403).json({
       ok: false,
       message: "Gestion du règlement non autorisée pour cette prestation."
