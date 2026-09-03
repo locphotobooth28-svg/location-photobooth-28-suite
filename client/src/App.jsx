@@ -1030,6 +1030,27 @@ Johan — Location Photobooth 28`;
   </div>
 )}
 {event?.id && (
+  <>
+  <style>{`
+    .collab-permissions-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:14px}
+    .collab-permissions-table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px;border:1px solid rgba(214,185,79,.18);border-radius:14px;overflow:hidden}
+    .collab-permissions-table th,.collab-permissions-table td{padding:14px 16px;text-align:left;border-bottom:1px solid rgba(255,255,255,.09);vertical-align:middle}
+    .collab-permissions-table th{background:rgba(255,255,255,.035);color:#e8e8e8;font-weight:900}
+    .collab-permissions-table th:nth-child(1){width:28%}
+    .collab-permissions-table th:nth-child(2){width:54%}
+    .collab-permissions-table th:nth-child(3){width:18%;text-align:center}
+    .collab-permissions-table td:nth-child(3){text-align:center}
+    .collab-permissions-table tbody tr:last-child td{border-bottom:0}
+    .collab-permissions-table input[type="checkbox"]{width:20px;height:20px;accent-color:#d6b94f;cursor:pointer}
+    .collab-sensitive-info{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:12px 14px;border:1px solid rgba(59,130,246,.35);border-radius:12px;background:rgba(37,99,235,.08)}
+    .collab-sensitive-info strong{white-space:nowrap}
+    @media(max-width:760px){.collab-sensitive-info{flex-direction:column}.collab-permissions-table{min-width:680px}}
+    html[data-lp28-theme="light"] .collab-permissions-table{border-color:#d8cda8}
+    html[data-lp28-theme="light"] .collab-permissions-table th{background:#f5f2ea;color:#171717}
+    html[data-lp28-theme="light"] .collab-permissions-table th,
+    html[data-lp28-theme="light"] .collab-permissions-table td{border-bottom-color:#e2ddd3}
+    html[data-lp28-theme="light"] .collab-sensitive-info{background:#eef5ff;color:#172033;border-color:#b9d2f5}
+  `}</style>
   <div className="card" style={{marginTop:16}}>
     <div className="eyebrow">ACCÈS COLLABORATEUR</div>
 
@@ -1040,82 +1061,55 @@ Johan — Location Photobooth 28`;
       dans sa fiche de prestation.
     </p>
 
-    <div className="check-grid">
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canSeeClient}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canSeeClient:e.target.checked
-          }))}
-        />
-        👤 Coordonnées du client
-      </label>
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canSeeContract}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canSeeContract:e.target.checked
-          }))}
-        />
-        📑 Contrat
-      </label>
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canSeeInvoice}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canSeeInvoice:e.target.checked
-          }))}
-        />
-        🧾 Facture
-      </label>
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canSeeBalance}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canSeeBalance:e.target.checked
-          }))}
-        />
-        💶 Reste à régler
-      </label>
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canManageCaution}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canManageCaution:e.target.checked
-          }))}
-        />
-        🛡️ Gestion de la caution
-      </label>
-
-      <label>
-        <input
-          type="checkbox"
-          checked={collaboratorPermissions.canSeeInstructions}
-          onChange={e=>setCollaboratorPermissions(p=>({
-            ...p,
-            canSeeInstructions:e.target.checked
-          }))}
-        />
-        📝 Consignes de prestation
-      </label>
-
+    <div className="collab-permissions-wrap">
+      <table className="collab-permissions-table">
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Description</th>
+            <th>Autoriser l’accès</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>👤 Coordonnées du client</strong></td>
+            <td>Nom, prénom, téléphone et e-mail du client.</td>
+            <td><input aria-label="Autoriser les coordonnées du client" type="checkbox" checked={collaboratorPermissions.canSeeClient} onChange={e=>setCollaboratorPermissions(p=>({...p,canSeeClient:e.target.checked}))}/></td>
+          </tr>
+          <tr>
+            <td><strong>📑 Contrat</strong></td>
+            <td>Consultation du contrat lié à la prestation.</td>
+            <td><input aria-label="Autoriser le contrat" type="checkbox" checked={collaboratorPermissions.canSeeContract} onChange={e=>setCollaboratorPermissions(p=>({...p,canSeeContract:e.target.checked}))}/></td>
+          </tr>
+          <tr>
+            <td><strong>🧾 Facture</strong></td>
+            <td>Consultation de la facture de la prestation.</td>
+            <td><input aria-label="Autoriser la facture" type="checkbox" checked={collaboratorPermissions.canSeeInvoice} onChange={e=>setCollaboratorPermissions(p=>({...p,canSeeInvoice:e.target.checked}))}/></td>
+          </tr>
+          <tr>
+            <td><strong>💶 Reste à régler</strong></td>
+            <td>Indique si un règlement est à récupérer et le montant restant.</td>
+            <td><input aria-label="Autoriser le reste à régler" type="checkbox" checked={collaboratorPermissions.canSeeBalance} onChange={e=>setCollaboratorPermissions(p=>({...p,canSeeBalance:e.target.checked}))}/></td>
+          </tr>
+          <tr>
+            <td><strong>🛡️ Gestion de la caution</strong></td>
+            <td>Consultation du statut et des informations de caution.</td>
+            <td><input aria-label="Autoriser la gestion de la caution" type="checkbox" checked={collaboratorPermissions.canManageCaution} onChange={e=>setCollaboratorPermissions(p=>({...p,canManageCaution:e.target.checked}))}/></td>
+          </tr>
+          <tr>
+            <td><strong>📝 Consignes de prestation</strong></td>
+            <td>Consultation des consignes et informations importantes.</td>
+            <td><input aria-label="Autoriser les consignes" type="checkbox" checked={collaboratorPermissions.canSeeInstructions} onChange={e=>setCollaboratorPermissions(p=>({...p,canSeeInstructions:e.target.checked}))}/></td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="collab-sensitive-info">
+        <strong>🔒 Information commerciale protégée</strong>
+        <span>Les dons et prestations offertes restent strictement réservés à l’administrateur et ne sont jamais affichés au collaborateur.</span>
+      </div>
     </div>
   </div>
+  </>
 )}
       {googleStatus?.connected && (
         <>
@@ -5707,7 +5701,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.46</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.47</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
