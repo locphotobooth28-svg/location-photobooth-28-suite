@@ -1928,6 +1928,40 @@ function CalendarView({ events, onOpenEvent, onDeleteEvent }) {
         .calendar-mobile-event .calendar-event{min-height:38px !important;padding:8px 10px !important;}
         .calendar-mobile-event .calendar-event strong{font-size:.78rem !important;}
         .calendar-mobile-event .calendar-event span{font-size:.82rem !important;}
+
+        .role-viewer .calendar-shell{
+          display:block !important;
+          width:100% !important;
+          min-height:320px !important;
+          background:#101114 !important;
+          color:#f8fafc !important;
+          border:1px solid rgba(214,185,79,.28) !important;
+        }
+        .role-viewer .calendar-mobile-list{
+          display:flex !important;
+          width:100% !important;
+          min-height:220px !important;
+          background:#101114 !important;
+          color:#f8fafc !important;
+          padding:4px !important;
+          box-sizing:border-box !important;
+        }
+        .role-viewer .calendar-mobile-day{
+          display:block !important;
+          width:100% !important;
+          background:#17191e !important;
+          color:#f8fafc !important;
+          border:1px solid #3a4049 !important;
+          box-sizing:border-box !important;
+        }
+        .role-viewer .calendar-mobile-date strong{color:#f8fafc !important;}
+        .role-viewer .calendar-mobile-free{color:#9ca3af !important;}
+        .role-viewer .calendar-mobile-event-lines{width:100% !important;}
+        .role-viewer .calendar-mobile-event .calendar-event{
+          width:100% !important;
+          color:#fff !important;
+          font-size:.78rem !important;
+        }
       }
     `}</style>
     <section className="calendar-shell" id="lp28-calendar-print-area">
@@ -5896,7 +5930,7 @@ function Dashboard({onLogout,user}) {
     setMobileMenuOpen(false);
   };
 
-  return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
+  return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""} role-${String(user?.role||"viewer").toLowerCase()}`}>
     <div style={{position:"fixed",right:18,top:16,zIndex:10020}}><NotificationBell onOpen={openNotifications}/></div>
     {notificationOpen&&<div style={{position:"fixed",right:18,top:72,zIndex:10050,width:"min(480px,calc(100vw - 24px))",maxHeight:"72vh",overflow:"auto",background:"#111827",color:"#f8fafc",border:"1px solid #d6b94f",borderRadius:16,padding:14,boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}><strong style={{color:"#f8fafc"}}>🔔 Notifications</strong><div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{notificationItems.some(n=>!n.read)&&<button onClick={readAllNotifications} style={{background:"#334155",color:"#fff"}}>✓ Tout lire</button>}{notificationItems.length>0&&<button onClick={deleteAllNotifications} style={{background:"#7f1d1d",color:"#fff"}}>🗑️ Tout supprimer</button>}<button onClick={()=>setNotificationOpen(false)} style={{background:"#fff",color:"#111827",minWidth:34,height:34}}>✕</button></div></div>{notificationItems.length===0&&<p style={{color:"#cbd5e1"}}>Aucune notification.</p>}{notificationItems.map(n=><div key={n.id} style={{padding:12,border:`1px solid ${n.read?"rgba(255,255,255,.16)":"#d6b94f"}`,background:n.read?"rgba(255,255,255,.03)":"rgba(214,185,79,.08)",borderRadius:12,marginTop:9,color:"#f8fafc"}}><div onClick={()=>readNotification(n)} style={{cursor:"pointer"}}><strong style={{display:"block",color:"#f8fafc"}}>{n.title}</strong><div style={{marginTop:5,color:"#e5e7eb",lineHeight:1.45}}>{n.message}</div><small style={{display:"block",marginTop:7,color:"#94a3b8"}}>{new Date(n.createdAt).toLocaleString("fr-FR")}{n.eventId?" · Ouvrir l’événement":""}</small></div><div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}><button onClick={()=>deleteNotification(n.id)} style={{background:"#3f1d1d",color:"#fecaca",padding:"7px 10px",minHeight:34}}>🗑️ Supprimer</button></div></div>)}</div>}
     <style>{`
@@ -5959,6 +5993,120 @@ function Dashboard({onLogout,user}) {
       @media (min-width:1025px){
         .app-shell .sidebar{transform:none !important;}
       }
+
+      /* v8.5.64 — consultation Lydie : mobile/tablette plus compacte */
+      @media (max-width:1100px){
+        .role-viewer .events-list .event-card{
+          grid-template-columns:180px minmax(0,1fr) !important;
+          gap:10px !important;
+          padding:10px !important;
+        }
+        .role-viewer .events-list .event-card .event-date{
+          padding:8px 10px !important;
+          min-height:74px !important;
+        }
+        .role-viewer .events-list .event-card .event-content{
+          min-width:0 !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"]{
+          gap:8px !important;
+          margin:10px 0 8px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div{
+          min-width:0 !important;
+          max-width:none !important;
+          padding:10px 12px !important;
+          border-radius:13px !important;
+          gap:10px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div > span{
+          font-size:24px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div div[style*="font-size:28px"]{
+          font-size:20px !important;
+        }
+        .role-viewer .event-meta{gap:6px !important;font-size:.84rem !important;}
+        .role-viewer .event-actions{gap:7px !important;}
+        .role-viewer .event-actions button{min-height:38px !important;padding:7px 10px !important;font-size:.83rem !important;}
+      }
+
+      @media (max-width:760px){
+        .role-viewer .app-shell .content{padding-left:10px !important;padding-right:10px !important;}
+        .role-viewer .events-toolbar{gap:8px !important;}
+        .role-viewer .events-list .event-card{
+          display:block !important;
+          grid-template-columns:1fr !important;
+          padding:9px !important;
+          border-radius:14px !important;
+          overflow:hidden !important;
+        }
+        .role-viewer .events-list .event-card .event-date{
+          width:100% !important;
+          min-height:0 !important;
+          margin:0 0 8px !important;
+          padding:8px 10px !important;
+          border-radius:10px !important;
+          display:flex !important;
+          flex-direction:row !important;
+          align-items:center !important;
+          justify-content:space-between !important;
+          gap:8px !important;
+        }
+        .role-viewer .events-list .event-card .event-date strong,
+        .role-viewer .events-list .event-card .event-date span{
+          font-size:.82rem !important;
+          white-space:normal !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div:first-child{
+          gap:6px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div:first-child button{
+          font-size:1rem !important;
+          line-height:1.2 !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"]{
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+          gap:7px !important;
+          margin:8px 0 !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div{
+          padding:9px !important;
+          border-radius:11px !important;
+          gap:7px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div > span{
+          font-size:20px !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div div[style*="font-size:12px"]{
+          font-size:9px !important;
+          line-height:1.15 !important;
+        }
+        .role-viewer .events-list .event-card .event-content > div[style*="margin:14px 0 10px"] > div div[style*="font-size:28px"]{
+          font-size:16px !important;
+          line-height:1.15 !important;
+        }
+        .role-viewer .event-meta{
+          display:grid !important;
+          grid-template-columns:1fr !important;
+          gap:4px !important;
+          margin-top:8px !important;
+          font-size:.78rem !important;
+        }
+        .role-viewer .event-actions{
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+          gap:6px !important;
+          margin-top:9px !important;
+        }
+        .role-viewer .event-actions button{
+          width:100% !important;
+          min-width:0 !important;
+          min-height:38px !important;
+          padding:7px 8px !important;
+          font-size:.76rem !important;
+        }
+      }
     `}</style>
 
     <div className="lp28-mobile-topbar">
@@ -5968,7 +6116,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.63</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.64</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
