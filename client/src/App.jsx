@@ -120,7 +120,7 @@ function SettingsPage(){
     <div className="panel" style={{marginBottom:16}}><h2>👥 Comptes utilisateurs</h2><div style={{display:"grid",gap:8}}>{users.map(u=><div key={u.id} className="card" style={{padding:12}}><strong>{u.displayName||u.name||u.username||u.email}</strong> · {u.role} {u.totpEnabled?" · 🔐 2FA":""}{u.collaboratorId?" · 👷 Intervenant lié":""}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div>)}</div></div>
     <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation calendrier</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
     <div className="panel" style={{marginBottom:16}}><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>
-    <div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Chaque appareil approuvé est nommé et rattaché à son compte. Il évite de ressaisir le code 2FA pendant 30 jours.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{devices.map(d=><div key={d.id} className="card" style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginTop:8}}><div><strong>{d.label||"Appareil"}</strong><div>👤 {d.ownerName||"Compte LP28"}</div><div className="muted">Dernière utilisation : {new Date(d.lastUsedAt).toLocaleString("fr-FR")}</div><div className="muted">Approuvé jusqu'au {new Date(d.expiresAt).toLocaleDateString("fr-FR")}</div></div><button onClick={()=>revoke(d.id)}>Révoquer</button></div>)}</div>
+    <div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Les appareils sont regroupés par personne. Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revoke(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>
   </section>;
 }
 
@@ -5412,12 +5412,14 @@ function Dashboard({onLogout,user}) {
       .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
       @media (max-width:1024px){
         .app-shell{display:block !important;min-height:100vh;}
-        .app-shell .content{width:100% !important;max-width:none !important;margin-left:0 !important;padding-top:72px !important;}
-        .app-shell .sidebar{position:fixed !important;left:0;top:0;bottom:0;width:min(86vw,330px) !important;max-width:330px;z-index:1202;transform:translateX(-105%);transition:transform .22s ease;box-shadow:18px 0 45px rgba(0,0,0,.42);overflow-y:auto;}
+        .app-shell .content{width:100% !important;max-width:none !important;margin-left:0 !important;padding-top:86px !important;}
+        .app-shell .sidebar{position:fixed !important;left:0;top:0;bottom:0;width:min(90vw,380px) !important;max-width:380px;z-index:1202;transform:translateX(-105%);transition:transform .22s ease;box-shadow:18px 0 45px rgba(0,0,0,.42);overflow:hidden;display:flex !important;flex-direction:column;}
+        .app-shell .sidebar nav{overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:0;padding-bottom:18px;-webkit-overflow-scrolling:touch;}
+        .app-shell .sidebar .sidebar-footer{flex:0 0 auto;}
         .app-shell .sidebar.mobile-open{transform:translateX(0);}
-        .lp28-mobile-topbar{display:flex;position:fixed;left:0;right:0;top:0;height:62px;z-index:1200;align-items:center;gap:12px;padding:8px 12px;background:rgba(10,10,12,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
-        .lp28-mobile-menu-btn{min-width:112px;height:46px;display:flex;align-items:center;justify-content:center;gap:9px;flex:0 0 auto;padding:0 16px;border:1px solid rgba(214,185,79,.55);border-radius:13px;background:linear-gradient(135deg,rgba(214,185,79,.18),rgba(21,21,25,.96));color:#fff;font-size:15px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.20);}
-        .lp28-mobile-menu-btn .menu-bars{font-size:24px;line-height:1;}
+        .lp28-mobile-topbar{display:flex;position:fixed;left:0;right:0;top:0;height:76px;z-index:1200;align-items:center;gap:12px;padding:8px 12px;background:rgba(10,10,12,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
+        .lp28-mobile-menu-btn{min-width:142px;height:58px;display:flex;align-items:center;justify-content:center;gap:11px;flex:0 0 auto;padding:0 20px;border:2px solid rgba(214,185,79,.72);border-radius:16px;background:linear-gradient(135deg,rgba(214,185,79,.24),rgba(21,21,25,.98));color:#fff;font-size:18px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 7px 20px rgba(0,0,0,.25);}
+        .lp28-mobile-menu-btn .menu-bars{font-size:30px;line-height:1;}
         .lp28-mobile-menu-btn .menu-label{letter-spacing:.04em;}
         .lp28-mobile-title{min-width:0;display:flex;flex-direction:column;line-height:1.12;}
         .lp28-mobile-title strong{font-size:.96rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -5425,7 +5427,15 @@ function Dashboard({onLogout,user}) {
         .lp28-install-btn{margin-left:auto;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid rgba(214,185,79,.55);background:rgba(214,185,79,.12);color:#fff;font-weight:900;white-space:nowrap;}
         .lp28-mobile-backdrop{position:fixed;inset:0;z-index:1201;background:rgba(0,0,0,.58);border:0;padding:0;margin:0;}
         .mobile-nav-open .lp28-mobile-backdrop{display:block;}
-        .app-shell .sidebar .nav-item{min-height:44px;}
+        .app-shell .sidebar .nav-item{min-height:52px;font-size:1rem;}
+        .trusted-owner-block{margin-top:18px;padding:14px;border:1px solid rgba(214,185,79,.24);border-radius:14px;background:rgba(255,255,255,.02);}
+        .trusted-owner-block h3{margin:0 0 10px;}
+        .trusted-table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+        .trusted-table{width:100%;border-collapse:collapse;min-width:650px;}
+        .trusted-table th,.trusted-table td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.09);vertical-align:middle;}
+        .trusted-table th{color:#d6b94f;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
+        .trusted-table td:last-child,.trusted-table th:last-child{text-align:right;}
+        .trusted-table button{min-height:42px;padding:8px 14px;}
       }
       @media (min-width:1025px){
         .app-shell .sidebar{transform:none !important;}
@@ -5439,9 +5449,10 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.40</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.41</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
+        <button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>navigate("settings")}>⚙️ Paramètres</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
         <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>navigate("planning")}>🗓️ Planning</button>
         <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>navigate("materialPlanning")}>📦 Planning matériel</button>
@@ -5453,7 +5464,6 @@ function Dashboard({onLogout,user}) {
         <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>navigate("collaborators")}>👷 Collaborateurs</button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>navigate("google")}>☁️ Google</button>
         <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>navigate("assistance")}>🆘 Assistance</button>
-        <button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>navigate("settings")}>⚙️ Paramètres</button>
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
