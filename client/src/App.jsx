@@ -47,26 +47,60 @@ customPrintPrice:"",payments:{depositPaid:false,balancePaid:false,cautionReceive
 };
 
 function Login({ onLogin }) {
-  const [email,setEmail]=useState("");
+  const [login,setLogin]=useState("");
   const [password,setPassword]=useState("");
   const [error,setError]=useState("");
+  const [twoFactor,setTwoFactor]=useState(false);
+  const [code,setCode]=useState("");
+  const [trustDevice,setTrustDevice]=useState(true);
   async function submit(e){
     e.preventDefault(); setError("");
-    const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
-    const d=await r.json();
+    const endpoint=twoFactor?"/api/login/2fa":"/api/login";
+    const body=twoFactor?{code,trustDevice,deviceLabel:navigator.userAgent}:{login,password};
+    const r=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
     if(!r.ok) return setError(d.message||"Connexion impossible.");
-    onLogin();
+    if(d.requires2fa){setTwoFactor(true);setCode("");return;}
+    onLogin(d.user||null);
   }
   return <div className="login-shell"><div className="login-card">
     <img className="login-logo" src="/logo.jpg" alt="Location Photobooth 28"/>
-    <div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>Administration</h1>
-    <p className="muted">Connecte-toi pour gérer tes événements.</p>
+    <div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{twoFactor?"🔐 Vérification 2FA":"Administration"}</h1>
+    <p className="muted">{twoFactor?"Saisis le code à 6 chiffres de ton application Authenticator.":"Connecte-toi avec ton identifiant, e-mail ou téléphone."}</p>
     {error&&<div className="alert">{error}</div>}
-    <form onSubmit={submit}><label>Adresse e-mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/>
-    <label>Mot de passe</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
-    <button className="primary">Se connecter</button></form>
+    <form onSubmit={submit}>
+      {!twoFactor?<><label>Identifiant / e-mail / téléphone</label><input value={login} onChange={e=>setLogin(e.target.value)} autoComplete="username" required/><label>Mot de passe</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/></>:<><label>Code Authenticator</label><input inputMode="numeric" pattern="[0-9A-Za-z-]*" value={code} onChange={e=>setCode(e.target.value)} placeholder="123456" autoFocus required/><label style={{display:"flex",gap:8,alignItems:"center",margin:"12px 0"}}><input type="checkbox" checked={trustDevice} onChange={e=>setTrustDevice(e.target.checked)} style={{width:"auto"}}/> Faire confiance à cet appareil pendant 30 jours</label></>}
+      <button className="primary">{twoFactor?"Vérifier":"Se connecter"}</button>
+    </form>
+    {twoFactor&&<button type="button" className="ghost" style={{marginTop:8}} onClick={()=>{setTwoFactor(false);setCode("");}}>← Revenir à la connexion</button>}
     <div className="login-links"><a href={SITE} target="_blank">🌐 Site internet</a><a href={FACEBOOK} target="_blank">ⓕ Facebook</a></div>
   </div></div>
+}
+
+function RegisterPage({token}){
+  const [info,setInfo]=useState(null),[error,setError]=useState(""),[done,setDone]=useState(false);
+  const [form,setForm]=useState({username:"",email:"",phone:"",password:"",confirm:""});
+  useEffect(()=>{fetch(`/api/register/${token}`).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.message);setInfo(d.invitation);setForm(f=>({...f,email:d.invitation.email||"",phone:d.invitation.phone||""}));}).catch(e=>setError(e.message));},[token]);
+  async function submit(e){e.preventDefault();setError("");if(form.password!==form.confirm)return setError("Les deux mots de passe sont différents.");const r=await fetch(`/api/register/${token}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});const d=await r.json().catch(()=>({}));if(!r.ok)return setError(d.message||"Inscription impossible.");setDone(true);}
+  if(done)return <div className="login-shell"><div className="login-card"><div className="eyebrow">LP28 SUITE</div><h1>✅ Compte créé</h1><p>Ton accès LP28 est maintenant actif.</p><button className="primary" onClick={()=>location.href="/"}>Se connecter</button></div></div>;
+  return <div className="login-shell"><div className="login-card"><img className="login-logo" src="/logo.jpg"/><div className="eyebrow">INVITATION LP28 · 10 MINUTES</div><h1>👤 Créer mon compte</h1>{info&&<p className="muted">Invitation pour <strong>{info.name||"Utilisateur LP28"}</strong></p>}{error&&<div className="alert">{error}</div>}{info&&<form onSubmit={submit}><label>Identifiant choisi</label><input value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required minLength={3}/><label>E-mail</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><label>Téléphone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><label>Mot de passe (10 caractères minimum)</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required minLength={10}/><label>Confirmer le mot de passe</label><input type="password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} required/><button className="primary">Créer mon compte</button></form>}</div></div>;
+}
+
+function SettingsPage(){
+  const [users,setUsers]=useState([]),[invite,setInvite]=useState({name:"",email:"",phone:"",role:"VIEWER"}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
+  async function load(){const [u,se,d]=await Promise.all([fetch("/api/admin/users").then(r=>r.json()),fetch("/api/session").then(r=>r.json()),fetch("/api/account/trusted-devices").then(r=>r.json())]);setUsers(u.users||[]);setSession(se);setDevices(d.devices||[]);}
+  useEffect(()=>{load()},[]);
+  async function createInvite(){const r=await fetch("/api/admin/invitations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(invite)});const d=await r.json();if(!r.ok)return alert(d.message);setInviteUrl(d.url);}
+  function whatsapp(){if(!inviteUrl)return;const msg=`👋 Bonjour ${invite.name||""},\n\nJohan vous invite à créer votre accès personnel à LP28 Suite.\n\n🔐 Ce lien est personnel, utilisable une seule fois et valable 10 minutes :\n${inviteUrl}`;window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,"_blank");}
+  async function setup2fa(){const r=await fetch("/api/account/2fa/setup",{method:"POST"});const d=await r.json();if(!r.ok)return alert(d.message||"Impossible d'activer la 2FA.");setQr(d);setCodes([]);}
+  async function enable2fa(){const r=await fetch("/api/account/2fa/enable",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:totpCode})});const d=await r.json();if(!r.ok)return alert(d.message);setCodes(d.recoveryCodes||[]);setQr(null);setTotpCode("");await load();}
+  async function revoke(id){await fetch(`/api/account/trusted-devices/${id}`,{method:"DELETE"});load();}
+  return <section><div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATION LP28</div><h2>⚙️ Paramètres</h2><p className="muted">Comptes utilisateurs, invitations et sécurité.</p></div></div>
+    <div className="panel" style={{marginBottom:16}}><h2>👥 Comptes utilisateurs</h2><div style={{display:"grid",gap:8}}>{users.map(u=><div key={u.id} className="card" style={{padding:12}}><strong>{u.name||u.username||u.email}</strong> · {u.role} {u.totpEnabled?" · 🔐 2FA":""}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div>)}</div></div>
+    <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom / nom" value={invite.name} onChange={e=>setInvite({...invite,name:e.target.value})}/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value})}><option value="VIEWER">Consultation calendrier</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select></div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
+    <div className="panel" style={{marginBottom:16}}><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>
+    <div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Un appareil approuvé évite de ressaisir le code 2FA pendant 30 jours.</p>{devices.map(d=><div key={d.id} className="card" style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginTop:8}}><div><strong>{d.label||"Appareil"}</strong><div className="muted">Valable jusqu'au {new Date(d.expiresAt).toLocaleDateString("fr-FR")}</div></div><button onClick={()=>revoke(d.id)}>Révoquer</button></div>)}</div>
+  </section>;
 }
 
 function EventForm({event,onClose,onSaved}) {
@@ -5345,7 +5379,7 @@ function Dashboard({onLogout}) {
     return `${item?.icon||"📦"} ${label}`;
   }
 
-  const currentViewTitle = view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire admin":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google":"Tableau de bord";
+  const currentViewTitle = view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire admin":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google":view==="settings"?"Paramètres":"Tableau de bord";
 
   const navigate = nextView => {
     setView(nextView);
@@ -5384,7 +5418,7 @@ function Dashboard({onLogout}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.37</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.38</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
@@ -5398,6 +5432,7 @@ function Dashboard({onLogout}) {
         <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>navigate("collaborators")}>👷 Collaborateurs</button>
         <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>navigate("google")}>☁️ Google</button>
         <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>navigate("assistance")}>🆘 Assistance</button>
+        <button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>navigate("settings")}>⚙️ Paramètres</button>
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
@@ -5580,7 +5615,7 @@ function Dashboard({onLogout}) {
       </> : view==="planning" ? <>
         <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span><span style={{fontWeight:800}}>🎁 Don / prestation offerte</span></section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
+      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
@@ -6619,6 +6654,9 @@ export default function App(){
   if(path === "/planning-famille"){
     return <FamilyPlanningPage/>;
   }
+
+  const registerMatch=path.match(/^\/inscription\/([^/]+)$/);
+  if(registerMatch)return <RegisterPage token={registerMatch[1]}/>;
 
   const signatureMatch =
   path.match(/^\/signature\/([^/]+)$/);
