@@ -1936,13 +1936,20 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
   orderBy: {
     createdAt: "desc"
   }
-}
+},
+  collaboratorAccesses: true
 },
     orderBy: { eventDate: "desc" }
   });
 
   res.json({
-    events: events.map(e => ({
+    events: events.map(e => {
+      const access=currentUser?.role==="INTERVENANT"&&currentUser?.collaboratorId
+        ? (e.collaboratorAccesses||[]).find(a=>a.collaboratorId===currentUser.collaboratorId&&a.active)
+        : null;
+      const gifted=eventIsGifted(e);
+      const canSeeOperationalBalance=currentUser?.role==="ADMIN" || Boolean(access?.canSeeBalance&&!gifted);
+      return ({
       id: e.id,
       name: e.name,
       type: e.type,
@@ -1958,6 +1965,8 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
 totalPrice: currentUser?.role==="ADMIN" && e.totalPrice != null ? Number(e.totalPrice) : null,
 deposit: currentUser?.role==="ADMIN" && e.deposit != null ? Number(e.deposit) : null,
 balance: currentUser?.role==="ADMIN" && e.balance != null ? Number(e.balance) : null,
+operationalBalance: canSeeOperationalBalance && e.balance != null ? Number(e.balance) : null,
+canSeeOperationalBalance,
 customPrintCount: e.customPrintCount != null ? Number(e.customPrintCount) : "",
 customPrintPrice: currentUser?.role==="ADMIN" && e.customPrintPrice != null ? Number(e.customPrintPrice) : null,
 
@@ -1984,6 +1993,7 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
         cautionReceived: e.cautionReceived,
         cautionReturned: e.cautionReturned
       } : null,
+      operationalBalancePaid: canSeeOperationalBalance ? Boolean(e.balancePaid) : null,
       bookingStatus: e.bookingStatus,
       optionUntil: e.optionUntil ? e.optionUntil.toISOString().slice(0,10) : null,
       sceneJets: e.sceneJets,
@@ -2024,7 +2034,7 @@ googleDriveFolderId: e.googleDriveFolderId,
         remainingPrints: e.printer.remainingPrints,
         loadedCapacity: e.printer.loadedCapacity
       } : null
-    }))
+    })})
   });
 });
 app.patch("/api/events/:id/start", adminOnly, async (req,res)=>{
