@@ -5094,6 +5094,8 @@ function Dashboard({onLogout}) {
   const [documentEvent,setDocumentEvent]=useState(null);
   const [viewEvent,setViewEvent]=useState(null);
   const [search,setSearch]=useState("");
+  const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
+  const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
 
   async function load(){
     const [e,d]=await Promise.all([
@@ -5215,6 +5217,42 @@ function Dashboard({onLogout}) {
 
   function saved(){setShowForm(false);setFormEvent(undefined);load();}
 
+  const weeklyDashboard=useMemo(()=>{
+    const now=new Date();
+    const monday=new Date(now);
+    const day=(monday.getDay()+6)%7;
+    monday.setHours(0,0,0,0);
+    monday.setDate(monday.getDate()-day);
+
+    const sunday=new Date(monday);
+    sunday.setDate(sunday.getDate()+6);
+    sunday.setHours(23,59,59,999);
+
+    const weekEvents=(events||[]).filter(event=>{
+      if(event?.archived)return false;
+      const booking=String(event?.bookingStatus||"").toUpperCase();
+      if(booking==="CANCELLED"||booking==="DECLINED")return false;
+      const match=String(event?.date||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(!match)return false;
+      const date=new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),12,0,0,0);
+      return date>=monday&&date<=sunday;
+    });
+
+    const billedEvents=weekEvents.filter(event=>!event?.preparation?.gifted);
+    const giftedEvents=weekEvents.filter(event=>!!event?.preparation?.gifted);
+    const sum=items=>items.reduce((total,event)=>total+Math.max(Number(event?.totalPrice||0),0),0);
+
+    return {
+      count:weekEvents.length,
+      billedCount:billedEvents.length,
+      giftCount:giftedEvents.length,
+      billedAmount:sum(billedEvents),
+      giftAmount:sum(giftedEvents)
+    };
+  },[events]);
+
+  const dashboardMoney=value=>Number(value||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+
   const [eventTab,setEventTab]=useState("upcoming");
 
   const eventTabCounts=useMemo(()=>{
@@ -5315,8 +5353,8 @@ function Dashboard({onLogout}) {
         .app-shell .sidebar{position:fixed !important;left:0;top:0;bottom:0;width:min(86vw,330px) !important;max-width:330px;z-index:1202;transform:translateX(-105%);transition:transform .22s ease;box-shadow:18px 0 45px rgba(0,0,0,.42);overflow-y:auto;}
         .app-shell .sidebar.mobile-open{transform:translateX(0);}
         .lp28-mobile-topbar{display:flex;position:fixed;left:0;right:0;top:0;height:62px;z-index:1200;align-items:center;gap:12px;padding:8px 12px;background:rgba(10,10,12,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
-        .lp28-mobile-menu-btn{min-width:132px;height:54px;display:flex;align-items:center;justify-content:center;gap:10px;flex:0 0 auto;padding:0 18px;border:1px solid rgba(214,185,79,.65);border-radius:15px;background:linear-gradient(135deg,rgba(214,185,79,.22),rgba(21,21,25,.96));color:#fff;font-size:17px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.24);}
-        .lp28-mobile-menu-btn .menu-bars{font-size:28px;line-height:1;}
+        .lp28-mobile-menu-btn{min-width:112px;height:46px;display:flex;align-items:center;justify-content:center;gap:9px;flex:0 0 auto;padding:0 16px;border:1px solid rgba(214,185,79,.55);border-radius:13px;background:linear-gradient(135deg,rgba(214,185,79,.18),rgba(21,21,25,.96));color:#fff;font-size:15px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.20);}
+        .lp28-mobile-menu-btn .menu-bars{font-size:24px;line-height:1;}
         .lp28-mobile-menu-btn .menu-label{letter-spacing:.04em;}
         .lp28-mobile-title{min-width:0;display:flex;flex-direction:column;line-height:1.12;}
         .lp28-mobile-title strong{font-size:.96rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -5333,12 +5371,12 @@ function Dashboard({onLogout}) {
 
     <div className="lp28-mobile-topbar">
       <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}><span className="menu-bars">☰</span><span className="menu-label">MENU</span></button>
-      <div className="lp28-mobile-title"><strong>{currentViewTitle}</strong><span>LP28 Suite</span></div>
+      <div className="lp28-mobile-title"><strong>Bonjour Yo 👋</strong><span>LP28 Suite</span></div>
       {!isStandalone && <button type="button" className="lp28-install-btn" onClick={installLp28}>📲 Installer</button>}
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.35</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.36</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
@@ -5380,6 +5418,26 @@ function Dashboard({onLogout}) {
           </article>
           <article className="stat-card"><span>Galeries actives</span><strong>{stats.activeGalleries}</strong></article>
           <article className="stat-card"><span>Contrats signés</span><strong>{stats.signedContracts}</strong></article>
+
+          <article className="stat-card" style={{border:"1px solid rgba(59,130,246,.55)",background:"linear-gradient(135deg,rgba(37,99,235,.15),rgba(15,23,42,.32))"}}>
+            <span>🗓️ Événements cette semaine</span>
+            <strong style={{color:"#60a5fa"}}>{weeklyDashboard.count}</strong>
+            <small className="muted">Du lundi au dimanche</small>
+          </article>
+
+          <article className="stat-card" style={{position:"relative",border:"1px solid rgba(168,85,247,.58)",background:"linear-gradient(135deg,rgba(126,34,206,.16),rgba(31,20,43,.32))"}}>
+            <button type="button" aria-label={showWeeklyBilledAmount?"Masquer le montant facturé":"Afficher le montant facturé"} title={showWeeklyBilledAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
+            <span>📄 Facturé cette semaine</span>
+            <strong style={{color:"#c084fc",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyBilledAmount?dashboardMoney(weeklyDashboard.billedAmount):"****.** €"}</strong>
+            <small className="muted">{weeklyDashboard.billedCount} prestation{weeklyDashboard.billedCount>1?"s":""} facturée{weeklyDashboard.billedCount>1?"s":""}</small>
+          </article>
+
+          <article className="stat-card" style={{position:"relative",border:"1px solid rgba(34,197,94,.55)",background:"linear-gradient(135deg,rgba(22,101,52,.18),rgba(13,36,25,.34))"}}>
+            <button type="button" aria-label={showWeeklyGiftAmount?"Masquer le montant des dons":"Afficher le montant des dons"} title={showWeeklyGiftAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
+            <span>🎁 Don / prestation offerte</span>
+            <strong style={{color:"#4ade80",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyGiftAmount?dashboardMoney(weeklyDashboard.giftAmount):"****.** €"}</strong>
+            <small className="muted">{weeklyDashboard.giftCount} prestation{weeklyDashboard.giftCount>1?"s":""} offerte{weeklyDashboard.giftCount>1?"s":""}</small>
+          </article>
         </section>
         <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo.jpg"/></section>
       </> : view==="events" ? <>
