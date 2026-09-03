@@ -435,26 +435,3 @@ model CollaboratorAction {
   @@index([collaboratorId])
   @@index([eventId, action])
 }
-
-model AppNotification {
-  id String @id @default(uuid())
-  title String
-  message String
-  type String @default("INFO")
-  source String @default("MANUAL")
-  audience String @default("ADMIN")
-  targetUserId String?
-  eventId String?
-  startsAt DateTime @default(now())
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
-  reads AppNotificationRead[]
-}
-model AppNotificationRead {
-  id String @id @default(uuid())
-  notificationId String
-  userId String
-  readAt DateTime @default(now())
-  notification AppNotification @relation(fields:[notificationId],references:[id],onDelete:Cascade)
-  @@unique([notificationId,userId])
-}
