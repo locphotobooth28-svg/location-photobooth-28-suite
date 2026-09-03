@@ -102,20 +102,90 @@ function totpCode(secret,step=Math.floor(Date.now()/30000)){
   const n=((h[o]&127)<<24)|(h[o+1]<<16)|(h[o+2]<<8)|h[o+3]; return String(n%1000000).padStart(6,"0");
 }
 function verifyTotp(secret,code){ const c=String(code||"").replace(/\D/g,""); if(c.length!==6)return false; const step=Math.floor(Date.now()/30000); return [-1,0,1].some(d=>{const a=Buffer.from(totpCode(secret,step+d));const b=Buffer.from(c);return a.length===b.length&&crypto.timingSafeEqual(a,b)}); }
-function safeUser(u){const firstName=u.firstName||String(u.name||"").trim().split(/\s+/)[0]||null;const lastName=u.lastName||null;const displayName=[firstName,lastName].filter(Boolean).join(" ")||u.name||u.username||u.email;return {id:u.id,name:u.name,firstName,lastName,displayName,collaboratorId:u.collaboratorId||null,email:u.email,phone:u.phone,username:u.username,role:u.role,active:u.active,permissions:u.permissions||{},totpEnabled:u.totpEnabled,lastLoginAt:u.lastLoginAt};}
-async function setAuthenticatedSession(req,user){ req.session.admin=user.role==="ADMIN"; req.session.userId=user.id; req.session.role=user.role; }
+function accountStatus(u){
+  const p=u?.permissions&&typeof u.permissions==="object"&&!Array.isArray(u.permissions)?u.permissions:{};
+  return String(p.accountStatus||"").toUpperCase() || (u?.active===false?"BLOCKED":"ACTIVE");
+}
+function safeUser(u){
+  const firstName=u.firstName||String(u.name||"").trim().split(/\s+/)[0]||null;
+  const lastName=u.lastName||null;
+  const displayName=[firstName,lastName].filter(Boolean).join(" ")||u.name||u.username||u.email;
+  return {
+    id:u.id,name:u.name,firstName,lastName,displayName,collaboratorId:u.collaboratorId||null,
+    email:u.email,phone:u.phone,username:u.username,role:u.role,active:u.active,
+    accountStatus:accountStatus(u),permissions:u.permissions||{},totpEnabled:u.totpEnabled,
+    lastLoginAt:u.lastLoginAt,createdAt:u.createdAt
+  };
+}
+function passwordPolicyError(password){
+  const p=String(password||"");
+  if(p.length<8)return "Le mot de passe doit contenir au minimum 8 caractères.";
+  if(!/[A-ZÀ-ÖØ-Ý]/.test(p))return "Le mot de passe doit contenir au moins une majuscule.";
+  if(!/[0-9]/.test(p))return "Le mot de passe doit contenir au moins un chiffre.";
+  if(!/[^A-Za-z0-9À-ÖØ-öø-ÿ]/.test(p))return "Le mot de passe doit contenir au moins un caractère spécial.";
+  return null;
+}
+function permissionsObject(u){
+  return u?.permissions&&typeof u.permissions==="object"&&!Array.isArray(u.permissions)?u.permissions:{};
+}
+function allowedModulesForUser(u){
+  if(u?.role==="ADMIN")return null;
+  const p=permissionsObject(u);
+  const defaults=u?.role==="INTERVENANT"
+    ? ["dashboard","events","planning","materialPlanning"]
+    : ["dashboard","planning"];
+  return Array.isArray(p.allowedModules)?p.allowedModules:defaults;
+}
+function canViewModule(u,moduleId){
+  if(u?.role==="ADMIN")return true;
+  return allowedModulesForUser(u).includes(moduleId);
+}
+async function setAuthenticatedSession(req,user){
+  req.session.admin=user.role==="ADMIN";
+  req.session.userId=user.id;
+  req.session.role=user.role;
+}
 async function trustedUserFromRequest(req){
   const raw=parseCookies(req)[TRUST_COOKIE]; if(!raw)return null;
   const row=await prisma.trustedDevice.findUnique({where:{tokenHash:sha256(raw)},include:{user:true}}).catch(()=>null);
-  if(!row||row.expiresAt<=new Date()||!row.user.active)return null;
-  await prisma.trustedDevice.update({where:{id:row.id},data:{lastUsedAt:new Date()}}).catch(()=>{}); return row.user;
+  if(!row||row.expiresAt<=new Date()||!row.user.active||accountStatus(row.user)!=="ACTIVE")return null;
+  await prisma.trustedDevice.update({where:{id:row.id},data:{lastUsedAt:new Date()}}).catch(()=>{});
+  return row.user;
+}
+async function sessionUser(req){
+  if(!req.session?.userId)return null;
+  const u=await prisma.user.findUnique({where:{id:req.session.userId}}).catch(()=>null);
+  if(!u||!u.active||accountStatus(u)!=="ACTIVE")return null;
+  return u;
 }
 async function adminOnly(req,res,next){
-  if(req.session?.userId && req.session?.role==="ADMIN")return next();
-  if(req.session?.admin===true)return next();
+  const u=await sessionUser(req);
+  if(u?.role==="ADMIN"){req.currentUser=u;return next();}
+  if(!req.session?.userId&&req.session?.admin===true)return next();
   return res.status(401).json({ok:false,message:"Non autorisé."});
 }
-function userOnly(req,res,next){ if(req.session?.userId||req.session?.admin===true)return next(); return res.status(401).json({ok:false,message:"Non autorisé."}); }
+async function userOnly(req,res,next){
+  const u=await sessionUser(req);
+  if(u){req.currentUser=u;return next();}
+  if(!req.session?.userId&&req.session?.admin===true)return next();
+  return res.status(401).json({ok:false,message:"Non autorisé."});
+}
+function moduleViewOnly(moduleId){
+  return async(req,res,next)=>{
+    const u=await sessionUser(req);
+    if(!u)return res.status(401).json({ok:false,message:"Non autorisé."});
+    if(!canViewModule(u,moduleId))return res.status(403).json({ok:false,message:"Ce module n'est pas autorisé pour ce compte."});
+    req.currentUser=u; next();
+  };
+}
+function anyModuleViewOnly(moduleIds){
+  return async(req,res,next)=>{
+    const u=await sessionUser(req);
+    if(!u)return res.status(401).json({ok:false,message:"Non autorisé."});
+    if(u.role!=="ADMIN"&&!moduleIds.some(id=>canViewModule(u,id)))return res.status(403).json({ok:false,message:"Accès non autorisé."});
+    req.currentUser=u; next();
+  };
+}
 
 const DEFAULT_ASSISTANCE_SETTINGS = {
   copilotUrl: "https://copilot.fotoshare.co/events",
@@ -876,7 +946,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
   }
 });
 
-app.get("/api/admin/booths",adminOnly,async(req,res)=>{
+app.get("/api/admin/booths",moduleViewOnly("booths"),async(req,res)=>{
   try{
     const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}});
     const now=Date.now();
@@ -991,9 +1061,12 @@ app.get("/api/health", async (req, res) => {
 });
 
 app.get("/api/session", async (req,res)=>{
-  let user=req.session?.userId?await prisma.user.findUnique({where:{id:req.session.userId}}).catch(()=>null):null;
-  if(!user){ user=await trustedUserFromRequest(req); if(user){await setAuthenticatedSession(req,user); await new Promise(resolve=>req.session.save(()=>resolve()));} }
-  res.json({authenticated:Boolean(user||req.session?.admin),user:user?safeUser(user):null,legacy:Boolean(!user&&req.session?.admin)});
+  let user=await sessionUser(req);
+  if(!user&&req.session?.userId){
+    delete req.session.userId;delete req.session.role;req.session.admin=false;
+  }
+  if(!user){user=await trustedUserFromRequest(req);if(user){await setAuthenticatedSession(req,user);await new Promise(resolve=>req.session.save(()=>resolve()));}}
+  res.json({authenticated:Boolean(user||(!req.session?.userId&&req.session?.admin)),user:user?safeUser(user):null,legacy:Boolean(!user&&!req.session?.userId&&req.session?.admin)});
 });
 
 app.post("/api/login", async (req,res)=>{
@@ -1005,7 +1078,9 @@ app.post("/api/login", async (req,res)=>{
     if(!user && email===ADMIN_EMAIL && password===ADMIN_PASSWORD){
       user=await prisma.user.create({data:{email:ADMIN_EMAIL,username:"johan",name:"Johan",role:"ADMIN",active:true,passwordHash:hashPassword(password)}});
     }
-    if(!user||!user.active||!verifyPassword(password,user.passwordHash))return res.status(401).json({ok:false,message:"Identifiants incorrects."});
+    if(!user||!verifyPassword(password,user.passwordHash))return res.status(401).json({ok:false,message:"Identifiants incorrects."});
+    if(!user.active||accountStatus(user)==="BLOCKED")return res.status(403).json({ok:false,message:"Ce compte est actuellement bloqué. Contacte l'administrateur LP28."});
+    if(accountStatus(user)==="REVOKED")return res.status(403).json({ok:false,message:"L'accès de ce compte a été révoqué par l'administrateur LP28."});
     if(user.totpEnabled){
       const trusted=await trustedUserFromRequest(req);
       if(!trusted||trusted.id!==user.id){ req.session.pending2faUserId=user.id; return req.session.save(()=>res.json({ok:true,requires2fa:true,user:{name:user.name}})); }
@@ -1017,7 +1092,7 @@ app.post("/api/login", async (req,res)=>{
 
 app.post("/api/login/2fa",async(req,res)=>{
   const userId=req.session?.pending2faUserId; if(!userId)return res.status(400).json({ok:false,message:"Connexion 2FA expirée."});
-  const user=await prisma.user.findUnique({where:{id:userId}}); if(!user||!user.totpEnabled)return res.status(400).json({ok:false,message:"2FA indisponible."});
+  const user=await prisma.user.findUnique({where:{id:userId}}); if(!user||!user.totpEnabled||!user.active||accountStatus(user)!=="ACTIVE")return res.status(400).json({ok:false,message:"2FA indisponible pour ce compte."});
   let valid=verifyTotp(user.totpSecret,req.body?.code); let recovery=false;
   if(!valid){ const code=String(req.body?.code||"").trim().toUpperCase(); const hashes=Array.isArray(user.recoveryCodes)?user.recoveryCodes:[]; const h=sha256(code); if(hashes.includes(h)){valid=true;recovery=true;await prisma.user.update({where:{id:user.id},data:{recoveryCodes:hashes.filter(x=>x!==h)}});} }
   if(!valid)return res.status(401).json({ok:false,message:"Code de sécurité incorrect."});
@@ -1048,7 +1123,10 @@ app.post("/api/admin/invitations",adminOnly,async(req,res)=>{
   let collaboratorId=role==="INTERVENANT"?String(req.body?.collaboratorId||"").trim()||null:null;
   if(collaboratorId){const exists=await prisma.collaborator.findUnique({where:{id:collaboratorId}});if(!exists)return res.status(400).json({ok:false,message:"Intervenant introuvable."});}
   const raw=randomToken(); const expiresAt=new Date(Date.now()+10*60*1000);
-  const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:`${firstName} ${lastName}`,firstName,lastName,email:normalizeEmail(req.body?.email),phone:normalizePhone(req.body?.phone),collaboratorId,role,permissions:req.body?.permissions||{},expiresAt,createdById:creator.id}});
+  const defaultAllowed=role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:role==="VIEWER"?["dashboard","planning"]:null;
+  const incomingPermissions=req.body?.permissions&&typeof req.body.permissions==="object"?req.body.permissions:{};
+  const invitationPermissions=role==="ADMIN"?incomingPermissions:{...incomingPermissions,allowedModules:Array.isArray(incomingPermissions.allowedModules)?incomingPermissions.allowedModules:defaultAllowed,accountStatus:"ACTIVE"};
+  const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:`${firstName} ${lastName}`,firstName,lastName,email:normalizeEmail(req.body?.email),phone:normalizePhone(req.body?.phone),collaboratorId,role,permissions:invitationPermissions,expiresAt,createdById:creator.id}});
   const url=`${appBaseUrl(req)}/inscription/${raw}`; res.json({ok:true,url,expiresAt:inv.expiresAt});
 });
 app.get("/api/register/:token",async(req,res)=>{const inv=await prisma.userInvitation.findUnique({where:{tokenHash:sha256(req.params.token)}});if(!inv||inv.usedAt||inv.expiresAt<=new Date())return res.status(410).json({ok:false,message:"Ce lien d'inscription est expiré ou déjà utilisé."});res.json({ok:true,invitation:{name:inv.name,firstName:inv.firstName,lastName:inv.lastName,email:inv.email,phone:inv.phone,role:inv.role,expiresAt:inv.expiresAt}});});
@@ -1057,7 +1135,8 @@ app.post("/api/register/:token",async(req,res)=>{
   const firstName=normalizePersonName(req.body?.firstName||inv.firstName),lastName=normalizePersonName(req.body?.lastName||inv.lastName);
   const username=normalizeUsername(req.body?.username),email=normalizeEmail(req.body?.email||inv.email),phone=normalizePhone(req.body?.phone||inv.phone),password=String(req.body?.password||"");
   if(!firstName||!lastName)return res.status(400).json({ok:false,message:"Le prénom et le nom sont obligatoires."});
-  if(!username||username.length<3||password.length<10)return res.status(400).json({ok:false,message:"Identifiant : 3 caractères minimum. Mot de passe : 10 caractères minimum."});
+  if(!username||username.length<3)return res.status(400).json({ok:false,message:"L'identifiant doit contenir au minimum 3 caractères."});
+  const passwordError=passwordPolicyError(password);if(passwordError)return res.status(400).json({ok:false,message:passwordError});
   try{
     const user=await prisma.$transaction(async tx=>{
       let collaboratorId=inv.collaboratorId||null;
@@ -1073,7 +1152,7 @@ app.post("/api/register/:token",async(req,res)=>{
       }
       let u;
       if(inv.targetUserId){
-        u=await tx.user.update({where:{id:inv.targetUserId},data:{passwordHash:hashPassword(password),username,email,phone,firstName,lastName,name:`${firstName} ${lastName}`}});await tx.trustedDevice.deleteMany({where:{userId:u.id}});
+        const target=await tx.user.findUnique({where:{id:inv.targetUserId}});const currentPermissions=permissionsObject(target);u=await tx.user.update({where:{id:inv.targetUserId},data:{passwordHash:hashPassword(password),username,email,phone,firstName,lastName,name:`${firstName} ${lastName}`,active:true,permissions:{...currentPermissions,accountStatus:"ACTIVE"}}});await tx.trustedDevice.deleteMany({where:{userId:u.id}});
       }else{
         u=await tx.user.create({data:{name:`${firstName} ${lastName}`,firstName,lastName,collaboratorId,email,phone,username,passwordHash:hashPassword(password),role:inv.role,permissions:inv.permissions||{},active:true}});
       }
@@ -1082,7 +1161,40 @@ app.post("/api/register/:token",async(req,res)=>{
     res.json({ok:true,user:safeUser(user)});
   }catch(err){console.error("REGISTER ERROR",err);res.status(409).json({ok:false,message:"Identifiant, e-mail, téléphone ou intervenant déjà associé à un autre compte."});}
 });
-app.patch("/api/admin/users/:id",adminOnly,async(req,res)=>{const data={};if(typeof req.body?.active==="boolean")data.active=req.body.active;if(["ADMIN","INTERVENANT","VIEWER"].includes(req.body?.role))data.role=req.body.role;if(req.body?.permissions)data.permissions=req.body.permissions;const u=await prisma.user.update({where:{id:req.params.id},data});res.json({ok:true,user:safeUser(u)});});
+app.patch("/api/admin/users/:id",adminOnly,async(req,res)=>{
+  const data={};
+  if(["ADMIN","INTERVENANT","VIEWER"].includes(req.body?.role))data.role=req.body.role;
+  if(req.body?.permissions&&typeof req.body.permissions==="object")data.permissions=req.body.permissions;
+  const u=await prisma.user.update({where:{id:req.params.id},data});
+  res.json({ok:true,user:safeUser(u)});
+});
+app.patch("/api/admin/users/:id/permissions",adminOnly,async(req,res)=>{
+  const target=await prisma.user.findUnique({where:{id:req.params.id}});
+  if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});
+  if(target.role==="ADMIN")return res.status(400).json({ok:false,message:"Les comptes administrateurs conservent l'accès complet."});
+  const SAFE_MODULES=["dashboard","events","planning","materialPlanning","galleries","booths","collaborators"];
+  const allowed=Array.isArray(req.body?.allowedModules)?req.body.allowedModules.filter(x=>SAFE_MODULES.includes(x)):[];
+  if(!allowed.includes("dashboard"))allowed.unshift("dashboard");
+  const p=permissionsObject(target);
+  const u=await prisma.user.update({where:{id:target.id},data:{permissions:{...p,allowedModules:allowed}}});
+  res.json({ok:true,user:safeUser(u)});
+});
+app.patch("/api/admin/users/:id/access",adminOnly,async(req,res)=>{
+  const target=await prisma.user.findUnique({where:{id:req.params.id}});
+  if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});
+  if(target.id===req.session.userId)return res.status(400).json({ok:false,message:"Tu ne peux pas bloquer ou révoquer ton propre compte administrateur."});
+  const action=String(req.body?.action||"").toUpperCase();
+  const p=permissionsObject(target);
+  let active=target.active,status=accountStatus(target);
+  if(action==="BLOCK"){active=false;status="BLOCKED";}
+  else if(action==="UNBLOCK"){active=true;status="ACTIVE";}
+  else if(action==="REVOKE"){active=false;status="REVOKED";}
+  else if(action==="RESTORE"){active=true;status="ACTIVE";}
+  else return res.status(400).json({ok:false,message:"Action inconnue."});
+  const u=await prisma.user.update({where:{id:target.id},data:{active,permissions:{...p,accountStatus:status}}});
+  if(status!=="ACTIVE")await prisma.trustedDevice.deleteMany({where:{userId:target.id}});
+  res.json({ok:true,user:safeUser(u)});
+});
 app.post("/api/admin/users/:id/reset-password",adminOnly,async(req,res)=>{const raw=randomToken();const expiresAt=new Date(Date.now()+10*60*1000);const target=await prisma.user.findUnique({where:{id:req.params.id}});if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:target.name,firstName:target.firstName,lastName:target.lastName,email:target.email,phone:target.phone,collaboratorId:target.collaboratorId,role:target.role,permissions:target.permissions||{},targetUserId:target.id,expiresAt,createdById:req.session.userId}});res.json({ok:true,url:`${appBaseUrl(req)}/inscription/${raw}`,expiresAt:inv.expiresAt,reset:true});});
 app.post("/api/account/2fa/setup",userOnly,async(req,res)=>{const user=await prisma.user.findUnique({where:{id:req.session.userId}});if(!user)return res.status(401).json({ok:false});const secret=base32Encode(crypto.randomBytes(20));req.session.pendingTotpSecret=secret;const label=encodeURIComponent(`LP28 Suite:${user.username||user.email||user.name}`);const issuer=encodeURIComponent("LP28 Suite");const uri=`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;const qrDataUrl=await QRCode.toDataURL(uri);req.session.save(()=>res.json({ok:true,secret,qrDataUrl}));});
 app.post("/api/account/2fa/enable",userOnly,async(req,res)=>{const secret=req.session.pendingTotpSecret;if(!secret||!verifyTotp(secret,req.body?.code))return res.status(400).json({ok:false,message:"Code Authenticator incorrect."});const codes=Array.from({length:8},()=>`${crypto.randomBytes(4).toString("hex").slice(0,4)}-${crypto.randomBytes(4).toString("hex").slice(0,4)}`.toUpperCase());await prisma.user.update({where:{id:req.session.userId},data:{totpEnabled:true,totpSecret:secret,recoveryCodes:codes.map(sha256)}});delete req.session.pendingTotpSecret;req.session.save(()=>res.json({ok:true,recoveryCodes:codes}));});
@@ -1092,11 +1204,41 @@ app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{
 });
 app.delete("/api/account/trusted-devices/:id",userOnly,async(req,res)=>{await prisma.trustedDevice.deleteMany({where:{id:req.params.id,userId:req.session.userId}});res.json({ok:true});});
 
+
+app.get("/api/account/appearance",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  if(!user)return res.status(401).json({ok:false,message:"Non autorisé."});
+  const permissions=permissionsObject(user);
+  const raw=permissions.uiAppearance&&typeof permissions.uiAppearance==="object"?permissions.uiAppearance:{};
+  const mode=["light","dark","auto"].includes(raw.mode)?raw.mode:"dark";
+  const lightStart=/^\d{2}:\d{2}$/.test(raw.lightStart||"")?raw.lightStart:"07:00";
+  const darkStart=/^\d{2}:\d{2}$/.test(raw.darkStart||"")?raw.darkStart:"19:00";
+  res.json({ok:true,appearance:{mode,lightStart,darkStart}});
+});
+app.put("/api/account/appearance",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  if(!user)return res.status(401).json({ok:false,message:"Non autorisé."});
+  const incoming=req.body?.appearance||{};
+  const mode=["light","dark","auto"].includes(incoming.mode)?incoming.mode:null;
+  if(!mode)return res.status(400).json({ok:false,message:"Mode d'affichage invalide."});
+  const validTime=v=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(v||""));
+  const lightStart=validTime(incoming.lightStart)?incoming.lightStart:"07:00";
+  const darkStart=validTime(incoming.darkStart)?incoming.darkStart:"19:00";
+  const permissions=permissionsObject(user);
+  const appearance={mode,lightStart,darkStart};
+  await prisma.user.update({where:{id:user.id},data:{permissions:{...permissions,uiAppearance:appearance}}});
+  res.json({ok:true,appearance});
+});
 app.get("/api/account/module-preferences",userOnly,async(req,res)=>{
   if(!req.session?.userId)return res.json({ok:true,modules:[]});
   const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{permissions:true}});
   const permissions=user?.permissions&&typeof user.permissions==="object"&&!Array.isArray(user.permissions)?user.permissions:{};
-  res.json({ok:true,modules:Array.isArray(permissions.uiModules)?permissions.uiModules:[]});
+  let modules=Array.isArray(permissions.uiModules)?permissions.uiModules:[];
+  if(req.currentUser?.role!=="ADMIN"){
+    const allowed=new Set([...allowedModulesForUser(req.currentUser),"settings"]);
+    modules=modules.filter(m=>allowed.has(m.id)).map(m=>({...m,visible:true}));
+  }
+  res.json({ok:true,modules});
 });
 app.put("/api/account/module-preferences",userOnly,async(req,res)=>{
   if(!req.session?.userId)return res.status(400).json({ok:false,message:"Compte utilisateur requis."});
@@ -1299,7 +1441,7 @@ app.post("/api/events/:id/google-sync", adminOnly, async (req, res) => {
   }
 });
 
-app.get("/api/dashboard", adminOnly, async (req, res) => {
+app.get("/api/dashboard", moduleViewOnly("dashboard"), async (req, res) => {
   const now = new Date();
   const today = new Date(now);
   today.setHours(0,0,0,0);
@@ -1313,8 +1455,17 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
   sundayEnd.setDate(sundayEnd.getDate() + daysUntilSunday);
   sundayEnd.setHours(23,59,59,999);
 
+  const currentUser=req.currentUser||await sessionUser(req);
+  const assignedDashboardWhere=currentUser?.role==="INTERVENANT"&&currentUser?.collaboratorId
+    ? {OR:[
+        {responsibleCollaboratorId:currentUser.collaboratorId},
+        {installerCollaboratorId:currentUser.collaboratorId},
+        {pickupCollaboratorId:currentUser.collaboratorId}
+      ]}
+    : {};
   const activeBookingWhere = {
     archived: false,
+    ...assignedDashboardWhere,
     bookingStatus: { notIn: ["DECLINED", "CANCELLED", "COMPLETED"] }
   };
 
@@ -1330,7 +1481,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
   };
 
   const [events, inProgress, upcoming, unsignedUpcomingContracts, activeGalleries, signedContracts, consumables] = await Promise.all([
-    prisma.event.count({ where: { archived: false } }),
+    prisma.event.count({ where: { archived: false, ...assignedDashboardWhere } }),
     prisma.event.count({ where: inProgressWhere }),
     prisma.event.count({ where: upcomingWhere }),
     prisma.event.count({
@@ -1342,6 +1493,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
     prisma.event.count({
       where: {
         archived: false,
+        ...assignedDashboardWhere,
         portalEnabled: true,
         bookingStatus: { notIn: ["DECLINED", "CANCELLED"] }
       }
@@ -1349,6 +1501,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
     prisma.event.count({
       where: {
         archived: false,
+        ...assignedDashboardWhere,
         contractStatus: "SIGNED"
       }
     }),
@@ -1369,7 +1522,7 @@ app.get("/api/dashboard", adminOnly, async (req, res) => {
   });
 });
 
-app.get("/api/materials", adminOnly, async (req, res) => {
+app.get("/api/materials", anyModuleViewOnly(["planning","materialPlanning"]), async (req, res) => {
   await ensureCatalog(prisma);
   const materials = await prisma.material.findMany({
     where: { active: true, bookingVisible: true },
@@ -1543,7 +1696,7 @@ app.post("/api/materials/:id/unavailabilities", adminOnly, async (req, res) => {
     }))
   });
 });
-app.get("/api/material-unavailabilities", adminOnly, async (req, res) => {
+app.get("/api/material-unavailabilities", anyModuleViewOnly(["planning","materialPlanning"]), async (req, res) => {
   const items = await prisma.materialUnavailability.findMany({
     include:{
       material:true
@@ -1751,8 +1904,17 @@ app.delete("/api/family-planning/blocks/:id",familyPlanningOnly,async(req,res)=>
 });
 // === fin Planning familial ===
 
-app.get("/api/events", adminOnly, async (req, res) => {
+app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"]), async (req, res) => {
+  const currentUser=req.currentUser||await sessionUser(req);
+  const assignedWhere=currentUser?.role==="INTERVENANT"&&currentUser?.collaboratorId
+    ? {OR:[
+        {responsibleCollaboratorId:currentUser.collaboratorId},
+        {installerCollaboratorId:currentUser.collaboratorId},
+        {pickupCollaboratorId:currentUser.collaboratorId}
+      ]}
+    : {};
   const events = await prisma.event.findMany({
+    where:assignedWhere,
     include: {
   client: true,
 
@@ -1788,26 +1950,11 @@ app.get("/api/events", adminOnly, async (req, res) => {
       organizerName: e.organizerName,
       organizerPhone: e.organizerPhone,
       organizerEmail: e.organizerEmail,
-totalPrice: e.totalPrice != null
-  ? Number(e.totalPrice)
-  : "",
-
-deposit: e.deposit != null
-  ? Number(e.deposit)
-  : "",
-
-balance: e.balance != null
-  ? Number(e.balance)
-  : "",
-customPrintCount:
-  e.customPrintCount != null
-    ? Number(e.customPrintCount)
-    : "",
-
-customPrintPrice:
-  e.customPrintPrice != null
-    ? Number(e.customPrintPrice)
-    : "",
+totalPrice: currentUser?.role==="ADMIN" && e.totalPrice != null ? Number(e.totalPrice) : null,
+deposit: currentUser?.role==="ADMIN" && e.deposit != null ? Number(e.deposit) : null,
+balance: currentUser?.role==="ADMIN" && e.balance != null ? Number(e.balance) : null,
+customPrintCount: e.customPrintCount != null ? Number(e.customPrintCount) : "",
+customPrintPrice: currentUser?.role==="ADMIN" && e.customPrintPrice != null ? Number(e.customPrintPrice) : null,
 
       responsibleCollaboratorId: e.responsibleCollaboratorId,
 installerCollaboratorId: e.installerCollaboratorId,
@@ -1826,12 +1973,12 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
 })),
 
       materials: e.materials.map(x => x.material.name),
-      payments: {
+      payments: currentUser?.role==="ADMIN" ? {
         depositPaid: e.depositPaid,
         balancePaid: e.balancePaid,
         cautionReceived: e.cautionReceived,
         cautionReturned: e.cautionReturned
-      },
+      } : null,
       bookingStatus: e.bookingStatus,
       optionUntil: e.optionUntil ? e.optionUntil.toISOString().slice(0,10) : null,
       sceneJets: e.sceneJets,
@@ -1844,7 +1991,7 @@ collaboratorActions: (e.collaboratorActions || []).map(a => ({
       fotoshareUrl: e.fotoshareUrl,
       frameSource: e.frameSource,
       frameStatus: e.frameStatus,
-      preparation: e.preparation,
+      preparation: currentUser?.role==="ADMIN" ? e.preparation : {...(e.preparation||{}),gifted:false},
       notes: e.notes,
 archived: e.archived,
 status: e.status,
@@ -3131,7 +3278,7 @@ app.get("/api/events/:id/share", adminOnly, async (req, res) => {
 });
 
 
-app.get("/api/material-planning", adminOnly, async (req, res) => {
+app.get("/api/material-planning", moduleViewOnly("materialPlanning"), async (req, res) => {
   const start = req.query.start ? new Date(`${req.query.start}T00:00:00`) : new Date();
   const days = Math.min(Math.max(Number(req.query.days || 7), 1), 31);
   const end = new Date(start);
@@ -3191,7 +3338,7 @@ const unavailabilities = await prisma.materialUnavailability.findMany({
   });
 });
 
-app.get("/api/availability", adminOnly, async (req, res) => {
+app.get("/api/availability", anyModuleViewOnly(["planning","materialPlanning"]), async (req, res) => {
   const date = String(req.query.date || "");
   const time = String(req.query.time || "00:00");
   const pickupDate = String(req.query.pickupDate || date);
@@ -4187,7 +4334,7 @@ app.delete("/api/guest/:token/memories/:id", async (req,res)=>{
 
 // ---------------- V8.3 ADMIN : Galeries LP28 Memories ----------------
 
-app.get("/api/admin/galleries", adminOnly, async (req, res) => {
+app.get("/api/admin/galleries", moduleViewOnly("galleries"), async (req, res) => {
   const events = await prisma.event.findMany({
     where: { portalEnabled: true },
     orderBy: { eventDate: "desc" },
@@ -4224,7 +4371,7 @@ app.get("/api/admin/galleries", adminOnly, async (req, res) => {
   });
 });
 
-app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
+app.get("/api/admin/galleries/:eventId", moduleViewOnly("galleries"), async (req, res) => {
   const event = await prisma.event.findUnique({
     where: { id: req.params.eventId }
   });
@@ -4282,7 +4429,7 @@ app.get("/api/admin/galleries/:eventId", adminOnly, async (req, res) => {
   });
 });
 
-app.get("/api/admin/galleries/media/:id/thumbnail", adminOnly, async (req,res)=>{
+app.get("/api/admin/galleries/media/:id/thumbnail", moduleViewOnly("galleries"), async (req,res)=>{
   try{
     const media=await prisma.memoryMedia.findUnique({where:{id:req.params.id}});
     if(!media)return res.status(404).end();
@@ -4301,7 +4448,7 @@ app.get("/api/admin/galleries/media/:id/thumbnail", adminOnly, async (req,res)=>
   }
 });
 
-app.get("/api/admin/galleries/media/:id/file", adminOnly, async (req,res)=>{
+app.get("/api/admin/galleries/media/:id/file", moduleViewOnly("galleries"), async (req,res)=>{
   try{
     const media=await prisma.memoryMedia.findUnique({where:{id:req.params.id}});
     if(!media)return res.status(404).end();
@@ -4448,7 +4595,7 @@ app.post("/api/admin/galleries/:eventId/expiration", adminOnly, async (req, res)
     portalExpiresAt: event.portalExpiresAt
   });
 });
-app.get("/api/collaborators", adminOnly, async (req, res) => {
+app.get("/api/collaborators", moduleViewOnly("collaborators"), async (req, res) => {
   const collaborators = await prisma.collaborator.findMany({
     where: {
       active: true
