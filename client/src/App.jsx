@@ -329,13 +329,16 @@ function EventForm({event,onClose,onSaved}) {
 const [addressSuggestions,setAddressSuggestions]=useState([]);
 const [addressLoading,setAddressLoading]=useState(false);
 
-const [collaboratorPermissions,setCollaboratorPermissions]=useState({
-  canSeeClient:true,
-  canSeeContract:true,
-  canSeeInvoice:false,
-  canSeeBalance:true,
-  canManageCaution:true,
-  canSeeInstructions:true
+const [collaboratorPermissions,setCollaboratorPermissions]=useState(()=>{
+  const saved=event?.preparation?.collaboratorPermissions||{};
+  return {
+    canSeeClient:saved.canSeeClient!==false,
+    canSeeContract:saved.canSeeContract!==false,
+    canSeeInvoice:Boolean(saved.canSeeInvoice),
+    canSeeBalance:saved.canSeeBalance!==false,
+    canManageCaution:saved.canManageCaution!==false,
+    canSeeInstructions:saved.canSeeInstructions!==false
+  };
 });
 
   const [collaborators,setCollaborators]=useState([]);
@@ -615,7 +618,14 @@ if (
       const r=await fetch(url,{
         method,
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({...form,materials:[...new Set(form.materials||[])]})
+        body:JSON.stringify({
+          ...form,
+          preparation:{
+            ...(form.preparation||{}),
+            collaboratorPermissions
+          },
+          materials:[...new Set(form.materials||[])]
+        })
       });
 
       let d = {};
@@ -690,6 +700,17 @@ if (
       if (d.google?.connected && d.google?.warnings?.length) {
         alert(`Événement enregistré ✅\n\nGoogle :\n${d.google.warnings.join("\n")}`);
       }
+
+      const savedEventId=d.event?.id||event?.id;
+      if(savedEventId){
+        await fetch(`/api/events/${savedEventId}/collaborator-access-permissions`,{
+          method:"PUT",
+          credentials:"include",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(collaboratorPermissions)
+        }).catch(()=>{});
+      }
+
       onSaved(d.event);
     } catch (err) {
       console.error(err);
@@ -5707,7 +5728,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.48</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.49</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
