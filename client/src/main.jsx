@@ -9,3 +9,15 @@ createRoot(document.getElementById("root")).render(
     <App />
   </React.StrictMode>
 );
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("LP28 Service Worker actif :", registration.scope);
+      })
+      .catch((error) => {
+        console.error("Erreur Service Worker LP28 :", error);
+      });
+  });
+}
