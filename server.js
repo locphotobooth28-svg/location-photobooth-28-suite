@@ -4,6 +4,8 @@ const express = require("express");
 const session = require("express-session");
 const path = require("path");
 const crypto = require("crypto");
+let webpush=null;
+try{webpush=require("web-push");}catch{console.warn("web-push non installé : notifications Push désactivées.");}
 const QRCode = require("qrcode");
 const fs = require("fs");
 const multer = require("multer");
@@ -164,7 +166,11 @@ function notificationWhere(user){
  const now=new Date(),aud=["ALL"];if(user?.role==="ADMIN")aud.push("ADMIN");if(user?.role==="INTERVENANT")aud.push("INTERVENANTS");if(user?.role==="VIEWER")aud.push("VIEWERS");
  return {startsAt:{lte:now},AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]},{OR:[{audience:{in:aud}},{targetUserId:user?.id||"__none__"}]}]};
 }
-async function addNotification(d){return prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});}
+async function addNotification(d){
+  const notification=await prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});
+  sendPushForNotification(notification).catch(err=>console.error("Push notification :",err.message));
+  return notification;
+}
 
 async function familyPlanningNotificationUser(){
   try{
@@ -194,6 +200,37 @@ async function notifyFamilyPlanningUser(data){
 function frDateShort(value){
   try{return new Date(value).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});}
   catch{return String(value||"");}
+}
+const VAPID_PUBLIC_KEY=String(process.env.VAPID_PUBLIC_KEY||"").trim();
+const VAPID_PRIVATE_KEY=String(process.env.VAPID_PRIVATE_KEY||"").trim();
+const VAPID_SUBJECT=String(process.env.VAPID_SUBJECT||"mailto:admin@locationphotobooth28.fr").trim();
+function pushConfigured(){return Boolean(webpush&&VAPID_PUBLIC_KEY&&VAPID_PRIVATE_KEY);}
+if(pushConfigured()){
+  try{webpush.setVapidDetails(VAPID_SUBJECT,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY);}catch(err){console.error("Configuration VAPID :",err.message);}
+}
+async function notificationRecipientUserIds(n){
+  if(n.targetUserId)return [n.targetUserId];
+  const where={active:true};
+  if(n.audience==="ADMIN")where.role="ADMIN";
+  else if(n.audience==="INTERVENANTS")where.role="INTERVENANT";
+  else if(n.audience==="VIEWERS")where.role="VIEWER";
+  const users=await prisma.user.findMany({where,select:{id:true}});
+  return users.map(u=>u.id);
+}
+async function sendPushForNotification(n){
+  if(!pushConfigured())return;
+  const userIds=await notificationRecipientUserIds(n);
+  if(!userIds.length)return;
+  const subs=await prisma.pushSubscription.findMany({where:{active:true,userId:{in:userIds}}});
+  const payload=JSON.stringify({title:n.title,message:n.message,eventId:n.eventId||null,notificationId:n.id,url:n.eventId?`/?event=${encodeURIComponent(n.eventId)}`:"/"});
+  await Promise.allSettled(subs.map(async s=>{
+    try{
+      await webpush.sendNotification({endpoint:s.endpoint,keys:{p256dh:s.p256dh,auth:s.auth}},payload,{TTL:3600,urgency:n.type==="URGENT"?"high":"normal"});
+    }catch(err){
+      if(err?.statusCode===404||err?.statusCode===410){await prisma.pushSubscription.update({where:{endpoint:s.endpoint},data:{active:false}}).catch(()=>{});return;}
+      throw err;
+    }
+  }));
 }
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
@@ -1284,6 +1321,22 @@ app.post("/api/admin/notifications",adminOnly,async(req,res)=>{
  const b=req.body||{};if(!String(b.title||"").trim()||!String(b.message||"").trim())return res.status(400).json({ok:false,message:"Titre et message obligatoires."});
  const audience=["ADMIN","ALL","INTERVENANTS","VIEWERS","USER"].includes(b.audience)?b.audience:"ADMIN";if(audience==="USER"&&!b.targetUserId)return res.status(400).json({ok:false,message:"Choisis un utilisateur."});
  res.json({ok:true,notification:await addNotification({...b,audience,targetUserId:audience==="USER"?b.targetUserId:null,source:"MANUAL"})});
+});
+app.get("/api/push/status",userOnly,async(req,res)=>{
+  const user=req.currentUser||await sessionUser(req);
+  const count=await prisma.pushSubscription.count({where:{userId:user.id,active:true}}).catch(()=>0);
+  res.json({ok:true,configured:pushConfigured(),publicKey:pushConfigured()?VAPID_PUBLIC_KEY:null,subscriptions:count});
+});
+app.post("/api/push/subscribe",userOnly,async(req,res)=>{
+  if(!pushConfigured())return res.status(503).json({ok:false,message:"Push non configuré sur le serveur."});
+  const user=req.currentUser||await sessionUser(req),b=req.body||{},s=b.subscription||b;
+  if(!s.endpoint||!s.keys?.p256dh||!s.keys?.auth)return res.status(400).json({ok:false,message:"Abonnement Push invalide."});
+  await prisma.pushSubscription.upsert({where:{endpoint:s.endpoint},update:{userId:user.id,p256dh:s.keys.p256dh,auth:s.keys.auth,deviceLabel:String(b.deviceLabel||"").slice(0,100)||null,userAgent:String(req.headers["user-agent"]||"").slice(0,500),active:true},create:{userId:user.id,endpoint:s.endpoint,p256dh:s.keys.p256dh,auth:s.keys.auth,deviceLabel:String(b.deviceLabel||"").slice(0,100)||null,userAgent:String(req.headers["user-agent"]||"").slice(0,500)}});
+  res.json({ok:true});
+});
+app.post("/api/push/unsubscribe",userOnly,async(req,res)=>{
+  const endpoint=String(req.body?.endpoint||"");if(endpoint)await prisma.pushSubscription.updateMany({where:{endpoint},data:{active:false}});
+  res.json({ok:true});
 });
 app.get("/api/account/appearance",userOnly,async(req,res)=>{
   const user=req.currentUser||await sessionUser(req);
@@ -5464,6 +5517,20 @@ app.post("/api/collaborator-portal/:token/payment-received", async (req, res) =>
   });
 });
 
+app.get("/sw.js",(req,res)=>{
+  res.type("application/javascript").set("Cache-Control","no-cache").send(`
+self.addEventListener("push",event=>{
+  let data={};try{data=event.data?event.data.json():{};}catch{}
+  const title=data.title||"LP28 Suite";
+  const options={body:data.message||"Nouvelle notification",icon:"/icon-192.png",badge:"/icon-192.png",tag:data.notificationId||undefined,renotify:true,data:{url:data.url||"/",eventId:data.eventId||null}};
+  event.waitUntil(self.registration.showNotification(title,options));
+});
+self.addEventListener("notificationclick",event=>{
+  event.notification.close();const url=event.notification.data?.url||"/";
+  event.waitUntil(clients.matchAll({type:"window",includeUncontrolled:true}).then(list=>{for(const c of list){if("focus" in c){c.navigate(url).catch(()=>{});return c.focus();}}return clients.openWindow?clients.openWindow(url):null;}));
+});
+`);
+});
 app.use(express.static(distDir));
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
