@@ -1092,6 +1092,33 @@ app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{
 });
 app.delete("/api/account/trusted-devices/:id",userOnly,async(req,res)=>{await prisma.trustedDevice.deleteMany({where:{id:req.params.id,userId:req.session.userId}});res.json({ok:true});});
 
+app.get("/api/account/module-preferences",userOnly,async(req,res)=>{
+  if(!req.session?.userId)return res.json({ok:true,modules:[]});
+  const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{permissions:true}});
+  const permissions=user?.permissions&&typeof user.permissions==="object"&&!Array.isArray(user.permissions)?user.permissions:{};
+  res.json({ok:true,modules:Array.isArray(permissions.uiModules)?permissions.uiModules:[]});
+});
+app.put("/api/account/module-preferences",userOnly,async(req,res)=>{
+  if(!req.session?.userId)return res.status(400).json({ok:false,message:"Compte utilisateur requis."});
+  const allowed=new Set(["dashboard","events","planning","materialPlanning","inventory","longPlanning","documents","galleries","booths","collaborators","google","assistance","settings"]);
+  const required=new Set(["dashboard","events","planning","materialPlanning","inventory","longPlanning","documents","galleries","assistance","settings"]);
+  const incoming=Array.isArray(req.body?.modules)?req.body.modules:[];
+  const seen=new Set();
+  const modules=[];
+  for(const item of incoming){
+    const id=String(item?.id||"");
+    if(!allowed.has(id)||seen.has(id))continue;
+    seen.add(id);
+    modules.push({id,order:modules.length,visible:required.has(id)?true:item?.visible!==false});
+  }
+  for(const id of allowed)if(!seen.has(id))modules.push({id,order:modules.length,visible:true});
+  const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{permissions:true}});
+  const permissions=user?.permissions&&typeof user.permissions==="object"&&!Array.isArray(user.permissions)?user.permissions:{};
+  const nextPermissions={...permissions,uiModules:modules};
+  await prisma.user.update({where:{id:req.session.userId},data:{permissions:nextPermissions}});
+  res.json({ok:true,modules});
+});
+
 
 app.get("/api/google/status", adminOnly, async (req, res) => {
   const calendar = await googleService.connection("calendar");
