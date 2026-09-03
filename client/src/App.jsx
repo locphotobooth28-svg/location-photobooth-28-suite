@@ -180,6 +180,19 @@ function SettingsPage({user}){
   const [appearancePreview,setAppearancePreview]=useState(()=>resolveAppearanceMode(appearance));
   const [adminNotif,setAdminNotif]=useState({title:"",message:"",type:"INFO",audience:"ADMIN",targetUserId:"",startsAt:"",expiresAt:""});
   const [testUserId,setTestUserId]=useState("");
+  const [notificationSound,setNotificationSound]=useState(()=>localStorage.getItem("lp28.notifications.sound")!=="false");
+  const [notificationPopup,setNotificationPopup]=useState(()=>localStorage.getItem("lp28.notifications.popup")!=="false");
+  function setNotifSound(v){setNotificationSound(v);localStorage.setItem("lp28.notifications.sound",String(v));}
+  function setNotifPopup(v){setNotificationPopup(v);localStorage.setItem("lp28.notifications.popup",String(v));}
+  function testLocalNotification(){
+    if(notificationSound)playLp28NotificationSound();
+    if(notificationPopup){
+      const el=document.createElement("div");
+      el.textContent="🔔 Test LP28 — Les notifications pop-up fonctionnent.";
+      Object.assign(el.style,{position:"fixed",right:"18px",top:"74px",zIndex:"12000",background:"#111827",color:"#fff",border:"1px solid #d6b94f",borderRadius:"14px",padding:"16px",boxShadow:"0 20px 55px rgba(0,0,0,.38)",maxWidth:"390px",fontWeight:"800"});
+      document.body.appendChild(el);setTimeout(()=>el.remove(),4500);
+    }
+  }
   const SAFE_MODULES=[
     {id:"dashboard",label:"Tableau de bord",icon:"🏠"},
     {id:"events",label:"Événements",icon:"📅"},
@@ -333,11 +346,22 @@ function SettingsPage({user}){
         {adminNotif.audience==="USER"&&<div><label>Personne</label><select value={adminNotif.targetUserId} onChange={e=>setAdminNotif(p=>({...p,targetUserId:e.target.value}))}><option value="">Choisir…</option>{users.map(u=><option key={u.id} value={u.id}>{u.displayName||u.firstName||u.email}</option>)}</select></div>}
         <div><label>Début</label><input type="datetime-local" value={adminNotif.startsAt} onChange={e=>setAdminNotif(p=>({...p,startsAt:e.target.value}))}/></div><div><label>Fin</label><input type="datetime-local" value={adminNotif.expiresAt} onChange={e=>setAdminNotif(p=>({...p,expiresAt:e.target.value}))}/></div>
       </div><label>Message</label><textarea rows="4" value={adminNotif.message} onChange={e=>setAdminNotif(p=>({...p,message:e.target.value}))}/><button className="primary" style={{marginTop:12}} onClick={sendAdminNotification}>🔔 Publier</button></div>
+      <div className="card" style={{padding:14,marginTop:14}}>
+        <h3>🔊 Alertes sur cet appareil</h3>
+        <p className="muted">Ces réglages concernent uniquement ce navigateur/appareil.</p>
+        <label style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}><input type="checkbox" checked={notificationSound} onChange={e=>setNotifSound(e.target.checked)}/> 🔊 Son des nouvelles notifications</label>
+        <label style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}><input type="checkbox" checked={notificationPopup} onChange={e=>setNotifPopup(e.target.checked)}/> 🪟 Fenêtre pop-up automatique</label>
+        <button style={{marginTop:14}} onClick={testLocalNotification}>🧪 Tester son + pop-up</button>
+        <p className="muted" style={{marginTop:10}}>Le navigateur peut demander une première interaction avant d’autoriser le son. Le bouton de test permet de l’activer.</p>
+      </div>
       <div className="card" style={{padding:14,marginTop:14}}><h3>⚙️ Automatique</h3><p>✅ <strong>Contrat signé</strong> → notification ADMIN automatique.</p>
         <p>💳 <strong>Chèque de caution reçu</strong> → notification quand l’intervenant confirme sa réception.</p>
         <p>↩️ <strong>Chèque de caution rendu</strong> → notification quand l’intervenant confirme sa restitution au client.</p>
         <p>💶 <strong>Règlement reçu</strong> → notification quand l’intervenant confirme le règlement, avec le montant lorsqu’il est disponible.</p>
-        <p>▶️ <strong>Début d’événement</strong> → notification quand la prestation passe en cours.</p></div>
+        <p>▶️ <strong>Début d’événement</strong> → notification quand la prestation passe en cours.</p>
+        <p>📅 <strong>Planning Lydie</strong> → notification lorsqu’un événement est ajouté, annulé ou supprimé.</p>
+        <p>⛔ <strong>Date bloquée par Lydie</strong> → notification ADMIN avec la période et le motif.</p>
+        <p>✅ <strong>Date libérée par Lydie</strong> → notification ADMIN lors de la suppression du blocage.</p></div>
     </div>}
   </section>;
 }
@@ -5377,30 +5401,81 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
   );
 }
 
+function playLp28NotificationSound(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return;
+    const ctx=new Ctx();
+    const now=ctx.currentTime;
+    [880,1174.66].forEach((freq,i)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type="sine";osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0.0001,now+i*.12);
+      gain.gain.exponentialRampToValueAtTime(.12,now+i*.12+.02);
+      gain.gain.exponentialRampToValueAtTime(.0001,now+i*.12+.20);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(now+i*.12);osc.stop(now+i*.12+.22);
+    });
+    setTimeout(()=>ctx.close().catch(()=>{}),700);
+  }catch{}
+}
 function NotificationBell({onOpen}){
   const [count,setCount]=useState(0);
+  const [toast,setToast]=useState(null);
+  const seenRef=React.useRef(new Set());
+  const initializedRef=React.useRef(false);
+  function prefs(){
+    try{
+      return {
+        sound:localStorage.getItem("lp28.notifications.sound")!=="false",
+        popup:localStorage.getItem("lp28.notifications.popup")!=="false"
+      };
+    }catch{return {sound:true,popup:true};}
+  }
   async function load(){
     try{
       const r=await fetch("/api/notifications");
       const d=await r.json();
-      if(d?.ok)setCount((d.notifications||[]).filter(n=>!n.read).length);
+      if(!d?.ok)return;
+      const items=d.notifications||[];
+      const unread=items.filter(n=>!n.read);
+      setCount(unread.length);
+      if(!initializedRef.current){
+        unread.forEach(n=>seenRef.current.add(n.id));
+        initializedRef.current=true;
+        return;
+      }
+      const fresh=unread.filter(n=>!seenRef.current.has(n.id));
+      unread.forEach(n=>seenRef.current.add(n.id));
+      if(fresh.length){
+        const n=fresh[0],p=prefs();
+        if(p.popup){
+          setToast(n);
+          setTimeout(()=>setToast(t=>t?.id===n.id?null:t),6500);
+        }
+        if(p.sound)playLp28NotificationSound();
+      }
     }catch{}
   }
-  useEffect(()=>{load();const t=setInterval(load,30000);return()=>clearInterval(t)},[]);
+  useEffect(()=>{load();const t=setInterval(load,10000);return()=>clearInterval(t)},[]);
   return <>
     <style>{`
-      @keyframes lp28BellPulse{
-        0%,100%{transform:rotate(0deg) scale(1);box-shadow:0 0 0 rgba(214,185,79,0)}
-        25%{transform:rotate(-9deg) scale(1.08)}
-        50%{transform:rotate(9deg) scale(1.08);box-shadow:0 0 20px rgba(214,185,79,.8)}
-        75%{transform:rotate(-5deg) scale(1.04)}
-      }
-      .lp28-notification-bell.unread{animation:lp28BellPulse 1.15s ease-in-out infinite;border-color:#d6b94f !important}
+      @keyframes lp28BellPulse{0%,100%{transform:rotate(0) scale(1)}25%{transform:rotate(-9deg) scale(1.08)}50%{transform:rotate(9deg) scale(1.08);box-shadow:0 0 20px rgba(214,185,79,.8)}75%{transform:rotate(-5deg) scale(1.04)}}
+      @keyframes lp28ToastIn{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+      .lp28-notification-bell.unread{animation:lp28BellPulse 1.15s ease-in-out infinite;border-color:#d6b94f!important}
+      .lp28-notification-toast{position:fixed;right:18px;top:74px;z-index:11000;width:min(390px,calc(100vw - 24px));padding:14px 16px;border-radius:15px;background:#111827;color:#f8fafc;border:1px solid #d6b94f;box-shadow:0 20px 55px rgba(0,0,0,.38);animation:lp28ToastIn .22s ease-out}
     `}</style>
     <button onClick={onOpen} className={`lp28-notification-bell ${count>0?"unread":""}`} style={{position:"relative",fontSize:"1.25rem",minWidth:46,height:46,borderRadius:14}} title="Notifications">
-      🔔
-      {count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}
+      🔔{count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}
     </button>
+    {toast&&<div className="lp28-notification-toast" onClick={()=>{setToast(null);onOpen?.()}} role="status">
+      <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
+        <strong style={{color:"#fff"}}>{toast.title}</strong>
+        <button onClick={e=>{e.stopPropagation();setToast(null)}} style={{background:"#fff",color:"#111827",minWidth:30,height:30}}>✕</button>
+      </div>
+      <div style={{marginTop:6,color:"#e5e7eb",lineHeight:1.45}}>{toast.message}</div>
+      <small style={{display:"block",marginTop:8,color:"#94a3b8"}}>Cliquer pour ouvrir les notifications</small>
+    </div>}
   </>;
 }
 function Dashboard({onLogout,user}) {
@@ -5788,7 +5863,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.56</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.58</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
