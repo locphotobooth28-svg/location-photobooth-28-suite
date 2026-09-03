@@ -165,6 +165,36 @@ function notificationWhere(user){
  return {startsAt:{lte:now},AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]},{OR:[{audience:{in:aud}},{targetUserId:user?.id||"__none__"}]}]};
 }
 async function addNotification(d){return prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});}
+
+async function familyPlanningNotificationUser(){
+  try{
+    const candidates=[];
+    if(typeof FAMILY_PLANNING_EMAIL!=="undefined" && FAMILY_PLANNING_EMAIL){
+      candidates.push({email:FAMILY_PLANNING_EMAIL});
+    }
+    candidates.push({firstName:{equals:"Lydie",mode:"insensitive"}});
+    candidates.push({name:{contains:"Lydie",mode:"insensitive"}});
+    return await prisma.user.findFirst({
+      where:{active:true,OR:candidates},
+      orderBy:{createdAt:"asc"}
+    });
+  }catch(err){
+    console.warn("Recherche compte planning familial :",err.message);
+    return null;
+  }
+}
+async function notifyFamilyPlanningUser(data){
+  const target=await familyPlanningNotificationUser();
+  return addNotification({
+    ...data,
+    audience:target?"USER":"VIEWERS",
+    targetUserId:target?.id||null
+  });
+}
+function frDateShort(value){
+  try{return new Date(value).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});}
+  catch{return String(value||"");}
+}
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -1943,6 +1973,18 @@ app.post("/api/family-planning/blocks",familyPlanningOnly,async(req,res)=>{
   const materials=await prisma.material.findMany({where:{active:true,blocksPlanning:true}});
   if(!materials.length) return res.status(400).json({ok:false,message:"Aucun matériel bloquant n'est configuré."});
   const created=await prisma.$transaction(materials.map(m=>prisma.materialUnavailability.create({data:{materialId:m.id,startAt:start,endAt:end,reason:"VACATION",notes:`FAMILY_PLANNING|${note}`,status:"ACTIVE"}})));
+
+  const familyUser=await familyPlanningNotificationUser();
+  const actor=familyUser?.firstName||familyUser?.name||"Lydie";
+  const sameDay=startDate===endDate;
+  await addNotification({
+    title:"⛔ Date bloquée dans le planning",
+    message:`${actor} a bloqué ${sameDay?`le ${frDateShort(start)}`:`du ${frDateShort(start)} au ${frDateShort(end)}`}${note?` — Motif : ${note}`:" — Sans motif renseigné"}.`,
+    type:"WARNING",
+    source:"FAMILY_DATE_BLOCKED",
+    audience:"ADMIN"
+  }).catch(err=>console.error("Notification blocage planning familial :",err));
+
   res.json({ok:true,count:created.length});
 });
 app.delete("/api/family-planning/blocks/:id",familyPlanningOnly,async(req,res)=>{
@@ -1950,6 +1992,18 @@ app.delete("/api/family-planning/blocks/:id",familyPlanningOnly,async(req,res)=>
   if(!first || first.reason!=="VACATION" || !String(first.notes||"").startsWith("FAMILY_PLANNING|")) return res.status(404).json({ok:false,message:"Blocage familial introuvable."});
   const note=String(first.notes||"");
   await prisma.materialUnavailability.deleteMany({where:{reason:"VACATION",notes:note,startAt:first.startAt,endAt:first.endAt}});
+
+  const familyUser=await familyPlanningNotificationUser();
+  const actor=familyUser?.firstName||familyUser?.name||"Lydie";
+  const privateNote=note.replace(/^FAMILY_PLANNING\|/,"").trim();
+  await addNotification({
+    title:"✅ Date libérée dans le planning",
+    message:`${actor} a libéré ${frDateShort(first.startAt)}${frDateShort(first.startAt)!==frDateShort(first.endAt)?` au ${frDateShort(first.endAt)}`:""}${privateNote?` — Motif précédent : ${privateNote}`:""}.`,
+    type:"SUCCESS",
+    source:"FAMILY_DATE_RELEASED",
+    audience:"ADMIN"
+  }).catch(err=>console.error("Notification libération planning familial :",err));
+
   res.json({ok:true});
 });
 // === fin Planning familial ===
@@ -2841,6 +2895,14 @@ customPrintPrice:
     google = { connected: true, calendar: false, drive: false, warnings: [err.message] };
   }
 
+  await notifyFamilyPlanningUser({
+    title:"📅 Nouvel événement ajouté",
+    message:`${event.name || "Événement"} — le ${frDateShort(event.eventDate)}${event.installTime?` à ${event.installTime}`:""}.`,
+    type:"INFO",
+    source:"EVENT_CREATED",
+    eventId:event.id
+  }).catch(err=>console.error("Notification nouvel événement planning familial :",err));
+
   res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
@@ -2966,6 +3028,19 @@ googleCalendarId: String(b.googleCalendarId || "").trim() || null,
   } catch (err) {
     console.error("Auto-sync Google aprÃ¨s modification :", err.message);
     google = { connected: true, calendar: false, drive: false, warnings: [err.message] };
+  }
+
+  if(
+    currentEventForPrinter?.bookingStatus!=="CANCELLED" &&
+    event.bookingStatus==="CANCELLED"
+  ){
+    await notifyFamilyPlanningUser({
+      title:"❌ Événement annulé",
+      message:`${event.name || "Événement"} — prévu le ${frDateShort(event.eventDate)} a été annulé.`,
+      type:"WARNING",
+      source:"EVENT_CANCELLED",
+      eventId:event.id
+    }).catch(err=>console.error("Notification événement annulé planning familial :",err));
   }
 
   res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
@@ -3332,6 +3407,13 @@ app.delete("/api/events/:id", adminOnly, async (req, res) => {
 
   await googleService.deleteCalendarEvent(req, event);
   await prisma.event.delete({ where: { id: req.params.id } });
+
+  await notifyFamilyPlanningUser({
+    title:"🗑️ Événement supprimé",
+    message:`${event.name || "Événement"} — prévu le ${frDateShort(event.eventDate)} a été supprimé du planning.`,
+    type:"WARNING",
+    source:"EVENT_DELETED"
+  }).catch(err=>console.error("Notification événement supprimé planning familial :",err));
 
   // Le dossier Drive est volontairement conservÃ© pour Ã©viter toute perte de photos/documents.
   res.json({ ok: true });
