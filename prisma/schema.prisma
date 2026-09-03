@@ -7,12 +7,50 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  email               String?  @unique
+  phone               String?  @unique
+  username            String?  @unique
+  passwordHash        String
+  name                 String?
+  role                 String   @default("VIEWER")
+  active               Boolean  @default(true)
+  permissions          Json?
+  totpEnabled          Boolean  @default(false)
+  totpSecret           String?
+  recoveryCodes        Json?
+  lastLoginAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  invitationsCreated  UserInvitation[] @relation("InvitationCreator")
+  trustedDevices       TrustedDevice[]
+}
+
+model UserInvitation {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique
+  name        String?
+  email       String?
+  phone       String?
+  role        String   @default("VIEWER")
+  permissions Json?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  targetUserId String?
+  createdById String
+  createdBy   User     @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model TrustedDevice {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  label     String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Client {
