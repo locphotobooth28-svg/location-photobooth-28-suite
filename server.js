@@ -77,6 +77,7 @@ function randomToken(bytes=32){ return crypto.randomBytes(bytes).toString("base6
 function normalizePhone(value){ return String(value||"").replace(/[^0-9+]/g,"").trim() || null; }
 function normalizeEmail(value){ return String(value||"").trim().toLowerCase() || null; }
 function normalizeUsername(value){ return String(value||"").trim().toLowerCase() || null; }
+function normalizePersonName(value){ return String(value||"").trim().replace(/\s+/g," "); }
 function parseCookies(req){
   return Object.fromEntries(String(req.headers.cookie||"").split(";").map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf("=");return i<0?[v,""]:[v.slice(0,i),decodeURIComponent(v.slice(i+1))]}));
 }
@@ -101,7 +102,7 @@ function totpCode(secret,step=Math.floor(Date.now()/30000)){
   const n=((h[o]&127)<<24)|(h[o+1]<<16)|(h[o+2]<<8)|h[o+3]; return String(n%1000000).padStart(6,"0");
 }
 function verifyTotp(secret,code){ const c=String(code||"").replace(/\D/g,""); if(c.length!==6)return false; const step=Math.floor(Date.now()/30000); return [-1,0,1].some(d=>{const a=Buffer.from(totpCode(secret,step+d));const b=Buffer.from(c);return a.length===b.length&&crypto.timingSafeEqual(a,b)}); }
-function safeUser(u){return {id:u.id,name:u.name,email:u.email,phone:u.phone,username:u.username,role:u.role,active:u.active,permissions:u.permissions||{},totpEnabled:u.totpEnabled,lastLoginAt:u.lastLoginAt};}
+function safeUser(u){const firstName=u.firstName||String(u.name||"").trim().split(/\s+/)[0]||null;const lastName=u.lastName||null;const displayName=[firstName,lastName].filter(Boolean).join(" ")||u.name||u.username||u.email;return {id:u.id,name:u.name,firstName,lastName,displayName,collaboratorId:u.collaboratorId||null,email:u.email,phone:u.phone,username:u.username,role:u.role,active:u.active,permissions:u.permissions||{},totpEnabled:u.totpEnabled,lastLoginAt:u.lastLoginAt};}
 async function setAuthenticatedSession(req,user){ req.session.admin=user.role==="ADMIN"; req.session.userId=user.id; req.session.role=user.role; }
 async function trustedUserFromRequest(req){
   const raw=parseCookies(req)[TRUST_COOKIE]; if(!raw)return null;
@@ -1021,31 +1022,74 @@ app.post("/api/login/2fa",async(req,res)=>{
   if(!valid){ const code=String(req.body?.code||"").trim().toUpperCase(); const hashes=Array.isArray(user.recoveryCodes)?user.recoveryCodes:[]; const h=sha256(code); if(hashes.includes(h)){valid=true;recovery=true;await prisma.user.update({where:{id:user.id},data:{recoveryCodes:hashes.filter(x=>x!==h)}});} }
   if(!valid)return res.status(401).json({ok:false,message:"Code de sécurité incorrect."});
   delete req.session.pending2faUserId; await setAuthenticatedSession(req,user); await prisma.user.update({where:{id:user.id},data:{lastLoginAt:new Date()}});
-  if(req.body?.trustDevice){ const raw=randomToken(); await prisma.trustedDevice.create({data:{userId:user.id,tokenHash:sha256(raw),label:String(req.body?.deviceLabel||req.get("user-agent")||"Appareil").slice(0,120),expiresAt:new Date(Date.now()+TRUST_DAYS*86400000)}}); res.cookie(TRUST_COOKIE,raw,{httpOnly:true,sameSite:"lax",secure:"auto",maxAge:TRUST_DAYS*86400000}); }
+  if(req.body?.trustDevice){
+    const label=String(req.body?.deviceLabel||"").trim().slice(0,80);
+    if(!label)return res.status(400).json({ok:false,message:"Donne un nom à cet appareil (ex. PC Johan ou Samsung S26 Ultra)."});
+    const raw=randomToken();
+    await prisma.trustedDevice.create({data:{userId:user.id,tokenHash:sha256(raw),label,expiresAt:new Date(Date.now()+TRUST_DAYS*86400000)}});
+    res.cookie(TRUST_COOKIE,raw,{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:TRUST_DAYS*86400000});
+  }
   req.session.save(()=>res.json({ok:true,authenticated:true,user:safeUser(user),recoveryCodeUsed:recovery}));
 });
 
-app.post("/api/logout",async(req,res)=>{ req.session.destroy(()=>res.json({ok:true})); });
+app.post("/api/logout",async(req,res)=>{
+  const raw=parseCookies(req)[TRUST_COOKIE];
+  if(raw)await prisma.trustedDevice.deleteMany({where:{tokenHash:sha256(raw)}}).catch(()=>{});
+  res.clearCookie(TRUST_COOKIE,{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production"});
+  req.session.destroy(()=>res.json({ok:true}));
+});
 
 app.get("/api/admin/users",adminOnly,async(req,res)=>{const users=await prisma.user.findMany({orderBy:{createdAt:"asc"}});res.json({ok:true,users:users.map(safeUser)});});
 app.post("/api/admin/invitations",adminOnly,async(req,res)=>{
   const creator=await prisma.user.findUnique({where:{id:req.session.userId}}); if(!creator)return res.status(409).json({ok:false,message:"Reconnecte-toi avec le compte administrateur Johan avant d'envoyer une invitation."});
+  const firstName=normalizePersonName(req.body?.firstName),lastName=normalizePersonName(req.body?.lastName);
+  if(!firstName||!lastName)return res.status(400).json({ok:false,message:"Le prénom et le nom sont obligatoires."});
+  const role=["ADMIN","INTERVENANT","VIEWER"].includes(req.body?.role)?req.body.role:"VIEWER";
+  let collaboratorId=role==="INTERVENANT"?String(req.body?.collaboratorId||"").trim()||null:null;
+  if(collaboratorId){const exists=await prisma.collaborator.findUnique({where:{id:collaboratorId}});if(!exists)return res.status(400).json({ok:false,message:"Intervenant introuvable."});}
   const raw=randomToken(); const expiresAt=new Date(Date.now()+10*60*1000);
-  const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:String(req.body?.name||"").trim()||null,email:normalizeEmail(req.body?.email),phone:normalizePhone(req.body?.phone),role:["ADMIN","INTERVENANT","VIEWER"].includes(req.body?.role)?req.body.role:"VIEWER",permissions:req.body?.permissions||{},expiresAt,createdById:creator.id}});
+  const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:`${firstName} ${lastName}`,firstName,lastName,email:normalizeEmail(req.body?.email),phone:normalizePhone(req.body?.phone),collaboratorId,role,permissions:req.body?.permissions||{},expiresAt,createdById:creator.id}});
   const url=`${appBaseUrl(req)}/inscription/${raw}`; res.json({ok:true,url,expiresAt:inv.expiresAt});
 });
-app.get("/api/register/:token",async(req,res)=>{const inv=await prisma.userInvitation.findUnique({where:{tokenHash:sha256(req.params.token)}});if(!inv||inv.usedAt||inv.expiresAt<=new Date())return res.status(410).json({ok:false,message:"Ce lien d'inscription est expiré ou déjà utilisé."});res.json({ok:true,invitation:{name:inv.name,email:inv.email,phone:inv.phone,role:inv.role,expiresAt:inv.expiresAt}});});
+app.get("/api/register/:token",async(req,res)=>{const inv=await prisma.userInvitation.findUnique({where:{tokenHash:sha256(req.params.token)}});if(!inv||inv.usedAt||inv.expiresAt<=new Date())return res.status(410).json({ok:false,message:"Ce lien d'inscription est expiré ou déjà utilisé."});res.json({ok:true,invitation:{name:inv.name,firstName:inv.firstName,lastName:inv.lastName,email:inv.email,phone:inv.phone,role:inv.role,expiresAt:inv.expiresAt}});});
 app.post("/api/register/:token",async(req,res)=>{
   const inv=await prisma.userInvitation.findUnique({where:{tokenHash:sha256(req.params.token)}}); if(!inv||inv.usedAt||inv.expiresAt<=new Date())return res.status(410).json({ok:false,message:"Ce lien d'inscription est expiré ou déjà utilisé."});
+  const firstName=normalizePersonName(req.body?.firstName||inv.firstName),lastName=normalizePersonName(req.body?.lastName||inv.lastName);
   const username=normalizeUsername(req.body?.username),email=normalizeEmail(req.body?.email||inv.email),phone=normalizePhone(req.body?.phone||inv.phone),password=String(req.body?.password||"");
+  if(!firstName||!lastName)return res.status(400).json({ok:false,message:"Le prénom et le nom sont obligatoires."});
   if(!username||username.length<3||password.length<10)return res.status(400).json({ok:false,message:"Identifiant : 3 caractères minimum. Mot de passe : 10 caractères minimum."});
-  try{const user=await prisma.$transaction(async tx=>{let u;if(inv.targetUserId){u=await tx.user.update({where:{id:inv.targetUserId},data:{passwordHash:hashPassword(password),username,email,phone}});await tx.trustedDevice.deleteMany({where:{userId:u.id}});}else{u=await tx.user.create({data:{name:inv.name,email,phone,username,passwordHash:hashPassword(password),role:inv.role,permissions:inv.permissions||{},active:true}});}await tx.userInvitation.update({where:{id:inv.id},data:{usedAt:new Date()}});return u;});res.json({ok:true,user:safeUser(user)});}catch(err){res.status(409).json({ok:false,message:"Identifiant, e-mail ou téléphone déjà utilisé."});}
+  try{
+    const user=await prisma.$transaction(async tx=>{
+      let collaboratorId=inv.collaboratorId||null;
+      if(inv.role==="INTERVENANT"){
+        if(collaboratorId){
+          await tx.collaborator.update({where:{id:collaboratorId},data:{firstName,lastName,email:email||undefined,phone:phone||undefined,active:true}});
+        }else{
+          const or=[];if(email)or.push({email});if(phone)or.push({phone});
+          const existing=or.length?await tx.collaborator.findFirst({where:{OR:or}}):null;
+          if(existing){collaboratorId=existing.id;await tx.collaborator.update({where:{id:existing.id},data:{firstName,lastName,email:email||undefined,phone:phone||undefined,active:true}});}
+          else{const c=await tx.collaborator.create({data:{firstName,lastName,email,phone,active:true}});collaboratorId=c.id;}
+        }
+      }
+      let u;
+      if(inv.targetUserId){
+        u=await tx.user.update({where:{id:inv.targetUserId},data:{passwordHash:hashPassword(password),username,email,phone,firstName,lastName,name:`${firstName} ${lastName}`}});await tx.trustedDevice.deleteMany({where:{userId:u.id}});
+      }else{
+        u=await tx.user.create({data:{name:`${firstName} ${lastName}`,firstName,lastName,collaboratorId,email,phone,username,passwordHash:hashPassword(password),role:inv.role,permissions:inv.permissions||{},active:true}});
+      }
+      await tx.userInvitation.update({where:{id:inv.id},data:{usedAt:new Date()}});return u;
+    });
+    res.json({ok:true,user:safeUser(user)});
+  }catch(err){console.error("REGISTER ERROR",err);res.status(409).json({ok:false,message:"Identifiant, e-mail, téléphone ou intervenant déjà associé à un autre compte."});}
 });
 app.patch("/api/admin/users/:id",adminOnly,async(req,res)=>{const data={};if(typeof req.body?.active==="boolean")data.active=req.body.active;if(["ADMIN","INTERVENANT","VIEWER"].includes(req.body?.role))data.role=req.body.role;if(req.body?.permissions)data.permissions=req.body.permissions;const u=await prisma.user.update({where:{id:req.params.id},data});res.json({ok:true,user:safeUser(u)});});
-app.post("/api/admin/users/:id/reset-password",adminOnly,async(req,res)=>{const raw=randomToken();const expiresAt=new Date(Date.now()+10*60*1000);const target=await prisma.user.findUnique({where:{id:req.params.id}});if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:target.name,email:target.email,phone:target.phone,role:target.role,permissions:target.permissions||{},targetUserId:target.id,expiresAt,createdById:req.session.userId}});res.json({ok:true,url:`${appBaseUrl(req)}/inscription/${raw}`,expiresAt:inv.expiresAt,reset:true});});
+app.post("/api/admin/users/:id/reset-password",adminOnly,async(req,res)=>{const raw=randomToken();const expiresAt=new Date(Date.now()+10*60*1000);const target=await prisma.user.findUnique({where:{id:req.params.id}});if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:target.name,firstName:target.firstName,lastName:target.lastName,email:target.email,phone:target.phone,collaboratorId:target.collaboratorId,role:target.role,permissions:target.permissions||{},targetUserId:target.id,expiresAt,createdById:req.session.userId}});res.json({ok:true,url:`${appBaseUrl(req)}/inscription/${raw}`,expiresAt:inv.expiresAt,reset:true});});
 app.post("/api/account/2fa/setup",userOnly,async(req,res)=>{const user=await prisma.user.findUnique({where:{id:req.session.userId}});if(!user)return res.status(401).json({ok:false});const secret=base32Encode(crypto.randomBytes(20));req.session.pendingTotpSecret=secret;const label=encodeURIComponent(`LP28 Suite:${user.username||user.email||user.name}`);const issuer=encodeURIComponent("LP28 Suite");const uri=`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;const qrDataUrl=await QRCode.toDataURL(uri);req.session.save(()=>res.json({ok:true,secret,qrDataUrl}));});
 app.post("/api/account/2fa/enable",userOnly,async(req,res)=>{const secret=req.session.pendingTotpSecret;if(!secret||!verifyTotp(secret,req.body?.code))return res.status(400).json({ok:false,message:"Code Authenticator incorrect."});const codes=Array.from({length:8},()=>`${crypto.randomBytes(4).toString("hex").slice(0,4)}-${crypto.randomBytes(4).toString("hex").slice(0,4)}`.toUpperCase());await prisma.user.update({where:{id:req.session.userId},data:{totpEnabled:true,totpSecret:secret,recoveryCodes:codes.map(sha256)}});delete req.session.pendingTotpSecret;req.session.save(()=>res.json({ok:true,recoveryCodes:codes}));});
-app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{const devices=await prisma.trustedDevice.findMany({where:{userId:req.session.userId,expiresAt:{gt:new Date()}},orderBy:{lastUsedAt:"desc"}});res.json({ok:true,devices:devices.map(d=>({id:d.id,label:d.label,expiresAt:d.expiresAt,lastUsedAt:d.lastUsedAt}))});});
+app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{
+  const devices=await prisma.trustedDevice.findMany({where:{userId:req.session.userId,expiresAt:{gt:new Date()}},include:{user:true},orderBy:{lastUsedAt:"desc"}});
+  res.json({ok:true,devices:devices.map(d=>({id:d.id,label:d.label,ownerName:safeUser(d.user).displayName,expiresAt:d.expiresAt,lastUsedAt:d.lastUsedAt,createdAt:d.createdAt}))});
+});
 app.delete("/api/account/trusted-devices/:id",userOnly,async(req,res)=>{await prisma.trustedDevice.deleteMany({where:{id:req.params.id,userId:req.session.userId}});res.json({ok:true});});
 
 
