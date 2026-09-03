@@ -128,6 +128,11 @@ function passwordPolicyError(password){
 function permissionsObject(u){
   return u?.permissions&&typeof u.permissions==="object"&&!Array.isArray(u.permissions)?u.permissions:{};
 }
+function eventIsGifted(event){
+  let p=event?.preparation;
+  if(typeof p==="string"){try{p=JSON.parse(p);}catch{p={};}}
+  return Boolean(p&&typeof p==="object"&&p.gifted===true);
+}
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -4790,7 +4795,7 @@ app.post("/api/events/:eventId/collaborator-access", adminOnly, async (req, res)
       canSeeClient: b.canSeeClient !== false,
       canSeeContract: b.canSeeContract !== false,
       canSeeInvoice: Boolean(b.canSeeInvoice),
-      canSeeBalance: b.canSeeBalance !== false,
+      canSeeBalance: !eventIsGifted(event) && b.canSeeBalance !== false,
       canManageCaution: b.canManageCaution !== false,
       canSeeInstructions: b.canSeeInstructions !== false,
 
@@ -4808,7 +4813,7 @@ app.post("/api/events/:eventId/collaborator-access", adminOnly, async (req, res)
       canSeeClient: b.canSeeClient !== false,
       canSeeContract: b.canSeeContract !== false,
       canSeeInvoice: Boolean(b.canSeeInvoice),
-      canSeeBalance: b.canSeeBalance !== false,
+      canSeeBalance: !eventIsGifted(event) && b.canSeeBalance !== false,
       canManageCaution: b.canManageCaution !== false,
       canSeeInstructions: b.canSeeInstructions !== false,
 
@@ -4889,6 +4894,7 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
   }
 
   const event = access.event;
+  const canSeeOperationalBalance = access.canSeeBalance && !eventIsGifted(event);
 let driveDocuments = [];
 
 try {
@@ -4943,11 +4949,11 @@ try {
         }
       : null,
 
-    balance: access.canSeeBalance
+    balance: canSeeOperationalBalance
       ? event.balance
       : null,
 
-      balancePaid: access.canSeeBalance
+      balancePaid: canSeeOperationalBalance
   ? event.balancePaid
   : null,
 
@@ -4988,7 +4994,7 @@ documents: {
     permissions: {
       contract: access.canSeeContract,
       invoice: access.canSeeInvoice,
-      balance: access.canSeeBalance,
+      balance: canSeeOperationalBalance,
       caution: access.canManageCaution,
       client: access.canSeeClient,
       instructions: access.canSeeInstructions
@@ -5198,10 +5204,10 @@ app.post("/api/collaborator-portal/:token/payment-received", async (req, res) =>
     });
   }
 
-  if (!access.canSeeBalance) {
+  if (!access.canSeeBalance || eventIsGifted(access.event)) {
     return res.status(403).json({
       ok: false,
-      message: "Gestion du règlement non autorisée."
+      message: "Gestion du règlement non autorisée pour cette prestation."
     });
   }
 
