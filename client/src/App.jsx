@@ -5035,6 +5035,7 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
 
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [events,setEvents]=useState([]);
   const [stats,setStats]=useState({events:0,inProgress:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   const [formEvent,setFormEvent]=useState(undefined);
@@ -5224,29 +5225,62 @@ function Dashboard({onLogout}) {
     return `${item?.icon||"📦"} ${label}`;
   }
 
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.18</span></div></div>
+  const currentViewTitle = view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire admin":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google":"Tableau de bord";
+
+  const navigate = nextView => {
+    setView(nextView);
+    setMobileMenuOpen(false);
+  };
+
+  return <div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
+    <style>{`
+      .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
+      @media (max-width:1024px){
+        .app-shell{display:block !important;min-height:100vh;}
+        .app-shell .content{width:100% !important;max-width:none !important;margin-left:0 !important;padding-top:72px !important;}
+        .app-shell .sidebar{position:fixed !important;left:0;top:0;bottom:0;width:min(86vw,330px) !important;max-width:330px;z-index:1202;transform:translateX(-105%);transition:transform .22s ease;box-shadow:18px 0 45px rgba(0,0,0,.42);overflow-y:auto;}
+        .app-shell .sidebar.mobile-open{transform:translateX(0);}
+        .lp28-mobile-topbar{display:flex;position:fixed;left:0;right:0;top:0;height:62px;z-index:1200;align-items:center;gap:12px;padding:8px 12px;background:rgba(10,10,12,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.10);}
+        .lp28-mobile-menu-btn{width:44px;height:44px;display:grid;place-items:center;flex:0 0 auto;border:1px solid rgba(255,255,255,.13);border-radius:12px;background:#151519;color:#fff;font-size:24px;line-height:1;cursor:pointer;}
+        .lp28-mobile-title{min-width:0;display:flex;flex-direction:column;line-height:1.12;}
+        .lp28-mobile-title strong{font-size:.96rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .lp28-mobile-title span{margin-top:3px;font-size:.69rem;font-weight:800;letter-spacing:.08em;color:#d6b94f;text-transform:uppercase;}
+        .lp28-mobile-backdrop{position:fixed;inset:0;z-index:1201;background:rgba(0,0,0,.58);border:0;padding:0;margin:0;}
+        .mobile-nav-open .lp28-mobile-backdrop{display:block;}
+        .app-shell .sidebar .nav-item{min-height:44px;}
+      }
+      @media (min-width:1025px){
+        .app-shell .sidebar{transform:none !important;}
+      }
+    `}</style>
+
+    <div className="lp28-mobile-topbar">
+      <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}>☰</button>
+      <div className="lp28-mobile-title"><strong>{currentViewTitle}</strong><span>LP28 Suite</span></div>
+    </div>
+    <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
+    <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.32</span></div></div>
       <nav>
-        <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>setView("dashboard")}>🏠 Tableau de bord</button>
-        <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>setView("events")}>📅 Événements</button>
-        <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>setView("planning")}>🗓️ Planning</button>
-        <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>setView("materialPlanning")}>📦 Planning matériel</button>
-        <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>setView("inventory")}>🔐 Inventaire admin</button>
-        <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>setView("longPlanning")}>🗓️ Planning 24 mois</button>
-        <button className={`nav-item ${view==="documents"?"active":""}`} onClick={()=>setView("documents")}>📄 Documents</button>
-        <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>setView("galleries")}>📸 Galeries</button>
-        <button className={`nav-item ${view==="booths"?"active":""}`} onClick={()=>setView("booths")}>🖥️ Mes bornes</button>
-        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>setView("collaborators")}>👷 Collaborateurs</button>
-        <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>setView("google")}>☁️ Google</button>
-        <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>setView("assistance")}>🆘 Assistance</button>
+        <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
+        <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
+        <button className={`nav-item ${view==="planning"?"active":""}`} onClick={()=>navigate("planning")}>🗓️ Planning</button>
+        <button className={`nav-item ${view==="materialPlanning"?"active":""}`} onClick={()=>navigate("materialPlanning")}>📦 Planning matériel</button>
+        <button className={`nav-item ${view==="inventory"?"active":""}`} onClick={()=>navigate("inventory")}>🔐 Inventaire admin</button>
+        <button className={`nav-item ${view==="longPlanning"?"active":""}`} onClick={()=>navigate("longPlanning")}>🗓️ Planning 24 mois</button>
+        <button className={`nav-item ${view==="documents"?"active":""}`} onClick={()=>navigate("documents")}>📄 Documents</button>
+        <button className={`nav-item ${view==="galleries"?"active":""}`} onClick={()=>navigate("galleries")}>📸 Galeries</button>
+        <button className={`nav-item ${view==="booths"?"active":""}`} onClick={()=>navigate("booths")}>🖥️ Mes bornes</button>
+        <button className={`nav-item ${view==="collaborators"?"active":""}`} onClick={()=>navigate("collaborators")}>👷 Collaborateurs</button>
+        <button className={`nav-item ${view==="google"?"active":""}`} onClick={()=>navigate("google")}>☁️ Google</button>
+        <button className={`nav-item ${view==="assistance"?"active":""}`} onClick={()=>navigate("assistance")}>🆘 Assistance</button>
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
 
     <main className="content">
       <header className="topbar">
-        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire administrateur":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google Workspace":"Tableau de bord"}</h1><p className="muted">Simple, rapide, efficace.</p></div>
+        <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{currentViewTitle}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         <button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>
       </header>
 
