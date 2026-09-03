@@ -167,6 +167,52 @@ function SettingsPage(){
   }
 
   return <section>
+    <style>{`
+      .settings-tabs{display:flex;overflow-x:auto;margin:0 0 16px;border-bottom:1px solid rgba(214,185,79,.28);scrollbar-width:thin;}
+      .settings-tabs button{min-width:170px;padding:13px 18px;border:1px solid rgba(255,255,255,.09);border-bottom:0;border-radius:0;background:#151518;color:#ddd;font-weight:800;white-space:nowrap;cursor:pointer;}
+      .settings-tabs button:first-child{border-radius:12px 0 0 0;}
+      .settings-tabs button:last-child{border-radius:0 12px 0 0;}
+      .settings-tabs button.active{color:#f1d45b;background:rgba(214,185,79,.10);box-shadow:inset 0 -3px 0 #d6b94f;}
+      .trusted-owner-block{margin-top:18px;padding:14px;border:1px solid rgba(214,185,79,.24);border-radius:14px;background:rgba(255,255,255,.02);}
+      .trusted-owner-block h3{margin:0 0 10px;}
+      .trusted-table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+      .trusted-table{width:100%;border-collapse:collapse;min-width:650px;}
+      .trusted-table th,.trusted-table td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.09);vertical-align:middle;}
+      .trusted-table th{color:#d6b94f;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
+      .trusted-table td:last-child,.trusted-table th:last-child{text-align:right;}
+      .trusted-table button{min-height:42px;padding:8px 14px;}
+      .module-order-help{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:14px;}
+      .module-order-help h2{margin-top:0;}
+      .module-order-legend{display:flex;gap:20px;flex-wrap:wrap;white-space:nowrap;}
+      .module-order-panel{padding:8px 18px;}
+      .module-order-head,.module-order-row{display:grid !important;grid-template-columns:120px minmax(260px,1fr) 120px 130px !important;gap:12px;align-items:center;width:100%;}
+      .module-order-head{padding:12px 10px;color:#d6b94f;font-weight:900;border-bottom:1px solid rgba(214,185,79,.25);}
+      .module-order-row{padding:11px 10px;border-bottom:1px solid rgba(214,185,79,.16);cursor:grab;min-height:54px;}
+      .module-order-row:last-child{border-bottom:0;}
+      .module-order-row:hover{background:rgba(214,185,79,.045);}
+      .module-order-row:active{cursor:grabbing;}
+      .module-drag{display:flex;gap:10px;align-items:center;white-space:nowrap;}
+      .module-drag b{display:inline-flex;min-width:32px;height:32px;align-items:center;justify-content:center;border-radius:7px;background:#c5a62d;color:#090909;}
+      .module-name{font-weight:800;white-space:nowrap;}
+      .module-switch{position:relative;display:inline-block;width:48px;height:26px;vertical-align:middle;}
+      .module-switch input{opacity:0;width:0;height:0;position:absolute;}
+      .module-switch span{position:absolute;inset:0;background:#444;border-radius:20px;cursor:pointer;}
+      .module-switch span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.18s;}
+      .module-switch input:checked + span{background:#d6b94f;}
+      .module-switch input:checked + span:before{transform:translateX(22px);}
+      .module-order-actions{display:flex;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap;}
+      .module-order-actions button{min-height:46px;padding:10px 16px;}
+      @media (max-width:900px){
+        .module-order-help{align-items:flex-start;flex-direction:column;}
+        .module-order-panel{overflow-x:auto;}
+        .module-order-head,.module-order-row{min-width:680px;}
+      }
+      @media (max-width:600px){
+        .settings-tabs button{min-width:145px;padding:12px 14px;}
+        .module-order-panel{padding:6px 10px;}
+        .module-order-head,.module-order-row{grid-template-columns:95px minmax(210px,1fr) 100px 110px !important;min-width:600px;}
+      }
+    `}</style>
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATION LP28</div><h2>⚙️ Paramètres</h2><p className="muted">Comptes utilisateurs, sécurité et personnalisation de LP28.</p></div></div>
 
     <div className="settings-tabs">
@@ -5588,7 +5634,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.43</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.44</span></div></div>
       <nav>
         {navModules.filter(m=>m.visible!==false).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""}`} onClick={()=>navigate(m.id)}>{m.icon} {m.label}</button>)}
       </nav>
