@@ -2789,6 +2789,30 @@ function AssistanceCenter(){
     setData(d);setSettings(d.settings||{});
   }
   useEffect(()=>{load()},[]);
+
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(err=>console.warn("Service worker LP28 :",err));
+    }
+    const onBeforeInstall=e=>{e.preventDefault();setInstallPrompt(e)};
+    const onInstalled=()=>{setInstallPrompt(null);setIsStandalone(true)};
+    window.addEventListener("beforeinstallprompt",onBeforeInstall);
+    window.addEventListener("appinstalled",onInstalled);
+    return ()=>{
+      window.removeEventListener("beforeinstallprompt",onBeforeInstall);
+      window.removeEventListener("appinstalled",onInstalled);
+    };
+  },[]);
+
+  async function installLp28(){
+    if(installPrompt){
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(()=>null);
+      setInstallPrompt(null);
+      return;
+    }
+    alert("Pour installer LP28 Suite : ouvre le menu de ton navigateur puis choisis ‘Installer l’application’ ou ‘Ajouter à l’écran d’accueil’. Sur iPhone/iPad : Partager → Sur l’écran d’accueil.");
+  }
   async function addVideo(){
     if(!title.trim()||!url.trim())return alert("Titre et lien obligatoires.");
     const r=await fetch("/api/admin/assistance/videos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,url})});
@@ -3676,6 +3700,30 @@ function AdminGalleries(){
     setCurrent(id);setDetail(d);setLightbox(null);setSelected([]);setSelectMode(false);
   }
   useEffect(()=>{load()},[]);
+
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(err=>console.warn("Service worker LP28 :",err));
+    }
+    const onBeforeInstall=e=>{e.preventDefault();setInstallPrompt(e)};
+    const onInstalled=()=>{setInstallPrompt(null);setIsStandalone(true)};
+    window.addEventListener("beforeinstallprompt",onBeforeInstall);
+    window.addEventListener("appinstalled",onInstalled);
+    return ()=>{
+      window.removeEventListener("beforeinstallprompt",onBeforeInstall);
+      window.removeEventListener("appinstalled",onInstalled);
+    };
+  },[]);
+
+  async function installLp28(){
+    if(installPrompt){
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(()=>null);
+      setInstallPrompt(null);
+      return;
+    }
+    alert("Pour installer LP28 Suite : ouvre le menu de ton navigateur puis choisis ‘Installer l’application’ ou ‘Ajouter à l’écran d’accueil’. Sur iPhone/iPad : Partager → Sur l’écran d’accueil.");
+  }
 
   async function action(id,act){
     const r=await fetch(`/api/admin/galleries/media/${id}/${act}`,{method:"POST"});
@@ -5036,6 +5084,8 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
 function Dashboard({onLogout}) {
   const [view,setView]=useState("dashboard");
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [installPrompt,setInstallPrompt]=useState(null);
+  const [isStandalone,setIsStandalone]=useState(()=>window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
   const [events,setEvents]=useState([]);
   const [stats,setStats]=useState({events:0,inProgress:0,upcoming:0,unsignedUpcomingContracts:0,signedContracts:0,activeGalleries:0});
   const [formEvent,setFormEvent]=useState(undefined);
@@ -5055,6 +5105,30 @@ function Dashboard({onLogout}) {
   }
 
   useEffect(()=>{load()},[]);
+
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(err=>console.warn("Service worker LP28 :",err));
+    }
+    const onBeforeInstall=e=>{e.preventDefault();setInstallPrompt(e)};
+    const onInstalled=()=>{setInstallPrompt(null);setIsStandalone(true)};
+    window.addEventListener("beforeinstallprompt",onBeforeInstall);
+    window.addEventListener("appinstalled",onInstalled);
+    return ()=>{
+      window.removeEventListener("beforeinstallprompt",onBeforeInstall);
+      window.removeEventListener("appinstalled",onInstalled);
+    };
+  },[]);
+
+  async function installLp28(){
+    if(installPrompt){
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(()=>null);
+      setInstallPrompt(null);
+      return;
+    }
+    alert("Pour installer LP28 Suite : ouvre le menu de ton navigateur puis choisis ‘Installer l’application’ ou ‘Ajouter à l’écran d’accueil’. Sur iPhone/iPad : Partager → Sur l’écran d’accueil.");
+  }
 
   async function startEvent(event){
     if(!confirm(`Démarrer maintenant la prestation "${event.name}" ?\n\nElle restera dans « En cours » jusqu'à ce que tu la marques terminée.`)) return;
@@ -5247,6 +5321,7 @@ function Dashboard({onLogout}) {
         .lp28-mobile-title{min-width:0;display:flex;flex-direction:column;line-height:1.12;}
         .lp28-mobile-title strong{font-size:.96rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .lp28-mobile-title span{margin-top:3px;font-size:.69rem;font-weight:800;letter-spacing:.08em;color:#d6b94f;text-transform:uppercase;}
+        .lp28-install-btn{margin-left:auto;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid rgba(214,185,79,.55);background:rgba(214,185,79,.12);color:#fff;font-weight:900;white-space:nowrap;}
         .lp28-mobile-backdrop{position:fixed;inset:0;z-index:1201;background:rgba(0,0,0,.58);border:0;padding:0;margin:0;}
         .mobile-nav-open .lp28-mobile-backdrop{display:block;}
         .app-shell .sidebar .nav-item{min-height:44px;}
@@ -5259,10 +5334,11 @@ function Dashboard({onLogout}) {
     <div className="lp28-mobile-topbar">
       <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}><span className="menu-bars">☰</span><span className="menu-label">MENU</span></button>
       <div className="lp28-mobile-title"><strong>{currentViewTitle}</strong><span>LP28 Suite</span></div>
+      {!isStandalone && <button type="button" className="lp28-install-btn" onClick={installLp28}>📲 Installer</button>}
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.33</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.34</span></div></div>
       <nav>
         <button className={`nav-item ${view==="dashboard"?"active":""}`} onClick={()=>navigate("dashboard")}>🏠 Tableau de bord</button>
         <button className={`nav-item ${view==="events"?"active":""}`} onClick={()=>navigate("events")}>📅 Événements</button>
@@ -6414,6 +6490,30 @@ function FamilyPlanningPage(){
     }
   };
   useEffect(()=>{load()},[]);
+
+  useEffect(()=>{
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js").catch(err=>console.warn("Service worker LP28 :",err));
+    }
+    const onBeforeInstall=e=>{e.preventDefault();setInstallPrompt(e)};
+    const onInstalled=()=>{setInstallPrompt(null);setIsStandalone(true)};
+    window.addEventListener("beforeinstallprompt",onBeforeInstall);
+    window.addEventListener("appinstalled",onInstalled);
+    return ()=>{
+      window.removeEventListener("beforeinstallprompt",onBeforeInstall);
+      window.removeEventListener("appinstalled",onInstalled);
+    };
+  },[]);
+
+  async function installLp28(){
+    if(installPrompt){
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(()=>null);
+      setInstallPrompt(null);
+      return;
+    }
+    alert("Pour installer LP28 Suite : ouvre le menu de ton navigateur puis choisis ‘Installer l’application’ ou ‘Ajouter à l’écran d’accueil’. Sur iPhone/iPad : Partager → Sur l’écran d’accueil.");
+  }
 
   async function login(e){
     e.preventDefault(); setError("");
