@@ -4,6 +4,84 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const SITE = "https://www.locationphotobooth28.fr";
 const FACEBOOK = "https://www.facebook.com/location.photobooth.28/";
 
+const DEFAULT_APPEARANCE={mode:"dark",lightStart:"07:00",darkStart:"19:00"};
+
+function normalizeAppearance(value){
+  const v=value&&typeof value==="object"?value:{};
+  return {
+    mode:["light","dark","auto"].includes(v.mode)?v.mode:"dark",
+    lightStart:/^\d{2}:\d{2}$/.test(v.lightStart||"")?v.lightStart:"07:00",
+    darkStart:/^\d{2}:\d{2}$/.test(v.darkStart||"")?v.darkStart:"19:00"
+  };
+}
+
+function timeToMinutes(v){
+  const [h,m]=String(v||"00:00").split(":").map(Number);
+  return (h||0)*60+(m||0);
+}
+
+function resolveAppearanceMode(pref,date=new Date()){
+  const p=normalizeAppearance(pref);
+  if(p.mode!=="auto")return p.mode;
+  const now=date.getHours()*60+date.getMinutes();
+  const light=timeToMinutes(p.lightStart),dark=timeToMinutes(p.darkStart);
+  const isLight=light<dark ? now>=light&&now<dark : now>=light||now<dark;
+  return isLight?"light":"dark";
+}
+
+function applyAppearance(pref){
+  const p=normalizeAppearance(pref);
+  const resolved=resolveAppearanceMode(p);
+  document.documentElement.dataset.lp28Theme=resolved;
+  document.documentElement.dataset.lp28ThemeMode=p.mode;
+  localStorage.setItem("lp28.appearance",JSON.stringify(p));
+  return resolved;
+}
+
+function LP28ThemeStyles(){
+  return <style>{`
+    html[data-lp28-theme="light"],html[data-lp28-theme="light"] body,
+    html[data-lp28-theme="light"] #root{background:#f5f3ee !important;color:#151515 !important;}
+    html[data-lp28-theme="light"] .app-shell,
+    html[data-lp28-theme="light"] .content,
+    html[data-lp28-theme="light"] main{background:#f5f3ee !important;color:#151515 !important;}
+    html[data-lp28-theme="light"] .sidebar{background:#fff !important;color:#171717 !important;border-right:1px solid #ddd6c8 !important;}
+    html[data-lp28-theme="light"] .sidebar .nav-item{color:#202020 !important;background:transparent !important;}
+    html[data-lp28-theme="light"] .sidebar .nav-item.active{background:#f2ead0 !important;color:#6d5200 !important;}
+    html[data-lp28-theme="light"] .sidebar-footer,
+    html[data-lp28-theme="light"] .sidebar-footer a{color:#333 !important;}
+    html[data-lp28-theme="light"] .topbar,
+    html[data-lp28-theme="light"] .calendar-toolbar{background:transparent !important;color:#151515 !important;}
+    html[data-lp28-theme="light"] .panel,
+    html[data-lp28-theme="light"] .card,
+    html[data-lp28-theme="light"] .stat-card,
+    html[data-lp28-theme="light"] .login-card,
+    html[data-lp28-theme="light"] .account-admin-card,
+    html[data-lp28-theme="light"] .trusted-owner-block,
+    html[data-lp28-theme="light"] .module-order-panel,
+    html[data-lp28-theme="light"] .module-order-help{background:#fff !important;color:#171717 !important;border-color:#d8cda8 !important;box-shadow:0 6px 20px rgba(0,0,0,.05) !important;}
+    html[data-lp28-theme="light"] .muted{color:#5f6368 !important;}
+    html[data-lp28-theme="light"] input,
+    html[data-lp28-theme="light"] select,
+    html[data-lp28-theme="light"] textarea{background:#fff !important;color:#171717 !important;border-color:#cfc8ba !important;}
+    html[data-lp28-theme="light"] input::placeholder,
+    html[data-lp28-theme="light"] textarea::placeholder{color:#777 !important;}
+    html[data-lp28-theme="light"] button:not(.primary):not(.nav-item){background:#fff !important;color:#171717 !important;border-color:#cfc8ba !important;}
+    html[data-lp28-theme="light"] .settings-tabs button{background:#f3f1ec !important;color:#333 !important;border-color:#d8d2c8 !important;}
+    html[data-lp28-theme="light"] .settings-tabs button.active{background:#fff7dc !important;color:#735600 !important;}
+    html[data-lp28-theme="light"] .lp28-mobile-topbar{background:rgba(255,255,255,.97) !important;border-bottom-color:#ddd6c8 !important;}
+    html[data-lp28-theme="light"] .lp28-mobile-title strong{color:#171717 !important;}
+    html[data-lp28-theme="light"] table,
+    html[data-lp28-theme="light"] th,
+    html[data-lp28-theme="light"] td{color:#171717 !important;border-color:#e2ddd3 !important;}
+    html[data-lp28-theme="light"] a{color:#7a5b00;}
+    html[data-lp28-theme="light"] .eyebrow{color:#997300 !important;}
+    html[data-lp28-theme="light"] .alert{background:#fff8dc !important;color:#402f00 !important;border-color:#e3c34b !important;}
+    html[data-lp28-theme="dark"]{color-scheme:dark;}
+    html[data-lp28-theme="light"]{color-scheme:light;}
+  `}</style>;
+}
+
 const MATERIALS = [
   {group:"Bornes & photo", icon:"🪞", name:"Borne Photobooth Miroir Lola"},
   {group:"Bornes & photo", icon:"📸", name:"Borne Photobooth Nina"},
@@ -86,167 +164,160 @@ function RegisterPage({token}){
     e.preventDefault();setError("");
     if(!form.firstName.trim()||!form.lastName.trim())return setError("Le prénom et le nom sont obligatoires.");
     if(form.password!==form.confirm)return setError("Les deux mots de passe sont différents.");
+    if(form.password.length<8||!/[A-ZÀ-ÖØ-Ý]/.test(form.password)||!/[0-9]/.test(form.password)||!/[^A-Za-z0-9À-ÖØ-öø-ÿ]/.test(form.password))return setError("Mot de passe : 8 caractères minimum, avec au moins 1 majuscule, 1 chiffre et 1 caractère spécial.");
     const r=await fetch(`/api/register/${token}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
     const d=await r.json().catch(()=>({}));if(!r.ok)return setError(d.message||"Inscription impossible.");setDone(true);
   }
   if(done)return <div className="login-shell"><div className="login-card"><div className="eyebrow">LP28 SUITE</div><h1>✅ Compte créé</h1><p>Ton accès LP28 est maintenant actif.</p><button className="primary" onClick={()=>location.href="/"}>Se connecter</button></div></div>;
-  return <div className="login-shell"><div className="login-card"><img className="login-logo" src="/logo.jpg"/><div className="eyebrow">INVITATION LP28 · 10 MINUTES</div><h1>👤 Créer mon compte</h1>{info&&<p className="muted">Invitation pour <strong>{[info.firstName,info.lastName].filter(Boolean).join(" ")||info.name||"Utilisateur LP28"}</strong></p>}{error&&<div className="alert">{error}</div>}{info&&<form onSubmit={submit}><label>Prénom *</label><input value={form.firstName} onChange={e=>setForm({...form,firstName:e.target.value})} required/><label>Nom *</label><input value={form.lastName} onChange={e=>setForm({...form,lastName:e.target.value})} required/><label>Identifiant choisi</label><input value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required minLength={3}/><label>E-mail</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><label>Téléphone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><label>Mot de passe (10 caractères minimum)</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required minLength={10}/><label>Confirmer le mot de passe</label><input type="password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} required/><button className="primary">Créer mon compte</button></form>}</div></div>;
+  return <div className="login-shell"><div className="login-card"><img className="login-logo" src="/logo.jpg"/><div className="eyebrow">INVITATION LP28 · 10 MINUTES</div><h1>👤 Créer mon compte</h1>{info&&<p className="muted">Invitation pour <strong>{[info.firstName,info.lastName].filter(Boolean).join(" ")||info.name||"Utilisateur LP28"}</strong></p>}{error&&<div className="alert">{error}</div>}{info&&<form onSubmit={submit}><label>Prénom *</label><input value={form.firstName} onChange={e=>setForm({...form,firstName:e.target.value})} required/><label>Nom *</label><input value={form.lastName} onChange={e=>setForm({...form,lastName:e.target.value})} required/><label>Identifiant choisi</label><input value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required minLength={3}/><label>E-mail</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><label>Téléphone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><label>Mot de passe *</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required minLength={8}/><p className="muted" style={{marginTop:4}}>Minimum 8 caractères avec 1 majuscule, 1 chiffre et 1 caractère spécial.</p><label>Confirmer le mot de passe</label><input type="password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} required/><button className="primary">Créer mon compte</button></form>}</div></div>;
 }
 
-function SettingsPage(){
-  const [settingsTab,setSettingsTab]=useState("general");
+function SettingsPage({user}){
+  const isAdmin=user?.role==="ADMIN";
+  const [settingsTab,setSettingsTab]=useState(isAdmin?"general":"security");
   const [users,setUsers]=useState([]),[collaborators,setCollaborators]=useState([]),[invite,setInvite]=useState({firstName:"",lastName:"",email:"",phone:"",role:"VIEWER",collaboratorId:""}),[inviteUrl,setInviteUrl]=useState(""),[qr,setQr]=useState(null),[codes,setCodes]=useState([]),[totpCode,setTotpCode]=useState(""),[session,setSession]=useState(null),[devices,setDevices]=useState([]);
-  const DEFAULT_MODULES=[
-    {id:"dashboard",label:"Tableau de bord",icon:"🏠",locked:true},
-    {id:"events",label:"Événements",icon:"📅",locked:true},
-    {id:"planning",label:"Planning",icon:"🗓️",locked:true},
-    {id:"materialPlanning",label:"Planning matériel",icon:"📦",locked:true},
-    {id:"inventory",label:"Inventaire admin",icon:"🔐",locked:true},
-    {id:"longPlanning",label:"Planning 24 mois",icon:"🗓️",locked:true},
-    {id:"documents",label:"Documents",icon:"📄",locked:true},
-    {id:"galleries",label:"Galeries",icon:"📸",locked:true},
-    {id:"booths",label:"Mes bornes",icon:"🖥️",locked:false},
-    {id:"collaborators",label:"Collaborateurs",icon:"👷",locked:false},
-    {id:"google",label:"Google",icon:"☁️",locked:false},
-    {id:"assistance",label:"Assistance",icon:"🆘",locked:true},
-    {id:"settings",label:"Paramètres",icon:"⚙️",locked:true}
+  const [appearance,setAppearance]=useState(()=>{try{return normalizeAppearance(JSON.parse(localStorage.getItem("lp28.appearance")||"{}"));}catch{return DEFAULT_APPEARANCE;}});
+  const [appearancePreview,setAppearancePreview]=useState(()=>resolveAppearanceMode(appearance));
+  const SAFE_MODULES=[
+    {id:"dashboard",label:"Tableau de bord",icon:"🏠"},
+    {id:"events",label:"Événements",icon:"📅"},
+    {id:"planning",label:"Planning",icon:"🗓️"},
+    {id:"materialPlanning",label:"Planning matériel",icon:"📦"},
+    {id:"galleries",label:"Galeries",icon:"📸"},
+    {id:"booths",label:"Mes bornes",icon:"🖥️"},
+    {id:"collaborators",label:"Collaborateurs",icon:"👷"}
   ];
-  function normalizePrefs(input){
-    const byId=new Map((Array.isArray(input)?input:[]).map(x=>[x.id,x]));
-    return DEFAULT_MODULES.map((m,i)=>({...m,visible:m.locked?true:(byId.get(m.id)?.visible!==false),order:Number.isFinite(Number(byId.get(m.id)?.order))?Number(byId.get(m.id).order):i}))
-      .sort((a,b)=>a.order-b.order).map((m,i)=>({...m,order:i}));
-  }
-  const [modulePrefs,setModulePrefs]=useState(()=>{
-    try{return normalizePrefs(JSON.parse(localStorage.getItem("lp28.modulePrefs")||"[]"));}catch{return normalizePrefs([]);}
-  });
-  const [dragModuleId,setDragModuleId]=useState(null);
-
+  const [userModules,setUserModules]=useState({});
   async function load(){
-    const [u,se,d,c,p]=await Promise.all([
-      fetch("/api/admin/users").then(r=>r.json()),
+    const requests=[
       fetch("/api/session").then(r=>r.json()),
-      fetch("/api/account/trusted-devices").then(r=>r.json()),
-      fetch("/api/collaborators").then(r=>r.json()).catch(()=>({collaborators:[]})),
-      fetch("/api/account/module-preferences").then(r=>r.json()).catch(()=>({}))
-    ]);
-    setUsers(u.users||[]);setSession(se);setDevices(d.devices||[]);setCollaborators(c.collaborators||[]);
-    if(p?.ok&&Array.isArray(p.modules)){const next=normalizePrefs(p.modules);setModulePrefs(next);localStorage.setItem("lp28.modulePrefs",JSON.stringify(next));}
+      fetch("/api/account/trusted-devices").then(r=>r.json())
+    ];
+    if(isAdmin)requests.push(fetch("/api/admin/users").then(r=>r.json()),fetch("/api/collaborators").then(r=>r.json()).catch(()=>({collaborators:[]})));
+    const all=await Promise.all(requests);
+    setSession(all[0]);setDevices(all[1].devices||[]);
+    fetch("/api/account/appearance").then(r=>r.json()).then(d=>{if(d?.ok&&d.appearance){const p=normalizeAppearance(d.appearance);setAppearance(p);setAppearancePreview(applyAppearance(p));}}).catch(()=>{});
+    if(isAdmin){
+      const us=all[2].users||[];setUsers(us);setCollaborators(all[3].collaborators||[]);
+      const map={};for(const u of us)map[u.id]=Array.isArray(u.permissions?.allowedModules)?u.permissions.allowedModules:(u.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
+      setUserModules(map);
+    }
   }
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load()},[isAdmin]);
   async function createInvite(){
     if(!invite.firstName.trim()||!invite.lastName.trim())return alert("Le prénom et le nom sont obligatoires.");
-    const r=await fetch("/api/admin/invitations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(invite)});const d=await r.json();if(!r.ok)return alert(d.message);setInviteUrl(d.url);
+    const defaultModules=invite.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:invite.role==="VIEWER"?["dashboard","planning"]:[];
+    const payload={...invite,permissions:invite.role==="ADMIN"?{}:{allowedModules:defaultModules}};
+    const r=await fetch("/api/admin/invitations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)return alert(d.message);setInviteUrl(d.url);
   }
-  function chooseCollaborator(id){
-    const c=collaborators.find(x=>x.id===id);setInvite(v=>({...v,collaboratorId:id,firstName:c?.firstName||v.firstName,lastName:c?.lastName||v.lastName,email:c?.email||v.email,phone:c?.phone||v.phone}));
-  }
+  function chooseCollaborator(id){const c=collaborators.find(x=>x.id===id);setInvite(v=>({...v,collaboratorId:id,firstName:c?.firstName||v.firstName,lastName:c?.lastName||v.lastName,email:c?.email||v.email,phone:c?.phone||v.phone}));}
   function whatsapp(){if(!inviteUrl)return;const msg=`👋 Bonjour ${invite.firstName||""},\n\nJohan vous invite à créer votre accès personnel à LP28 Suite.\n\n🔐 Ce lien est personnel, utilisable une seule fois et valable 10 minutes :\n${inviteUrl}`;window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,"_blank");}
   async function setup2fa(){const r=await fetch("/api/account/2fa/setup",{method:"POST"});const d=await r.json();if(!r.ok)return alert(d.message||"Impossible d'activer la 2FA.");setQr(d);setCodes([]);}
   async function enable2fa(){const r=await fetch("/api/account/2fa/enable",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:totpCode})});const d=await r.json();if(!r.ok)return alert(d.message);setCodes(d.recoveryCodes||[]);setQr(null);setTotpCode("");await load();}
-  async function revoke(id){await fetch(`/api/account/trusted-devices/${id}`,{method:"DELETE"});load();}
-  function dropModule(targetId){
-    if(!dragModuleId||dragModuleId===targetId)return;
-    const from=modulePrefs.findIndex(x=>x.id===dragModuleId),to=modulePrefs.findIndex(x=>x.id===targetId);
-    if(from<0||to<0)return;
-    const next=[...modulePrefs];const [moved]=next.splice(from,1);next.splice(to,0,moved);
-    setModulePrefs(next.map((x,i)=>({...x,order:i})));setDragModuleId(null);
+  async function revokeDevice(id){await fetch(`/api/account/trusted-devices/${id}`,{method:"DELETE"});load();}
+  async function accessAction(id,action){
+    if(!confirm(action==="REVOKE"?"Révoquer complètement l'accès de ce compte ?":action==="BLOCK"?"Bloquer temporairement ce compte ?":"Confirmer cette action ?"))return;
+    const r=await fetch(`/api/admin/users/${id}/access`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Action impossible.");await load();
   }
-  async function saveModulePrefs(){
-    const saved=modulePrefs.map((x,i)=>({id:x.id,order:i,visible:x.locked?true:x.visible!==false}));
-    localStorage.setItem("lp28.modulePrefs",JSON.stringify(saved));
-    const r=await fetch("/api/account/module-preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({modules:saved})});
+  async function savePermissions(u){
+    const allowed=(userModules[u.id]||[]).filter(Boolean);
+    const r=await fetch(`/api/admin/users/${u.id}/permissions`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({allowedModules:allowed})});const d=await r.json().catch(()=>({}));
+    if(!r.ok)return alert(d.message||"Impossible d'enregistrer les accès.");alert(`✅ Accès de ${u.displayName||u.name||u.username} enregistrés.`);await load();
+  }
+  function toggleModule(uid,id){
+    setUserModules(v=>{const cur=new Set(v[uid]||[]);if(id==="dashboard"){cur.add(id);}else if(cur.has(id))cur.delete(id);else cur.add(id);return {...v,[uid]:[...cur]};});
+  }
+  function statusLabel(u){return u.accountStatus==="REVOKED"?"⛔ Révoqué":u.accountStatus==="BLOCKED"?"🔒 Bloqué":"✅ Actif";}
+  function dateFr(v){return v?new Date(v).toLocaleString("fr-FR"):"—";}
+  function previewAppearance(next){const p=normalizeAppearance(next);setAppearance(p);setAppearancePreview(applyAppearance(p));}
+  async function saveAppearance(){
+    const p=normalizeAppearance(appearance);applyAppearance(p);
+    const r=await fetch("/api/account/appearance",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appearance:p})});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok)return alert(d.message||"Impossible d'enregistrer l'ordre.");
-    window.dispatchEvent(new CustomEvent("lp28-module-prefs-changed",{detail:saved}));
-    alert("✅ Ordre des modules enregistré.");
-  }
-  async function resetModulePrefs(){
-    const fresh=normalizePrefs([]);setModulePrefs(fresh);localStorage.setItem("lp28.modulePrefs",JSON.stringify(fresh));
-    await fetch("/api/account/module-preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({modules:fresh.map(({id,order,visible})=>({id,order,visible}))})}).catch(()=>{});
-    window.dispatchEvent(new CustomEvent("lp28-module-prefs-changed",{detail:fresh}));
+    if(!r.ok)return alert(d.message||"Impossible d'enregistrer l'affichage.");
+    window.dispatchEvent(new CustomEvent("lp28-appearance-changed",{detail:p}));
+    alert("✅ Mode d'affichage enregistré.");
   }
 
   return <section>
+    <LP28ThemeStyles/>
     <style>{`
-      .settings-tabs{display:flex;overflow-x:auto;margin:0 0 16px;border-bottom:1px solid rgba(214,185,79,.28);scrollbar-width:thin;}
-      .settings-tabs button{min-width:170px;padding:13px 18px;border:1px solid rgba(255,255,255,.09);border-bottom:0;border-radius:0;background:#151518;color:#ddd;font-weight:800;white-space:nowrap;cursor:pointer;}
-      .settings-tabs button:first-child{border-radius:12px 0 0 0;}
-      .settings-tabs button:last-child{border-radius:0 12px 0 0;}
-      .settings-tabs button.active{color:#f1d45b;background:rgba(214,185,79,.10);box-shadow:inset 0 -3px 0 #d6b94f;}
-      .trusted-owner-block{margin-top:18px;padding:14px;border:1px solid rgba(214,185,79,.24);border-radius:14px;background:rgba(255,255,255,.02);}
-      .trusted-owner-block h3{margin:0 0 10px;}
-      .trusted-table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-      .trusted-table{width:100%;border-collapse:collapse;min-width:650px;}
-      .trusted-table th,.trusted-table td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.09);vertical-align:middle;}
-      .trusted-table th{color:#d6b94f;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
-      .trusted-table td:last-child,.trusted-table th:last-child{text-align:right;}
-      .trusted-table button{min-height:42px;padding:8px 14px;}
-      .module-order-help{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:14px;}
-      .module-order-help h2{margin-top:0;}
-      .module-order-legend{display:flex;gap:20px;flex-wrap:wrap;white-space:nowrap;}
-      .module-order-panel{padding:8px 18px;}
-      .module-order-head,.module-order-row{display:grid !important;grid-template-columns:120px minmax(260px,1fr) 120px 130px !important;gap:12px;align-items:center;width:100%;}
-      .module-order-head{padding:12px 10px;color:#d6b94f;font-weight:900;border-bottom:1px solid rgba(214,185,79,.25);}
-      .module-order-row{padding:11px 10px;border-bottom:1px solid rgba(214,185,79,.16);cursor:grab;min-height:54px;}
-      .module-order-row:last-child{border-bottom:0;}
-      .module-order-row:hover{background:rgba(214,185,79,.045);}
-      .module-order-row:active{cursor:grabbing;}
-      .module-drag{display:flex;gap:10px;align-items:center;white-space:nowrap;}
-      .module-drag b{display:inline-flex;min-width:32px;height:32px;align-items:center;justify-content:center;border-radius:7px;background:#c5a62d;color:#090909;}
-      .module-name{font-weight:800;white-space:nowrap;}
-      .module-switch{position:relative;display:inline-block;width:48px;height:26px;vertical-align:middle;}
-      .module-switch input{opacity:0;width:0;height:0;position:absolute;}
-      .module-switch span{position:absolute;inset:0;background:#444;border-radius:20px;cursor:pointer;}
-      .module-switch span:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.18s;}
-      .module-switch input:checked + span{background:#d6b94f;}
-      .module-switch input:checked + span:before{transform:translateX(22px);}
-      .module-order-actions{display:flex;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap;}
-      .module-order-actions button{min-height:46px;padding:10px 16px;}
-      @media (max-width:900px){
-        .module-order-help{align-items:flex-start;flex-direction:column;}
-        .module-order-panel{overflow-x:auto;}
-        .module-order-head,.module-order-row{min-width:680px;}
-      }
-      @media (max-width:600px){
-        .settings-tabs button{min-width:145px;padding:12px 14px;}
-        .module-order-panel{padding:6px 10px;}
-        .module-order-head,.module-order-row{grid-template-columns:95px minmax(210px,1fr) 100px 110px !important;min-width:600px;}
-      }
+      .settings-tabs{display:flex;overflow-x:auto;margin:0 0 16px;border-bottom:1px solid rgba(214,185,79,.28)}
+      .settings-tabs button{min-width:170px;padding:13px 18px;border:1px solid rgba(255,255,255,.09);border-bottom:0;border-radius:0;background:#151518;color:#ddd;font-weight:800;white-space:nowrap}
+      .settings-tabs button.active{color:#f1d45b;background:rgba(214,185,79,.10);box-shadow:inset 0 -3px 0 #d6b94f}
+      .account-admin-card{padding:16px;margin-top:10px;border:1px solid rgba(214,185,79,.22);border-radius:14px;background:rgba(255,255,255,.02)}
+      .account-admin-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+      .account-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px 16px;margin-top:12px}
+      .permission-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:12px}
+      .permission-grid label{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid rgba(255,255,255,.08);border-radius:10px}
+      .permission-grid input{width:auto}
+      .account-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+      .danger-btn{border-color:rgba(239,68,68,.55)!important;color:#fecaca!important}
+      .warn-btn{border-color:rgba(245,158,11,.55)!important;color:#fde68a!important}
+      .appearance-grid{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;margin-top:14px}
+      .appearance-card{padding:18px;border:1px solid rgba(214,185,79,.22);border-radius:14px;cursor:pointer;min-height:145px}
+      .appearance-card.active{border-color:#d6b94f;box-shadow:inset 0 0 0 2px rgba(214,185,79,.22)}
+      .appearance-icon{font-size:2rem;margin-bottom:10px}.appearance-card strong{display:block;font-size:1.05rem;margin-bottom:5px}
+      .appearance-auto-hours{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;max-width:520px}
+      @media(max-width:720px){.appearance-grid{grid-template-columns:1fr}.appearance-auto-hours{grid-template-columns:1fr}}
+      .trusted-owner-block{margin-top:18px;padding:14px;border:1px solid rgba(214,185,79,.24);border-radius:14px;background:rgba(255,255,255,.02)}
+      .trusted-table-wrap{width:100%;overflow-x:auto}.trusted-table{width:100%;border-collapse:collapse;min-width:650px}
+      .trusted-table th,.trusted-table td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.09)}
+      .trusted-table th{color:#d6b94f}.trusted-table td:last-child,.trusted-table th:last-child{text-align:right}
+      @media(max-width:700px){.settings-tabs button{min-width:150px}.account-admin-card{padding:12px}}
     `}</style>
-    <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATION LP28</div><h2>⚙️ Paramètres</h2><p className="muted">Comptes utilisateurs, sécurité et personnalisation de LP28.</p></div></div>
+    <div className="calendar-toolbar"><div><div className="eyebrow">{isAdmin?"ADMINISTRATION LP28":"MON COMPTE LP28"}</div><h2>⚙️ Paramètres</h2><p className="muted">{isAdmin?"Comptes utilisateurs, sécurité et droits d'accès.":"Sécurité et appareils de ton compte."}</p></div></div>
 
     <div className="settings-tabs">
-      <button className={settingsTab==="general"?"active":""} onClick={()=>setSettingsTab("general")}>Général</button>
+      {isAdmin&&<button className={settingsTab==="general"?"active":""} onClick={()=>setSettingsTab("general")}>Comptes & accès</button>}
       <button className={settingsTab==="security"?"active":""} onClick={()=>setSettingsTab("security")}>Sécurité</button>
       <button className={settingsTab==="devices"?"active":""} onClick={()=>setSettingsTab("devices")}>Appareils de confiance</button>
-      <button className={settingsTab==="modules"?"active":""} onClick={()=>setSettingsTab("modules")}>Ordre des modules</button>
+      <button className={settingsTab==="appearance"?"active":""} onClick={()=>setSettingsTab("appearance")}>Affichage</button>
     </div>
 
-    {settingsTab==="general"&&<>
-      <div className="panel" style={{marginBottom:16}}><h2>👥 Comptes utilisateurs</h2><div style={{display:"grid",gap:8}}>{users.map(u=><div key={u.id} className="card" style={{padding:12}}><strong>{u.displayName||u.name||u.username||u.email}</strong> · {u.role} {u.totpEnabled?" · 🔐 2FA":""}{u.collaboratorId?" · 👷 Intervenant lié":""}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div>)}</div></div>
-      <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation calendrier</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
-    </>}
-
-    {settingsTab==="security"&&<div className="panel" style={{marginBottom:16}}><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>}
-
-    {settingsTab==="devices"&&<div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Les appareils sont regroupés par personne. Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revoke(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>}
-
-    {settingsTab==="modules"&&<>
-      <div className="panel module-order-help">
-        <div><h2>🔐 Ordre des modules</h2><p className="muted">Glisse-dépose les modules pour choisir leur ordre dans le menu. Le cadenas signifie que le module est obligatoire et ne peut pas être masqué.</p></div>
-        <div className="module-order-legend"><span>🔒 Obligatoire</span><span>⠿ Glisser pour réorganiser</span></div>
-      </div>
-      <div className="panel module-order-panel">
-        <div className="module-order-head"><span>Ordre</span><span>Module</span><span>Visible</span><span>État</span></div>
-        {modulePrefs.map((m,i)=><div key={m.id} className="module-order-row" draggable onDragStart={()=>setDragModuleId(m.id)} onDragEnd={()=>setDragModuleId(null)} onDragOver={e=>e.preventDefault()} onDrop={()=>dropModule(m.id)}>
-          <span className="module-drag">⠿ <b>{i+1}</b></span>
-          <span className="module-name">{m.icon} {m.label}</span>
-          <span>{m.locked?<span title="Module obligatoire">🔒</span>:<label className="module-switch"><input type="checkbox" checked={m.visible!==false} onChange={e=>setModulePrefs(v=>v.map(x=>x.id===m.id?{...x,visible:e.target.checked}:x))}/><span></span></label>}</span>
-          <span className="muted">{m.locked?"Verrouillé":"Optionnel"}</span>
+    {isAdmin&&settingsTab==="general"&&<>
+      <div className="panel" style={{marginBottom:16}}>
+        <h2>👥 Comptes utilisateurs</h2>
+        <p className="muted">Tu choisis précisément les modules visibles pour chaque compte. Les montants, paiements, dons et prestations offertes restent réservés à l'administrateur, quel que soit le compte.</p>
+        {users.map(u=><div key={u.id} className="account-admin-card">
+          <div className="account-admin-head"><div><strong style={{fontSize:"1.08rem"}}>{u.displayName||u.name||u.username||u.email}</strong> · {u.role}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div><strong>{statusLabel(u)}</strong></div>
+          <div className="account-meta"><span>📅 Inscription : <strong>{dateFr(u.createdAt)}</strong></span><span>🕒 Dernière connexion : <strong>{dateFr(u.lastLoginAt)}</strong></span><span>🔐 2FA : <strong>{u.totpEnabled?"Activée":"Non activée"}</strong></span></div>
+          {u.role!=="ADMIN"&&<>
+            <div style={{marginTop:14,fontWeight:900}}>👁️ Modules autorisés</div>
+            <div className="permission-grid">{SAFE_MODULES.map(m=><label key={m.id}><input type="checkbox" checked={(userModules[u.id]||[]).includes(m.id)} disabled={m.id==="dashboard"} onChange={()=>toggleModule(u.id,m.id)}/>{m.icon} {m.label}</label>)}</div>
+            <div className="muted" style={{marginTop:8}}>🔒 Toujours masqués pour les comptes non administrateurs : montants, règlements, « Don / prestation offerte », Inventaire admin, Documents/contrats, Google et réglages administrateur.</div>
+            <div className="account-actions"><button className="primary" onClick={()=>savePermissions(u)}>💾 Enregistrer les accès</button>
+              {u.accountStatus==="ACTIVE"&&<button className="warn-btn" onClick={()=>accessAction(u.id,"BLOCK")}>🔒 Bloquer</button>}
+              {u.accountStatus==="BLOCKED"&&<button onClick={()=>accessAction(u.id,"UNBLOCK")}>🔓 Débloquer</button>}
+              {u.accountStatus!=="REVOKED"&&<button className="danger-btn" onClick={()=>accessAction(u.id,"REVOKE")}>⛔ Révoquer le compte</button>}
+              {u.accountStatus==="REVOKED"&&<button onClick={()=>accessAction(u.id,"RESTORE")}>♻️ Réactiver</button>}
+            </div>
+          </>}
         </div>)}
       </div>
-      <div className="module-order-actions"><button onClick={resetModulePrefs}>↶ Réinitialiser l’ordre par défaut</button><button className="primary" onClick={saveModulePrefs}>💾 Enregistrer l’ordre</button></div>
+      <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
     </>}
+
+    {settingsTab==="security"&&<div className="panel"><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>}
+
+    {settingsTab==="devices"&&<div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revokeDevice(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>}
+
+    {settingsTab==="appearance"&&<div className="panel">
+      <h2>🎨 Affichage</h2>
+      <p className="muted">Choisis l'apparence de LP28. Le réglage est enregistré sur ton compte et s'applique à tes appareils.</p>
+      <div className="appearance-grid">
+        <div className={`appearance-card ${appearance.mode==="light"?"active":""}`} onClick={()=>previewAppearance({...appearance,mode:"light"})}><div className="appearance-icon">☀️</div><strong>Mode clair</strong><span className="muted">Fond blanc et interface claire.</span></div>
+        <div className={`appearance-card ${appearance.mode==="dark"?"active":""}`} onClick={()=>previewAppearance({...appearance,mode:"dark"})}><div className="appearance-icon">🌙</div><strong>Mode sombre</strong><span className="muted">Fond noir, comme l'affichage actuel.</span></div>
+        <div className={`appearance-card ${appearance.mode==="auto"?"active":""}`} onClick={()=>previewAppearance({...appearance,mode:"auto"})}><div className="appearance-icon">🌓</div><strong>Mode automatique</strong><span className="muted">LP28 passe automatiquement du clair au sombre selon l'heure.</span></div>
+      </div>
+      {appearance.mode==="auto"&&<div className="appearance-auto-hours">
+        <div><label>☀️ Mode clair à partir de</label><input type="time" value={appearance.lightStart} onChange={e=>previewAppearance({...appearance,lightStart:e.target.value})}/></div>
+        <div><label>🌙 Mode sombre à partir de</label><input type="time" value={appearance.darkStart} onChange={e=>previewAppearance({...appearance,darkStart:e.target.value})}/></div>
+      </div>}
+      <div className="card" style={{marginTop:14,padding:12}}><strong>Aperçu actuel : {appearancePreview==="light"?"☀️ Mode clair":"🌙 Mode sombre"}</strong>{appearance.mode==="auto"&&<div className="muted">Clair de {appearance.lightStart} à {appearance.darkStart}, sombre le reste du temps.</div>}</div>
+      <button className="primary" style={{marginTop:14}} onClick={saveAppearance}>💾 Enregistrer l'affichage</button>
+    </div>}
   </section>;
 }
 
@@ -5277,6 +5348,8 @@ function Dashboard({onLogout,user}) {
   const [search,setSearch]=useState("");
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
+  const isAdmin=user?.role==="ADMIN";
+
   const NAV_DEFAULT=[
     {id:"dashboard",label:"Tableau de bord",icon:"🏠",locked:true},
     {id:"events",label:"Événements",icon:"📅",locked:true},
@@ -5564,7 +5637,7 @@ function Dashboard({onLogout,user}) {
     setMobileMenuOpen(false);
   };
 
-  return <div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
+  return <><LP28ThemeStyles/><div className={`app-shell ${mobileMenuOpen?"mobile-nav-open":""}`}>
     <style>{`
       .lp28-mobile-topbar,.lp28-mobile-backdrop{display:none;}
       @media (max-width:1024px){
@@ -5634,9 +5707,15 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.44</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.46</span></div></div>
       <nav>
-        {navModules.filter(m=>m.visible!==false).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""}`} onClick={()=>navigate(m.id)}>{m.icon} {m.label}</button>)}
+        {navModules.filter(m=>{
+          if(m.visible===false)return false;
+          if(isAdmin)return true;
+          if(m.id==="settings")return true;
+          const allowed=Array.isArray(user?.permissions?.allowedModules)?user.permissions.allowedModules:(user?.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
+          return allowed.includes(m.id);
+        }).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""}`} onClick={()=>navigate(m.id)}>{m.icon} {m.label}</button>)}
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
@@ -5644,7 +5723,7 @@ function Dashboard({onLogout,user}) {
     <main className="content">
       <header className="topbar">
         <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{currentViewTitle}</h1><p className="muted">Simple, rapide, efficace.</p></div>
-        <button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>
+        {isAdmin&&<button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>}
       </header>
 
       {view==="dashboard" ? <>
@@ -5818,8 +5897,8 @@ function Dashboard({onLogout,user}) {
         </div>
       </> : view==="planning" ? <>
         <AdminPlanningCalendar events={events} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={remove}/>
-        <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span><span style={{fontWeight:800}}>🎁 Don / prestation offerte</span></section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
+        <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span>{isAdmin&&<span style={{fontWeight:800}}>🎁 Don / prestation offerte</span>}</section>
+      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
@@ -5840,7 +5919,7 @@ function Dashboard({onLogout,user}) {
     )}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
     {documentEvent&&<DocumentManager event={documentEvent} onClose={()=>setDocumentEvent(null)}/>}
-  </div>;
+  </div></>;
 }
 
 function CollaboratorPortalPage({token}){
@@ -6893,9 +6972,24 @@ if(signatureMatch){
   }
 
   const [loading,setLoading]=useState(true),[auth,setAuth]=useState(false),[currentUser,setCurrentUser]=useState(null);
-  useEffect(()=>{fetch("/api/session").then(r=>r.json()).then(d=>{setAuth(!!d.authenticated);setCurrentUser(d.user||null)}).finally(()=>setLoading(false))},[]);
+  useEffect(()=>{
+    let local=DEFAULT_APPEARANCE;try{local=normalizeAppearance(JSON.parse(localStorage.getItem("lp28.appearance")||"{}"));}catch{}
+    applyAppearance(local);
+    let current=local;
+    const refresh=()=>applyAppearance(current);
+    const timer=setInterval(refresh,60000);
+    const onChange=e=>{current=normalizeAppearance(e?.detail||current);applyAppearance(current);};
+    window.addEventListener("lp28-appearance-changed",onChange);
+    fetch("/api/session").then(r=>r.json()).then(async d=>{
+      setAuth(!!d.authenticated);setCurrentUser(d.user||null);
+      if(d.authenticated){
+        try{const r=await fetch("/api/account/appearance");const a=await r.json();if(a?.ok&&a.appearance){current=normalizeAppearance(a.appearance);applyAppearance(current);}}catch{}
+      }
+    }).finally(()=>setLoading(false));
+    return()=>{clearInterval(timer);window.removeEventListener("lp28-appearance-changed",onChange);};
+  },[]);
   async function logout(){await fetch("/api/logout",{method:"POST"});setAuth(false);setCurrentUser(null)}
   if(loading)return <div className="loading">Chargement…</div>;
-  return auth?<Dashboard onLogout={logout} user={currentUser}/>:<Login onLogin={u=>{setCurrentUser(u);setAuth(true)}}/>;
+  return auth?<Dashboard onLogout={logout} user={currentUser}/>:<><LP28ThemeStyles/><Login onLogin={u=>{setCurrentUser(u);setAuth(true)}}/></>;
 }
 
