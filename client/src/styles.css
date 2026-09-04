@@ -539,3 +539,8 @@ html[data-lp28-theme="light"] .mathis-report .mathis-bubble{background:#fffdf7;c
 .mathis-sav-alert b{font-size:15px}.mathis-sav-alert span{font-size:13px}
 @keyframes mathisSavPulse{0%,100%{box-shadow:0 0 0 0 rgba(217,45,32,.08)}50%{box-shadow:0 0 0 7px rgba(217,45,32,.16)}}
 html[data-lp28-theme="light"] .mathis-sav-alert{background:#fff1f0;color:#7a271a}
+
+/* Mathis V1.6 — question LED prioritaire */
+.mathis-led-first-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mathis-led-first-actions button{min-height:58px;font-weight:800}
+@media(max-width:700px){.mathis-led-first-actions{grid-template-columns:1fr}}

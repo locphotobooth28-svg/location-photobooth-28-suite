@@ -3263,7 +3263,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [issue,setIssue]=useState("");
   const [printer,setPrinter]=useState("");
   const [step,setStep]=useState("booth");
-  const [printerStage,setPrinterStage]=useState("symptom");
+  const [printerStage,setPrinterStage]=useState("led-first");
   const [printerSymptom,setPrinterSymptom]=useState("");
   const [printerAnswer,setPrinterAnswer]=useState("");
   const [ledCode,setLedCode]=useState("");
@@ -3279,7 +3279,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
   function reset(){
     setBooth("");setIssue("");setPrinter("");setStep("booth");
-    setPrinterStage("symptom");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);
+    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);
   }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
@@ -3288,13 +3288,14 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     else setStep("diagnostic");
   }
   function choosePrinter(id){
-    setPrinter(id);setPrinterStage("symptom");setPrinterSymptom("");setPrinterAnswer("");setStep("diagnostic");
+    setPrinter(id);setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setStep("diagnostic");
   }
   function choosePrinterSymptom(id){
     setPrinterSymptom(id);setPrinterAnswer("");setPrinterStage("action");
   }
   function printerSolved(){
     setPrinterAnswer("solved");setPrinterStage("result");
+    if(isEventUser)notifyResolvedSilently();
   }
   function printerStillBroken(){
     setPrinterAnswer("failed");setPrinterStage("result");
@@ -3340,6 +3341,22 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       const audio=new Audio(customAlertSound||"/mathis-alert.mp3");
       audio.volume=0.9;
       audio.play().catch(()=>{});
+    }catch(e){}
+  }
+  function notifyResolvedSilently(){
+    if(!isEventUser)return;
+    try{
+      window.dispatchEvent(new CustomEvent("lp28:mathis-report",{detail:{
+        type:"resolved",silent:true,
+        title:"Incident résolu par notre technicien Mathis",
+        eventName:eventName||"",booth:boothInfo?.name||"",printer:printerInfo?.name||"",
+        incident:symptomLabel(),
+        message:`${eventName?eventName+" · ":""}${boothInfo?.name||""} · ${printerInfo?.name||""} · ${symptomLabel()} · résolu`,
+        createdAt:new Date().toISOString()
+      }}));
+      if("Notification" in window && Notification.permission==="granted"){
+        new Notification("🤖 Incident Mathis résolu",{body:`${eventName?eventName+" — ":""}${boothInfo?.name||""} — ${symptomLabel()}`,silent:true});
+      }
     }catch(e){}
   }
   function reportText(){
@@ -3389,7 +3406,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
         {led&&<><b>Lecture LED :</b> {led.label} → {led.status}<br/><b>Niveau :</b> {riskBadge(led.level)}<br/></>}
         <b>Prise de photos :</b> {canPhotos?"✅ possible":"🔴 indisponible"}<br/>
         <b>Impression :</b> {canPrint?"✅ rétablie":"🟠 à contrôler / indisponible"}<br/>
-        <b>État :</b> {printerAnswer==="solved"?"✅ incident résolu":printerAnswer==="failed"?"🔴 intervention niveau 2 demandée":"🟠 diagnostic en cours"}<br/>
+        <b>État :</b> {printerAnswer==="solved"?"✅ incident résolu — notification silencieuse":printerAnswer==="failed"?"🔴 intervention niveau 2 demandée":"🟠 diagnostic en cours"}<br/>
         <small>Mathis privilégie la continuité de la prestation et ne valide aucune manipulation non documentée.</small>
       </div>
     </div>;
@@ -3403,12 +3420,8 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       <div className="mathis-bubble mathis-bubble-bot"><b>Regarde les 4 voyants : POWER, RIBBON, PAPER et ERROR.</b><br/>Choisis uniquement la combinaison que tu vois réellement. Si aucune ne correspond, sélectionne « aucune correspondance » : je ne devinerai pas.</div>
       <div className="mathis-choice-grid mathis-led-grid">
         {codes.map(c=><button key={c.id} onClick={()=>setLedCode(c.id)}><span>💡</span><b>{c.label}</b><small>{c.status}</small></button>)}
-        <button onClick={()=>setLedCode("unknown")}><span>❓</span><b>Aucune correspondance</b><small>STOP : remontée d'information sans manipulation</small></button>
       </div>
-    </>;
-    if(ledCode==="unknown")return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>🔴 Je n'identifie pas cette combinaison avec certitude.</b><br/>Ne démonte rien et ne force rien. Les invités peuvent continuer à prendre des photos si Nikon + LumaBooth fonctionnent ; l'impression reste suspendue. Fais une photo des voyants pour le support niveau 2.</div>
-      <div className="mathis-actions"><button onClick={escalateLevel2}>📋 Générer le compte rendu</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>
+      <div className="mathis-actions"><button onClick={()=>{setLedCode("");setPrinterStage("symptom")}}>↩️ Aucun voyant ne clignote finalement</button></div>
     </>;
     return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>{riskBadge(led.level)} — {led.status}</b><br/><b>Voyants :</b> {led.label}<br/><b>Action autorisée :</b> {led.safe}<br/><br/>📸 <b>Les invités peuvent continuer à prendre leurs photos</b> tant que Nikon et LumaBooth fonctionnent. L'impression peut rester indisponible pendant le diagnostic.</div>
@@ -3473,6 +3486,14 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   }
 
   function PrinterDiagnostic(){
+    if(printerStage==="led-first") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Avant toute manipulation, regardez l'imprimante.</b><br/><b>Un voyant clignote-t-il sur l'imprimante ?</b></div>
+      <div className="mathis-actions mathis-led-first-actions">
+        <button onClick={()=>{setLedCode("");setPrinterSymptom("error");setPrinterStage("action")}}>🔴 OUI, un voyant clignote</button>
+        <button onClick={()=>{setLedCode("");setPrinterStage("symptom")}}>🟢 NON, aucun voyant ne clignote</button>
+      </div>
+    </>;
+
     if(printerStage==="symptom") return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>Très bien. Je dépanne {boothInfo?.name} avec {printerInfo?.name||"l'imprimante"}.</b><br/>Quel symptôme vois-tu maintenant ?</div>
       <div className="mathis-choice-grid mathis-printer-symptoms">
@@ -3490,7 +3511,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     if(printerStage==="action") return <PrinterAction/>;
 
     if(printerStage==="result"&&printerAnswer==="solved") return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>✅ Parfait, la panne semble résolue.</b><br/>Avant de remettre la borne au public, fais <b>une session photo complète avec un tirage test</b>. Si le tirage est correct, la prestation peut reprendre.</div>
+      <div className="mathis-bubble mathis-bubble-bot"><b>✅ Parfait, la panne semble résolue.</b><br/>Avant de remettre la borne au public, faites <b>une session photo complète avec un tirage test</b>. Si le tirage est correct, la prestation peut reprendre.{isEventUser&&<><br/><br/>📋 Un compte rendu est remonté <b>silencieusement</b> à Location Photobooth 28. Aucune alerte sonore ni WhatsApp n'est déclenché.</>}</div>
       {isEventUser&&<IncidentReport/>}<div className="mathis-actions"><button onClick={reset}>✅ Terminer le diagnostic</button><button onClick={printerBack}>🔎 Vérifier autre chose</button></div>
     </>;
 
