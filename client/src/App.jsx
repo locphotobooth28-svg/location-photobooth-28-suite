@@ -3209,6 +3209,87 @@ async function loadUnavailabilities(materialId){
 }
 
 
+
+const MATHIS_BOOTHS={
+  nina:{name:"Nina",icon:"📸",trigger:"Godox X2T"},
+  lola:{name:"Lola",icon:"🪞",trigger:"Godox X2T"},
+  gabin:{name:"Gabin",icon:"📷",trigger:"Godox AT-16"}
+};
+const MATHIS_PRINTERS={
+  dnp1:{name:"DNP DS620 — N°1",icon:"🖨️"},
+  dnp2:{name:"DNP DS620 — N°2",icon:"🖨️"},
+  citizen:{name:"Citizen CY-02",icon:"🖨️"},
+  unknown:{name:"Je ne sais pas",icon:"❓"}
+};
+const MATHIS_ISSUES=[
+  ["printer","🖨️","Imprimante","Pas d'impression, papier, ruban, bourrage"],
+  ["flash","⚡","Flash Godox","Ne s'allume pas, ne déclenche pas, puissance"],
+  ["camera","📷","Appareil Nikon","Non détecté, autofocus, connexion USB"],
+  ["quality","🖼️","Qualité photo","Floue, sombre, claire, couleurs, cadrage"],
+  ["lumabooth","📸","LumaBooth","Blocage, relance, périphérique non détecté"],
+  ["internet","🌐","Internet / QR / Galerie","Wi-Fi, 4G, QR Code, synchronisation"],
+  ["windows","💻","Borne / Windows","Lenteur, USB, file d'impression, redémarrage"],
+  ["other","💬","Autre problème","Je ne trouve pas mon problème dans la liste"]
+];
+
+function MathisAssistant({videos=[]}){
+  const [open,setOpen]=useState(false);
+  const [booth,setBooth]=useState("");
+  const [issue,setIssue]=useState("");
+  const [printer,setPrinter]=useState("");
+  const [step,setStep]=useState("booth");
+  const boothInfo=MATHIS_BOOTHS[booth];
+  const issueInfo=MATHIS_ISSUES.find(x=>x[0]===issue);
+
+  function reset(){setBooth("");setIssue("");setPrinter("");setStep("booth")}
+  function chooseBooth(id){setBooth(id);setStep("issue")}
+  function chooseIssue(id){
+    setIssue(id);
+    if(id==="printer") setStep("printer");
+    else setStep("diagnostic");
+  }
+  function choosePrinter(id){setPrinter(id);setStep("diagnostic")}
+
+  function diagnostic(){
+    if(!boothInfo||!issueInfo)return null;
+    const trigger=boothInfo.trigger;
+    const video=(needle)=>videos.find(v=>String(v.title||"").toLowerCase().includes(needle));
+    if(issue==="printer"){
+      const pr=MATHIS_PRINTERS[printer];
+      return <>
+        <div className="mathis-bubble mathis-bubble-bot"><b>Très bien. Je dépanne {boothInfo.name} avec {pr?.name||"l'imprimante"}.</b><br/>Première vérification : l'imprimante est-elle allumée et sans voyant d'erreur ?</div>
+        <div className="mathis-actions"><button>✅ Oui, elle est prête</button><button>🔴 Voyant / erreur</button><button>⛔ Elle ne s'allume pas</button></div>
+        {(video("bourrage")||video("déchir")||video("dechir"))&&<div className="mathis-video-shortcuts"><span>🎥 Vidéos déjà disponibles</span>{videos.filter(v=>/bourrage|déchir|dechir/i.test(v.title||"")).map(v=><a key={v.id} href={v.url} target="_blank" rel="noreferrer">▶️ {v.title}</a>)}</div>}
+      </>;
+    }
+    if(issue==="flash") return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise le déclencheur {trigger}.</b><br/>On commence sans toucher aux réglages compliqués : le Godox MS300/MS300V est-il allumé et le bouton TEST déclenche-t-il un éclair ?</div><div className="mathis-actions"><button>⚡ Oui, TEST fonctionne</button><button>❌ TEST ne déclenche pas</button><button>⛔ Le flash ne s'allume pas</button></div></>;
+    if(issue==="quality") return <><div className="mathis-bubble mathis-bubble-bot">Je vais d'abord déterminer si le défaut vient de la prise de vue ou de l'impression.<br/><b>La photo est-elle déjà mauvaise à l'écran avant son impression ?</b></div><div className="mathis-actions"><button>🖥️ Oui, à l'écran aussi</button><button>🖨️ Non, seulement imprimée</button><button>👀 Je ne sais pas</button></div></>;
+    if(issue==="internet") return <><div className="mathis-bubble mathis-bubble-bot">La prestation photo et l'impression doivent rester prioritaires, même sans Internet.<br/><b>Quel est le symptôme sur {boothInfo.name} ?</b></div><div className="mathis-actions"><button>📶 Wi-Fi / 4G absent</button><button>🌐 Connecté mais pas Internet</button><button>🔳 QR Code ne fonctionne pas</button><button>☁️ Galerie non synchronisée</button></div></>;
+    if(issue==="lumabooth") return <><div className="mathis-bubble mathis-bubble-bot"><b>LumaBooth sur {boothInfo.name} :</b> que se passe-t-il ?</div><div className="mathis-actions"><button>🧊 LumaBooth est bloqué</button><button>📷 Nikon non détecté</button><button>🖨️ Imprimante non détectée</button><button>🔄 Je veux le relancer proprement</button></div></>;
+    if(issue==="camera") return <><div className="mathis-bubble mathis-bubble-bot">On contrôle d'abord le Nikon de {boothInfo.name} sans modifier les réglages.<br/><b>L'appareil est-il allumé et détecté par la borne ?</b></div><div className="mathis-actions"><button>✅ Oui</button><button>🔌 Non détecté</button><button>🔋 Il ne s'allume pas</button></div></>;
+    if(issue==="windows") return <><div className="mathis-bubble mathis-bubble-bot">Je vais rester léger pour ne pas ralentir {boothInfo.name}.<br/><b>Quel problème Windows rencontres-tu ?</b></div><div className="mathis-actions"><button>🐌 Borne lente</button><button>🔌 USB non reconnu</button><button>🖨️ Impression bloquée</button><button>🔄 Redémarrage nécessaire</button></div></>;
+    return <><div className="mathis-bubble mathis-bubble-bot">Décris-moi le problème rencontré sur <b>{boothInfo.name}</b>. Si je ne peux pas le résoudre de façon sûre, je passerai la main au support niveau 2.</div><textarea className="mathis-free-text" placeholder="Exemple : la photo se prend mais rien ne s'imprime…"/></>;
+  }
+
+  return <div className={`mathis-shell ${open?"open":""}`}>
+    {!open?<button className="mathis-launch" onClick={()=>setOpen(true)}><img src="/mathis-assistant.png" alt="Mathis"/><span><b>🤖 Mathis — Technicien N1</b><small>Premier intervenant en cas de problème · Ouvrir l'assistant</small></span><strong>Ouvrir →</strong></button>:
+    <div className="mathis-panel">
+      <div className="mathis-head"><img src="/mathis-assistant.png" alt="Mathis"/><div><span className="mathis-online">● DISPONIBLE À LA DEMANDE</span><h3>🤖 Mathis — Assistant technique</h3><p>Location Photobooth 28 · dépannage léger, sans surveillance permanente</p></div><button onClick={()=>setOpen(false)} aria-label="Fermer">✕</button></div>
+      <div className="mathis-chat">
+        <div className="mathis-bubble mathis-bubble-bot">Salut 👋 Je suis <b>Mathis</b>, ton premier intervenant technique.<br/>Je vais avancer avec toi <b>une question à la fois</b>, sans lancer de surveillance en arrière-plan.</div>
+        {step==="booth"&&<><div className="mathis-bubble mathis-bubble-bot"><b>Quelle borne est impactée ?</b></div><div className="mathis-choice-grid mathis-booths">{Object.entries(MATHIS_BOOTHS).map(([id,b])=><button key={id} onClick={()=>chooseBooth(id)}><span>{b.icon}</span><b>{b.name}</b><small>{b.trigger}</small></button>)}</div></>}
+        {step!=="booth"&&<div className="mathis-bubble mathis-bubble-user">{boothInfo?.icon} Borne <b>{boothInfo?.name}</b></div>}
+        {step==="issue"&&<><div className="mathis-bubble mathis-bubble-bot">D'accord 👍 <b>Quel problème rencontres-tu sur {boothInfo?.name} ?</b></div><div className="mathis-choice-grid">{MATHIS_ISSUES.map(([id,icon,label,desc])=><button key={id} onClick={()=>chooseIssue(id)}><span>{icon}</span><b>{label}</b><small>{desc}</small></button>)}</div></>}
+        {(step==="printer"||step==="diagnostic")&&<div className="mathis-bubble mathis-bubble-user">{issueInfo?.[1]} <b>{issueInfo?.[2]}</b></div>}
+        {step==="printer"&&<><div className="mathis-bubble mathis-bubble-bot">Les imprimantes ne sont pas affectées à une borne.<br/><b>Quelle imprimante est actuellement branchée à {boothInfo?.name} ?</b></div><div className="mathis-choice-grid mathis-printers">{Object.entries(MATHIS_PRINTERS).map(([id,p])=><button key={id} onClick={()=>choosePrinter(id)}><span>{p.icon}</span><b>{p.name}</b>{id.startsWith("dnp")&&<small>Repère physique {id==="dnp1"?"1":"2"}</small>}</button>)}</div></>}
+        {step==="diagnostic"&&issue==="printer"&&<div className="mathis-bubble mathis-bubble-user">🖨️ <b>{MATHIS_PRINTERS[printer]?.name}</b></div>}
+        {step==="diagnostic"&&diagnostic()}
+      </div>
+      <div className="mathis-footer"><button className="secondary-btn" onClick={reset}>↺ Nouveau diagnostic</button><span>🛡️ Mathis ne propose aucune manipulation mécanique risquée.</span></div>
+    </div>}
+  </div>;
+}
+
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");
   const [settings,setSettings]=useState({});
@@ -3261,6 +3342,7 @@ function AssistanceCenter(){
   const quick=[["🚀","FotoShare Copilot",settings.copilotUrl],["🖥️","Chrome Remote Desktop",settings.remoteDesktopUrl],["⚙️","LumaBooth Dashboard",settings.lumaboothDashboardUrl],["☁️","Google Drive",settings.googleDriveUrl],["📅","Google Agenda",settings.googleCalendarUrl]];
   return <section className="assistance-center">
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div><h2>🆘 Assistance & pilotage</h2><p className="muted">Tes outils de contrôle et l'assistance que tu mets à disposition des organisateurs.</p></div></div>
+    <MathisAssistant videos={data.videos||[]}/>
     <div className="assistance-links">{quick.map(([i,l,h])=><a key={l} className="assist-link-card" href={h||"#"} target="_blank" rel="noreferrer"><span>{i}</span><strong>{l}</strong><small>Ouvrir ↗</small></a>)}</div>
 
     <div className="assist-video-admin">
