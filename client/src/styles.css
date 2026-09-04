@@ -519,3 +519,16 @@ html[data-lp28-theme="light"] body .assistance-center h2,
 html[data-lp28-theme="light"] body .assistance-center h3{
   color:#171717 !important;
 }
+
+
+/* Mathis V1.3 — diagnostic imprimante */
+.mathis-printer-symptoms button { min-height: 92px; }
+.mathis-printer-symptoms button small { line-height: 1.25; }
+.mathis-actions button { cursor: pointer; }
+
+
+/* Mathis V1.4 — codes LED et compte rendu incident */
+.mathis-led-grid button{min-height:96px}
+.mathis-report{margin-top:12px}
+.mathis-report .mathis-bubble{border-left:4px solid var(--gold,#b9962f)}
+html[data-lp28-theme="light"] .mathis-report .mathis-bubble{background:#fffdf7;color:#171717}

@@ -3232,36 +3232,242 @@ const MATHIS_ISSUES=[
   ["other","💬","Autre problème","Je ne trouve pas mon problème dans la liste"]
 ];
 
+
+const MATHIS_LED_CODES={
+  dnp:[
+    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Remplacer le rouleau papier selon la procédure normale.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Remplacer le consommable selon la procédure normale.",level:"orange",photos:true,prints:false},
+    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Porte ouverte / papier absent",safe:"Contrôler la présence et la mise en place du papier puis fermer complètement le mécanisme.",level:"orange",photos:true,prints:false},
+    {id:"door-open",label:"ERROR clignote seul",status:"Porte / mécanisme ouvert",safe:"Fermer complètement le mécanisme sans forcer.",level:"green",photos:true,prints:false},
+    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Contrôler uniquement le chargement accessible du papier. Ne pas forcer si le papier est coincé.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Contrôler uniquement la bonne mise en place du ruban. Ne pas toucher la tête thermique.",level:"orange",photos:true,prints:false},
+    {id:"media-size",label:"RIBBON et PAPER clignotent alternativement",status:"Taille média incompatible",safe:"Ne pas démonter. Vérifier le format d'impression envoyé et le média installé.",level:"green",photos:true,prints:false},
+    {id:"system-error",label:"ERROR fixe seul",status:"Erreur système",safe:"Basculer l'interrupteur ON/Standby puis attendre le redémarrage. Si l'erreur revient : STOP niveau 2.",level:"red",photos:true,prints:false},
+    {id:"cooldown",label:"POWER clignote seul",status:"Refroidissement de tête",safe:"Ne rien manipuler : attendre. Le retour à l'état normal est automatique.",level:"green",photos:true,prints:false}
+  ],
+  citizen:[
+    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Remplacer le papier et le ruban en ensemble, conformément au manuel Citizen.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Remplacer le papier et le ruban en ensemble, conformément au manuel Citizen.",level:"orange",photos:true,prints:false},
+    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Capot ouvert / pas de papier",safe:"Mettre correctement le papier puis fermer le capot avant.",level:"orange",photos:true,prints:false},
+    {id:"door-open",label:"ERROR clignote seul",status:"Capot avant ouvert",safe:"Fermer complètement le capot avant sans forcer.",level:"green",photos:true,prints:false},
+    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Libérer uniquement le papier accessible et le remettre correctement. Si résistance : STOP.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Remettre correctement le ruban sans toucher la tête thermique.",level:"orange",photos:true,prints:false},
+    {id:"system-error",label:"ERROR fixe seul",status:"Erreur système",safe:"Éteindre puis rallumer l'imprimante. Si l'erreur revient : STOP niveau 2.",level:"red",photos:true,prints:false},
+    {id:"cooldown",label:"POWER clignote seul",status:"Refroidissement de tête",safe:"Ne rien manipuler : attendre le refroidissement automatique.",level:"green",photos:true,prints:false}
+  ]
+};
+
 function MathisAssistant({videos=[]}){
   const [open,setOpen]=useState(false);
   const [booth,setBooth]=useState("");
   const [issue,setIssue]=useState("");
   const [printer,setPrinter]=useState("");
   const [step,setStep]=useState("booth");
+  const [printerStage,setPrinterStage]=useState("symptom");
+  const [printerSymptom,setPrinterSymptom]=useState("");
+  const [printerAnswer,setPrinterAnswer]=useState("");
+  const [ledCode,setLedCode]=useState("");
+  const [incidentStarted]=useState(()=>new Date());
+  const [reportOpen,setReportOpen]=useState(false);
   const boothInfo=MATHIS_BOOTHS[booth];
   const issueInfo=MATHIS_ISSUES.find(x=>x[0]===issue);
+  const printerInfo=MATHIS_PRINTERS[printer];
 
-  function reset(){setBooth("");setIssue("");setPrinter("");setStep("booth")}
+  function reset(){
+    setBooth("");setIssue("");setPrinter("");setStep("booth");
+    setPrinterStage("symptom");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);
+  }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
     setIssue(id);
     if(id==="printer") setStep("printer");
     else setStep("diagnostic");
   }
-  function choosePrinter(id){setPrinter(id);setStep("diagnostic")}
+  function choosePrinter(id){
+    setPrinter(id);setPrinterStage("symptom");setPrinterSymptom("");setPrinterAnswer("");setStep("diagnostic");
+  }
+  function choosePrinterSymptom(id){
+    setPrinterSymptom(id);setPrinterAnswer("");setPrinterStage("action");
+  }
+  function printerSolved(){
+    setPrinterAnswer("solved");setPrinterStage("result");
+  }
+  function printerStillBroken(){
+    setPrinterAnswer("failed");setPrinterStage("result");
+  }
+  function printerBack(){
+    setPrinterStage("symptom");setPrinterSymptom("");setPrinterAnswer("");
+  }
+
+  const findVideo=(needles=[])=>{
+    const list=Array.isArray(needles)?needles:[needles];
+    return videos.find(v=>list.some(n=>String(v.title||"").toLowerCase().includes(String(n).toLowerCase())));
+  };
+  const jamVideo=findVideo(["bourrage"]);
+  const tornVideo=findVideo(["déchir","dechir"]);
+
+  function VideoHelp({video,label}){
+    if(!video)return null;
+    return <div className="mathis-video-shortcuts"><span>🎥 Aide vidéo Location Photobooth 28</span><a href={video.url} target="_blank" rel="noreferrer">▶️ {label||video.title}</a></div>;
+  }
+
+  function ledFamily(){
+    if(printer==="dnp1"||printer==="dnp2")return "dnp";
+    if(printer==="citizen")return "citizen";
+    return "";
+  }
+  function ledInfo(){
+    const family=ledFamily();
+    return (MATHIS_LED_CODES[family]||[]).find(x=>x.id===ledCode);
+  }
+  function riskBadge(level){
+    if(level==="red")return "🔴 STOP / niveau 2";
+    if(level==="orange")return "🟠 Manipulation guidée";
+    return "🟢 Sans risque";
+  }
+  function symptomLabel(){
+    const labels={"not-printing":"Rien ne s'imprime","paper":"Papier / PAPER","ribbon":"Ruban / RIBBON","jam":"Bourrage papier","offline":"Hors ligne / non détectée","queue":"File d'impression bloquée","error":"Voyants / code LED","no-power":"Ne s'allume plus"};
+    return labels[printerSymptom]||printerSymptom||"Non précisé";
+  }
+  function IncidentReport(){
+    const led=ledInfo();
+    const canPhotos=led?led.photos:true;
+    const canPrint=printerAnswer==="solved";
+    return <div className="mathis-report">
+      <div className="mathis-bubble mathis-bubble-bot"><b>📋 Compte rendu Mathis</b><br/>
+        <b>Borne :</b> {boothInfo?.name||"—"}<br/>
+        <b>Imprimante :</b> {printerInfo?.name||"—"}<br/>
+        <b>Incident :</b> {symptomLabel()}<br/>
+        {led&&<><b>Lecture LED :</b> {led.label} → {led.status}<br/><b>Niveau :</b> {riskBadge(led.level)}<br/></>}
+        <b>Prise de photos :</b> {canPhotos?"✅ possible":"🔴 indisponible"}<br/>
+        <b>Impression :</b> {canPrint?"✅ rétablie":"🟠 à contrôler / indisponible"}<br/>
+        <b>État :</b> {printerAnswer==="solved"?"✅ incident résolu":printerAnswer==="failed"?"🔴 intervention niveau 2 demandée":"🟠 diagnostic en cours"}<br/>
+        <small>Mathis privilégie la continuité de la prestation et ne valide aucune manipulation non documentée.</small>
+      </div>
+    </div>;
+  }
+  function LedDiagnostic(){
+    const family=ledFamily();
+    const codes=MATHIS_LED_CODES[family]||[];
+    const led=ledInfo();
+    if(!family)return <div className="mathis-bubble mathis-bubble-bot">Je dois d'abord identifier précisément l'imprimante avant d'interpréter ses voyants.</div>;
+    if(!led)return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Regarde les 4 voyants : POWER, RIBBON, PAPER et ERROR.</b><br/>Choisis uniquement la combinaison que tu vois réellement. Si aucune ne correspond, sélectionne « aucune correspondance » : je ne devinerai pas.</div>
+      <div className="mathis-choice-grid mathis-led-grid">
+        {codes.map(c=><button key={c.id} onClick={()=>setLedCode(c.id)}><span>💡</span><b>{c.label}</b><small>{c.status}</small></button>)}
+        <button onClick={()=>setLedCode("unknown")}><span>❓</span><b>Aucune correspondance</b><small>STOP : remontée d'information sans manipulation</small></button>
+      </div>
+    </>;
+    if(ledCode==="unknown")return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>🔴 Je n'identifie pas cette combinaison avec certitude.</b><br/>Ne démonte rien et ne force rien. Les invités peuvent continuer à prendre des photos si Nikon + LumaBooth fonctionnent ; l'impression reste suspendue. Fais une photo des voyants pour le support niveau 2.</div>
+      <div className="mathis-actions"><button onClick={()=>{setPrinterAnswer("failed");setPrinterStage("result")}}>📋 Générer le compte rendu</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>
+    </>;
+    return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>{riskBadge(led.level)} — {led.status}</b><br/><b>Voyants :</b> {led.label}<br/><b>Action autorisée :</b> {led.safe}<br/><br/>📸 <b>Les invités peuvent continuer à prendre leurs photos</b> tant que Nikon et LumaBooth fonctionnent. L'impression peut rester indisponible pendant le diagnostic.</div>
+      <div className="mathis-actions"><button onClick={printerSolved}>✅ Impression rétablie</button><button onClick={printerStillBroken}>❌ Toujours en panne</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>
+    </>;
+  }
+
+  function PrinterAction(){
+    const isDnp=printer==="dnp1"||printer==="dnp2";
+    const model=isDnp?"DNP DS620":printer==="citizen"?"Citizen CY-02":"imprimante";
+    const commonButtons=<div className="mathis-actions"><button onClick={printerSolved}>✅ C'est réparé</button><button onClick={printerStillBroken}>❌ Toujours en panne</button><button onClick={printerBack}>↩️ Autre symptôme</button></div>;
+
+    if(printer==="unknown") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Pas de souci.</b><br/>Regarde l'étiquette sur la façade ou le dessus de l'imprimante. Si tu vois <b>DNP DS620</b>, vérifie ensuite le repère physique <b>N°1</b> ou <b>N°2</b>. Si tu vois <b>Citizen CY-02</b>, reviens au choix précédent.</div>
+      <div className="mathis-actions"><button onClick={()=>setStep("printer")}>🖨️ Choisir l'imprimante</button></div>
+    </>;
+
+    if(printerSymptom==="no-power") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>{printerInfo?.name} ne s'allume pas.</b><br/>1. Vérifie que l'interrupteur de l'imprimante est sur ON.<br/>2. Vérifie le câble secteur côté imprimante puis côté prise/multiprise.<br/>3. Teste la prise avec un autre appareil si possible.<br/><b>Ne démonte pas l'imprimante.</b></div>
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="paper") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Problème papier sur {printerInfo?.name}.</b><br/>{isDnp?"Sur la DS620, un voyant PAPER signale généralement qu'il faut contrôler le rouleau papier.":"Sur la Citizen, contrôle d'abord le rouleau papier et sa bonne mise en place."}<br/>Ouvre normalement le tiroir, vérifie qu'il reste du papier et qu'il est correctement chargé, puis referme complètement l'imprimante.</div>
+      {tornVideo&&<VideoHelp video={tornVideo} label="Voir la vidéo : papier déchiré"/>}
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="ribbon") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Problème ruban sur {printerInfo?.name}.</b><br/>Ouvre normalement l'imprimante, contrôle que le ruban n'est pas terminé, détendu ou mal positionné. Replace la cassette/le ruban sans forcer puis referme complètement.<br/><b>Ne touche pas la tête thermique et n'utilise aucun outil métallique.</b></div>
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="jam") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Bourrage papier détecté.</b><br/>Arrête les nouvelles impressions. Ouvre l'imprimante normalement et retire uniquement le papier facilement accessible, doucement et dans le sens naturel de sortie.<br/><b>⚠️ Ne tire jamais en force et ne touche pas au cutter.</b></div>
+      {jamVideo&&<VideoHelp video={jamVideo} label="Voir la vidéo : bourrage papier"/>}
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="offline") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>{printerInfo?.name} est hors ligne / non détectée.</b><br/>1. Vérifie qu'elle est allumée et prête.<br/>2. Vérifie le câble USB aux deux extrémités.<br/>3. Garde si possible <b>le même port USB</b> sur la borne.<br/>4. Dans Windows → Imprimantes et scanners, vérifie que {model} apparaît.<br/>Ne réinstalle pas le pilote pour l'instant.</div>
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="queue") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Impressions bloquées dans Windows.</b><br/>Ferme temporairement LumaBooth pour éviter d'ajouter des travaux. Ouvre Windows → Imprimantes et scanners → {model} → file d'attente, puis annule les travaux bloqués. Attends que la file soit vide avant de relancer LumaBooth.</div>
+      {commonButtons}
+    </>;
+
+    if(printerSymptom==="error") return <LedDiagnostic/>;
+
+    if(printerSymptom==="not-printing") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>L'imprimante est prête mais aucune photo ne sort.</b><br/>On doit séparer Windows de LumaBooth : essaie d'imprimer une petite image directement depuis Windows sur <b>{printerInfo?.name}</b>.<br/><b>Si Windows imprime, le problème est probablement côté LumaBooth/configuration. Si Windows n'imprime pas, on reste côté imprimante/USB/Windows.</b></div>
+      <div className="mathis-actions">
+        <button onClick={()=>{setPrinterAnswer("windows-ok");setPrinterStage("result")}}>🟢 Windows imprime</button>
+        <button onClick={()=>{setPrinterAnswer("windows-fail");setPrinterStage("result")}}>🔴 Windows n'imprime pas</button>
+        <button onClick={printerBack}>↩️ Autre symptôme</button>
+      </div>
+    </>;
+
+    return null;
+  }
+
+  function PrinterDiagnostic(){
+    if(printerStage==="symptom") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Très bien. Je dépanne {boothInfo?.name} avec {printerInfo?.name||"l'imprimante"}.</b><br/>Quel symptôme vois-tu maintenant ?</div>
+      <div className="mathis-choice-grid mathis-printer-symptoms">
+        <button onClick={()=>choosePrinterSymptom("not-printing")}><span>🖨️</span><b>Rien ne s'imprime</b><small>L'imprimante semble prête</small></button>
+        <button onClick={()=>choosePrinterSymptom("paper")}><span>📄</span><b>Papier / PAPER</b><small>Fin, mauvais chargement, papier déchiré</small></button>
+        <button onClick={()=>choosePrinterSymptom("ribbon")}><span>🎞️</span><b>Ruban / RIBBON</b><small>Ruban terminé ou mal positionné</small></button>
+        <button onClick={()=>choosePrinterSymptom("jam")}><span>⚠️</span><b>Bourrage papier</b><small>Papier coincé dans l'imprimante</small></button>
+        <button onClick={()=>choosePrinterSymptom("offline")}><span>🔌</span><b>Hors ligne / non détectée</b><small>Windows ou LumaBooth ne la voit plus</small></button>
+        <button onClick={()=>choosePrinterSymptom("queue")}><span>📋</span><b>File d'impression bloquée</b><small>Des travaux restent en attente</small></button>
+        <button onClick={()=>choosePrinterSymptom("error")}><span>🔴</span><b>Voyants / code LED</b><small>POWER · RIBBON · PAPER · ERROR</small></button>
+        <button onClick={()=>choosePrinterSymptom("no-power")}><span>⛔</span><b>Ne s'allume plus</b><small>Aucun voyant / aucun bruit</small></button>
+      </div>
+    </>;
+
+    if(printerStage==="action") return <PrinterAction/>;
+
+    if(printerStage==="result"&&printerAnswer==="solved") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>✅ Parfait, la panne semble résolue.</b><br/>Avant de remettre la borne au public, fais <b>une session photo complète avec un tirage test</b>. Si le tirage est correct, la prestation peut reprendre.</div>
+      <IncidentReport/><div className="mathis-actions"><button onClick={reset}>✅ Terminer le diagnostic</button><button onClick={printerBack}>🔎 Vérifier autre chose</button></div>
+    </>;
+
+    if(printerStage==="result"&&printerAnswer==="windows-ok") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>🟢 Bonne nouvelle : l'imprimante et Windows fonctionnent.</b><br/>Le problème se situe probablement dans LumaBooth ou dans l'imprimante sélectionnée. Ferme puis relance LumaBooth proprement et vérifie <b>Print Setup</b> : sélectionne {printerInfo?.name} et le bon format papier. Fais ensuite un tirage test.</div>
+      <div className="mathis-actions"><button onClick={printerSolved}>✅ Ça imprime maintenant</button><button onClick={printerStillBroken}>❌ Toujours rien</button></div>
+    </>;
+
+    if(printerStage==="result"&&printerAnswer==="windows-fail") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>🔴 Windows n'arrive pas non plus à imprimer.</b><br/>Ne touche pas encore à LumaBooth. Vérifie le câble USB, que {printerInfo?.name} est bien en ligne dans Windows et vide sa file d'impression. Éteins ensuite l'imprimante 10 secondes, rallume-la et refais un test Windows.</div>
+      <div className="mathis-actions"><button onClick={printerSolved}>✅ Le test Windows fonctionne</button><button onClick={printerStillBroken}>❌ Toujours en panne</button></div>
+    </>;
+
+    if(printerStage==="result"&&printerAnswer==="failed") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>🟠 Mathis passe au niveau 2.</b><br/>J'ai déjà identifié : <b>{boothInfo?.name}</b> + <b>{printerInfo?.name}</b> + symptôme <b>{printerSymptom||"impression"}</b>.<br/>N'effectue pas de démontage supplémentaire. Si une imprimante de secours est disponible, utilise-la pour protéger la prestation et contacte le support Location Photobooth 28.</div>
+      <IncidentReport/><div className="mathis-actions"><button onClick={printerBack}>↩️ Reprendre le diagnostic</button><button onClick={reset}>🆕 Nouveau diagnostic</button></div>
+    </>;
+
+    return null;
+  }
 
   function diagnostic(){
     if(!boothInfo||!issueInfo)return null;
     const trigger=boothInfo.trigger;
-    const video=(needle)=>videos.find(v=>String(v.title||"").toLowerCase().includes(needle));
-    if(issue==="printer"){
-      const pr=MATHIS_PRINTERS[printer];
-      return <>
-        <div className="mathis-bubble mathis-bubble-bot"><b>Très bien. Je dépanne {boothInfo.name} avec {pr?.name||"l'imprimante"}.</b><br/>Première vérification : l'imprimante est-elle allumée et sans voyant d'erreur ?</div>
-        <div className="mathis-actions"><button>✅ Oui, elle est prête</button><button>🔴 Voyant / erreur</button><button>⛔ Elle ne s'allume pas</button></div>
-        {(video("bourrage")||video("déchir")||video("dechir"))&&<div className="mathis-video-shortcuts"><span>🎥 Vidéos déjà disponibles</span>{videos.filter(v=>/bourrage|déchir|dechir/i.test(v.title||"")).map(v=><a key={v.id} href={v.url} target="_blank" rel="noreferrer">▶️ {v.title}</a>)}</div>}
-      </>;
-    }
+    if(issue==="printer") return <PrinterDiagnostic/>;
     if(issue==="flash") return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise le déclencheur {trigger}.</b><br/>On commence sans toucher aux réglages compliqués : le Godox MS300/MS300V est-il allumé et le bouton TEST déclenche-t-il un éclair ?</div><div className="mathis-actions"><button>⚡ Oui, TEST fonctionne</button><button>❌ TEST ne déclenche pas</button><button>⛔ Le flash ne s'allume pas</button></div></>;
     if(issue==="quality") return <><div className="mathis-bubble mathis-bubble-bot">Je vais d'abord déterminer si le défaut vient de la prise de vue ou de l'impression.<br/><b>La photo est-elle déjà mauvaise à l'écran avant son impression ?</b></div><div className="mathis-actions"><button>🖥️ Oui, à l'écran aussi</button><button>🖨️ Non, seulement imprimée</button><button>👀 Je ne sais pas</button></div></>;
     if(issue==="internet") return <><div className="mathis-bubble mathis-bubble-bot">La prestation photo et l'impression doivent rester prioritaires, même sans Internet.<br/><b>Quel est le symptôme sur {boothInfo.name} ?</b></div><div className="mathis-actions"><button>📶 Wi-Fi / 4G absent</button><button>🌐 Connecté mais pas Internet</button><button>🔳 QR Code ne fonctionne pas</button><button>☁️ Galerie non synchronisée</button></div></>;
