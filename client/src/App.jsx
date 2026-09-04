@@ -3433,6 +3433,21 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       </div>
     </div>;
   }
+  function ClientSupportStatus(){
+    const status = savStatus==="closed"
+      ? {icon:"✅",title:"Assistance terminée",text:"L’assistance est terminée. Merci pour votre patience et profitez pleinement de votre événement."}
+      : savStatus==="level3"
+      ? {icon:"🚗",title:"Johan se déplace",text:"Après les vérifications à distance, Johan doit intervenir sur place. Gardez votre téléphone à proximité et restez près de la borne si possible."}
+      : savStatus==="remote"
+      ? {icon:"💻",title:"Téléassistance en cours",text:"Johan a pris en compte votre demande et effectue actuellement les vérifications à distance."}
+      : {icon:"🟠",title:"Demande de téléassistance",text:"Votre technicien Mathis a terminé son diagnostic. Renseignez l’interlocuteur présent près de la borne afin que Johan puisse prendre le relais."};
+    return <div className={`mathis-client-status status-${savStatus}`}>
+      <div className="mathis-client-status-head"><span>{status.icon}</span><div><small>STATUT DE VOTRE PRISE EN CHARGE</small><b>{status.title}</b></div></div>
+      <p>{status.text}</p>
+      {savStatus!=="closed"&&<p className="mathis-client-status-note">📱 Gardez votre téléphone à proximité. {savStatus!=="level3"&&"📸 Si la prise de photos fonctionne, continuez à profiter normalement de votre événement."}</p>}
+    </div>;
+  }
+
   function LedDiagnostic(){
     const family=ledFamily();
     const codes=MATHIS_LED_CODES[family]||[];
@@ -3547,8 +3562,9 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       {isEventUser&&savStatus==="remote"&&<div className="mathis-bubble mathis-bubble-bot"><b>💻 Johan a pris en compte votre demande.</b><br/>Il effectue maintenant les vérifications à distance. Gardez votre téléphone à proximité et restez près de la borne si possible.<br/><br/>📸 Si les photos fonctionnent, continuez à profiter de votre événement : nous nous occupons du reste.</div>}
       {isEventUser&&savStatus==="level3"&&<div className="mathis-bubble mathis-bubble-bot"><b>🚗 Johan va intervenir sur place.</b><br/>Après son contrôle à distance, Johan a déterminé qu’une intervention physique est nécessaire. Le temps de la route, continuez à utiliser la prise de photos si elle reste disponible.<br/><br/>Nous sommes navrés de la gêne occasionnée. Ce type d’incident peut malheureusement arriver et nous faisons le nécessaire pour rétablir le service au plus vite.</div>}
       {isEventUser&&savStatus==="closed"&&<div className="mathis-bubble mathis-bubble-bot"><b>✅ Intervention terminée.</b><br/>Johan a clôturé l’assistance. Merci pour votre patience et profitez pleinement de votre événement. 📸</div>}
-      {isEventUser&&<IncidentReport/>}
-      {isEventUser&&<div className="mathis-sav-alert"><b>{savStatus==="level3"?"🔴 NIVEAU 3 — DÉPLACEMENT":"🟠 NIVEAU 2 — TÉLÉASSISTANCE"} — {eventName||"Événement"}</b><span>{contactFirstName?`${contactFirstName} · ${contactPhone}`:"Johan doit contrôler la situation à distance."}</span></div>}
+      {isEventUser&&<ClientSupportStatus/>}
+      {!isEventUser&&<IncidentReport/>}
+      {!isEventUser&&<div className="mathis-sav-alert"><b>{savStatus==="level3"?"🔴 NIVEAU 3 — DÉPLACEMENT":"🟠 NIVEAU 2 — TÉLÉASSISTANCE"} — {eventName||"Diagnostic administrateur"}</b><span>{contactFirstName?`${contactFirstName} · ${contactPhone}`:"Contrôle technique en cours."}</span></div>}
       <div className="mathis-actions">
         {!isEventUser&&savStatus==="remote"&&<><button onClick={resolveRemoteSupport}>✅ Résolu à distance</button><button onClick={decideLevel3}>🚗 Je dois me déplacer</button></>}
         {!isEventUser&&savStatus==="level3"&&<button onClick={closeLevel3}>✅ Intervention terminée</button>}
@@ -6579,7 +6595,7 @@ function Dashboard({onLogout,user}) {
         </section>
         <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo.jpg"/></section>
       </> : view==="events" ? <>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+        <div className="event-tabs" style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
           <button
             onClick={()=>setEventTab("upcoming")}
             style={{border:`1px solid ${eventTab==="upcoming"?"#f4c542":"rgba(244,197,66,.55)"}`,background:eventTab==="upcoming"?"#d4ad2d":"rgba(244,197,66,.10)",color:eventTab==="upcoming"?"#111827":"#f8e6a0",fontWeight:900,boxShadow:eventTab==="upcoming"?"0 6px 18px rgba(212,173,45,.18)":"none"}}
