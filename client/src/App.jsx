@@ -3332,7 +3332,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   }
   function riskBadge(level){
     if(level==="red")return "🔴 STOP / niveau 2";
-    if(level==="orange")return "🟠 Manipulation guidée";
+    if(level==="orange")return "🟠 Contrôle nécessaire";
     return "🟢 Sans risque";
   }
   function symptomLabel(){
@@ -4390,6 +4390,16 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     </section>
 
     {support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}
+
+    <section className="portal-section">
+      <MathisAssistant
+        videos={[]}
+        eventContext={e}
+        userRole={organizer?"organizer":"guest"}
+        supportPhone={support.supportPhone||support.phone||""}
+      />
+    </section>
+
     <footer>Location Photobooth 28</footer>
 
     {lightbox&&<div className="memory-lightbox"
