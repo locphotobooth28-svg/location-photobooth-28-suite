@@ -3573,10 +3573,27 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     return <><div className="mathis-bubble mathis-bubble-bot">Décris-moi le problème rencontré sur <b>{boothInfo.name}</b>. Si je ne peux pas le résoudre de façon sûre, je passerai la main au support niveau 2.</div><textarea className="mathis-free-text" placeholder="Exemple : la photo se prend mais rien ne s'imprime…"/></>;
   }
 
+  const directPhone=(supportPhone||"07 56 83 21 85").trim();
+  const telPhone=directPhone.replace(/[^+\d]/g,"");
+
   return <div className={`mathis-shell ${open?"open":""}`}>
-    {!open?<button className="mathis-launch" onClick={()=>setOpen(true)}><img src="/mathis-assistant.png" alt="Mathis"/><span><b>🤖 Votre technicien Mathis</b><small>Premier intervenant en cas de problème · Ouvrir l'assistant</small></span><strong>Ouvrir →</strong></button>:
+    {!open?<div className="mathis-home">
+      <div className="mathis-help-title"><span>🆘</span><div><h2>Besoin d'aide ?</h2><p>Votre technicien Mathis est là pour vous accompagner.</p></div></div>
+      <div className="mathis-home-card">
+        <img className="mathis-home-photo" src="/mathis-technicien.png" alt="Votre technicien Mathis"/>
+        <div className="mathis-home-main">
+          <h3>Votre technicien Mathis</h3>
+          <p className="mathis-home-subtitle">Assistant technique — Location Photobooth 28</p>
+          <span className="mathis-available">● ASSISTANCE DISPONIBLE 24H/24</span>
+          <div className="mathis-home-welcome">Bonjour 👋 Je suis <b>votre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais vous accompagner <b>une question à la fois</b> afin d’identifier le problème et de trouver la solution la plus adaptée.</div>
+        </div>
+        <button className="mathis-start" onClick={()=>setOpen(true)}>💬 <span>Démarrer l’assistance avec Mathis</span> <b>›</b></button>
+        <div className="mathis-benefits"><span>◷<b>Disponible<br/>24H/24</b></span><span>⚙️<b>Diagnostic<br/>guidé</b></span><span>🛡️<b>Une solution<br/>adaptée</b></span></div>
+      </div>
+      <div className="mathis-direct-contact"><div><span className="mathis-phone-icon">☎</span><p><small>BESOIN D’UN CONTACT DIRECT ?</small><strong>{directPhone}</strong><em>Johan — Location Photobooth 28</em></p></div><a href={`tel:${telPhone}`}>📞 Appeler maintenant</a></div>
+    </div>:
     <div className="mathis-panel">
-      <div className="mathis-head"><img src="/mathis-assistant.png" alt="Mathis"/><div><span className="mathis-online">● DISPONIBLE À LA DEMANDE</span><h3>🤖 Votre technicien Mathis — Assistant technique</h3><p>Location Photobooth 28 · Assistance et dépannage</p></div><button onClick={()=>setOpen(false)} aria-label="Fermer">✕</button></div>
+      <div className="mathis-head"><img src="/mathis-technicien.png" alt="Mathis"/><div><span className="mathis-online">● ASSISTANCE DISPONIBLE 24H/24</span><h3>Votre technicien Mathis — Assistant technique</h3><p>Location Photobooth 28 · Assistance et dépannage</p></div><button onClick={()=>setOpen(false)} aria-label="Fermer">✕</button></div>
       <div className="mathis-chat">
         <div className="mathis-bubble mathis-bubble-bot">Bonjour 👋 Je suis <b>votre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais vous accompagner <b>une question à la fois</b> afin d’identifier le problème et de trouver la solution la plus adaptée.</div>
         {step==="booth"&&<><div className="mathis-bubble mathis-bubble-bot"><b>Quelle borne est impactée ?</b></div><div className="mathis-choice-grid mathis-booths">{Object.entries(MATHIS_BOOTHS).map(([id,b])=><button key={id} onClick={()=>chooseBooth(id)}><span>{b.icon}</span><b>{b.name}</b><small>{b.trigger}</small></button>)}</div></>}
@@ -3644,7 +3661,7 @@ function AssistanceCenter(){
   const quick=[["🚀","FotoShare Copilot",settings.copilotUrl],["🖥️","Chrome Remote Desktop",settings.remoteDesktopUrl],["⚙️","LumaBooth Dashboard",settings.lumaboothDashboardUrl],["☁️","Google Drive",settings.googleDriveUrl],["📅","Google Agenda",settings.googleCalendarUrl]];
   return <section className="assistance-center">
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div><h2>🆘 Assistance & pilotage</h2><p className="muted">Tes outils de contrôle et l'assistance que tu mets à disposition des organisateurs.</p></div></div>
-    <MathisAssistant videos={data.videos||[]} userRole="admin" supportPhone={settings.supportPhone||""}/>
+    <MathisAssistant videos={data.videos||[]} userRole="admin" supportPhone={settings.supportPhone||settings.phone||"07 56 83 21 85"}/>
     <div className="assistance-links">{quick.map(([i,l,h])=><a key={l} className="assist-link-card" href={h||"#"} target="_blank" rel="noreferrer"><span>{i}</span><strong>{l}</strong><small>Ouvrir ↗</small></a>)}</div>
 
     <div className="assist-video-admin">
@@ -4378,22 +4395,11 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       {visibleCount<galleryMedia.length&&<button className="memory-load-more" onClick={()=>setVisibleCount(v=>v+80)}>Afficher 80 photos de plus</button>}
     </section>
 
-    <section className="portal-section">
-      <h2>🆘 Besoin d'aide ?</h2>
-      {(data.assistanceVideos||[]).length>0
-        ? <div className="portal-videos">{data.assistanceVideos.map(v=><a key={v.id} href={v.url} target="_blank" rel="noreferrer">▶️ <span>{v.title}</span></a>)}</div>
-        : <p className="muted">Aucune vidéo d'assistance disponible.</p>}
-      <div className="portal-contact-actions">
-        {support.phone&&<a href={`tel:${support.phone.replace(/\s/g,"")}`}>📞 Appeler l'assistance</a>}
-        {support.whatsappUrl&&<a href={support.whatsappUrl} target="_blank" rel="noreferrer">💬 WhatsApp</a>}
-      </div>
-    </section>
-
     {support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}
 
     <section className="portal-section">
       <MathisAssistant
-        videos={[]}
+        videos={data.assistanceVideos||[]}
         eventContext={e}
         userRole={organizer?"organizer":"guest"}
         supportPhone={support.supportPhone||support.phone||""}
