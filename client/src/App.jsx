@@ -5757,7 +5757,7 @@ function AdminDocuments({events,onOpen}){
   );
 }
 
-function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
+function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false}) {
   if(!event) return null;
 
   const safeText = value => {
@@ -5924,7 +5924,7 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
                 <h3>💶 Tarification</h3>
                 <p>Total : <strong>{moneySafe(event.totalPrice)}</strong></p>
                 <p>Acompte : {moneySafe(event.deposit)}</p>
-                <p>Reste : <strong>{moneySafe(event.balance)}</strong></p>
+                <p>Reste : <strong>{event?.payments?.balancePaid ? "0,00 €" : moneySafe(event.balance)}</strong></p>
                 <p>Cadre : {frameLabel}</p>
               </div>
             : event.canSeeOperationalBalance
@@ -5953,14 +5953,14 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments}) {
 
         <div className="event-actions" style={{marginTop:18}}>
           <button type="button" onClick={onClose}>← Retour aux événements</button>
-          <button type="button" className="primary" onClick={()=>onEdit(event)}>✏️ Modifier</button>
-          <button
+          {(isAdmin||canEventAction("edit"))&&<button type="button" className="primary" onClick={()=>onEdit(event)}>✏️ Modifier</button>}
+          {(isAdmin||canEventAction("contract"))&&<button
             type="button"
             onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}
           >
             📄 Voir le contrat
-          </button>
-          <button type="button" onClick={()=>onDocuments(event)}>📁 Documents</button>
+          </button>}
+          {(isAdmin||canEventAction("documents"))&&<button type="button" onClick={()=>onDocuments(event)}>📁 Documents</button>}
         </div>
       </div>
     </div>
@@ -6272,6 +6272,7 @@ function Dashboard({onLogout,user}) {
         const operational=Number(event?.operationalBalance);
         return Number.isFinite(operational)?Math.max(operational,0):0;
       }
+      if(event?.payments?.balancePaid===true)return 0;
       const balance=Number(event?.balance);
       if(Number.isFinite(balance))return Math.max(balance,0);
       const total=Math.max(Number(event?.totalPrice||0),0);
@@ -6779,6 +6780,8 @@ function Dashboard({onLogout,user}) {
           setDocumentEvent(event);
           setViewEvent(null);
         }}
+        isAdmin={isAdmin}
+        canEventAction={canEventAction}
       />
     )}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}

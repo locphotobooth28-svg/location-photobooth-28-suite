@@ -2216,7 +2216,7 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
       organizerEmail: e.organizerEmail,
 totalPrice: currentUser?.role==="ADMIN" && e.totalPrice != null ? Number(e.totalPrice) : null,
 deposit: currentUser?.role==="ADMIN" && e.deposit != null ? Number(e.deposit) : null,
-balance: currentUser?.role==="ADMIN" && e.balance != null ? Number(e.balance) : null,
+balance: currentUser?.role==="ADMIN" ? (e.balancePaid ? 0 : (e.balance != null ? Number(e.balance) : null)) : null,
 operationalBalance: canSeeOperationalBalance ? eventOperationalRemaining(e) : null,
 canSeeOperationalBalance,
 customPrintCount: e.customPrintCount != null ? Number(e.customPrintCount) : "",
