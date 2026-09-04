@@ -3235,23 +3235,23 @@ const MATHIS_ISSUES=[
 
 const MATHIS_LED_CODES={
   dnp:[
-    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Remplacer le rouleau papier selon la procédure normale.",level:"orange",photos:true,prints:false},
-    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Remplacer le consommable selon la procédure normale.",level:"orange",photos:true,prints:false},
-    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Porte ouverte / papier absent",safe:"Contrôler la présence et la mise en place du papier puis fermer complètement le mécanisme.",level:"orange",photos:true,prints:false},
+    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Ne remplacez pas le papier. Les consommables sont gérés exclusivement par Johan : passez au niveau 2 pour contrôle à distance.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Ne remplacez pas le ruban. Les consommables sont gérés exclusivement par Johan : passez au niveau 2 pour contrôle à distance.",level:"orange",photos:true,prints:false},
+    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Porte ouverte / papier absent",safe:"Ne manipulez pas le papier. Johan contrôle les consommables et la situation au niveau 2.",level:"orange",photos:true,prints:false},
     {id:"door-open",label:"ERROR clignote seul",status:"Porte / mécanisme ouvert",safe:"Fermer complètement le mécanisme sans forcer.",level:"green",photos:true,prints:false},
-    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Contrôler uniquement le chargement accessible du papier. Ne pas forcer si le papier est coincé.",level:"orange",photos:true,prints:false},
-    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Contrôler uniquement la bonne mise en place du ruban. Ne pas toucher la tête thermique.",level:"orange",photos:true,prints:false},
+    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Ne manipulez pas le papier. Johan contrôle la situation au niveau 2.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Ne manipulez pas le ruban. Johan contrôle la situation au niveau 2.",level:"orange",photos:true,prints:false},
     {id:"media-size",label:"RIBBON et PAPER clignotent alternativement",status:"Taille média incompatible",safe:"Ne pas démonter. Vérifier le format d'impression envoyé et le média installé.",level:"green",photos:true,prints:false},
     {id:"system-error",label:"ERROR fixe seul",status:"Erreur système",safe:"Basculer l'interrupteur ON/Standby puis attendre le redémarrage. Si l'erreur revient : STOP niveau 2.",level:"red",photos:true,prints:false},
     {id:"cooldown",label:"POWER clignote seul",status:"Refroidissement de tête",safe:"Ne rien manipuler : attendre. Le retour à l'état normal est automatique.",level:"green",photos:true,prints:false}
   ],
   citizen:[
-    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Remplacer le papier et le ruban en ensemble, conformément au manuel Citizen.",level:"orange",photos:true,prints:false},
-    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Remplacer le papier et le ruban en ensemble, conformément au manuel Citizen.",level:"orange",photos:true,prints:false},
-    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Capot ouvert / pas de papier",safe:"Mettre correctement le papier puis fermer le capot avant.",level:"orange",photos:true,prints:false},
+    {id:"paper-end",label:"PAPER clignote",status:"Fin de papier",safe:"Ne remplacez ni le papier ni le ruban. Les consommables sont gérés exclusivement par Johan : passez au niveau 2 pour contrôle à distance.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-end",label:"RIBBON clignote",status:"Fin de ruban",safe:"Ne remplacez ni le papier ni le ruban. Les consommables sont gérés exclusivement par Johan : passez au niveau 2 pour contrôle à distance.",level:"orange",photos:true,prints:false},
+    {id:"door-no-paper",label:"PAPER + ERROR clignotent",status:"Capot ouvert / pas de papier",safe:"Ne manipulez pas le papier. Johan contrôle les consommables et la situation au niveau 2.",level:"orange",photos:true,prints:false},
     {id:"door-open",label:"ERROR clignote seul",status:"Capot avant ouvert",safe:"Fermer complètement le capot avant sans forcer.",level:"green",photos:true,prints:false},
-    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Libérer uniquement le papier accessible et le remettre correctement. Si résistance : STOP.",level:"orange",photos:true,prints:false},
-    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Remettre correctement le ruban sans toucher la tête thermique.",level:"orange",photos:true,prints:false},
+    {id:"paper-error",label:"PAPER + ERROR fixes",status:"Erreur papier",safe:"Ne manipulez pas le papier. Johan contrôle la situation au niveau 2.",level:"orange",photos:true,prints:false},
+    {id:"ribbon-error",label:"RIBBON + ERROR fixes",status:"Erreur ruban",safe:"Ne manipulez pas le ruban. Johan contrôle la situation au niveau 2.",level:"orange",photos:true,prints:false},
     {id:"system-error",label:"ERROR fixe seul",status:"Erreur système",safe:"Éteindre puis rallumer l'imprimante. Si l'erreur revient : STOP niveau 2.",level:"red",photos:true,prints:false},
     {id:"cooldown",label:"POWER clignote seul",status:"Refroidissement de tête",safe:"Ne rien manipuler : attendre le refroidissement automatique.",level:"green",photos:true,prints:false}
   ]
@@ -3271,6 +3271,10 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [reportOpen,setReportOpen]=useState(false);
   const [alertEnabled,setAlertEnabled]=useState(true);
   const [customAlertSound,setCustomAlertSound]=useState("");
+  const [savStatus,setSavStatus]=useState("diagnostic");
+  const [contactFirstName,setContactFirstName]=useState("");
+  const [contactPhone,setContactPhone]=useState("");
+  const [contactAvailable,setContactAvailable]=useState(false);
   const isEventUser=userRole==="organizer"||userRole==="guest"||userRole==="organisateur"||userRole==="invite";
   const eventName=eventContext?.name||eventContext?.title||eventContext?.eventName||"";
   const boothInfo=MATHIS_BOOTHS[booth];
@@ -3279,7 +3283,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
   function reset(){
     setBooth("");setIssue("");setPrinter("");setStep("booth");
-    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);
+    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);
   }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
@@ -3348,7 +3352,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     try{
       window.dispatchEvent(new CustomEvent("lp28:mathis-report",{detail:{
         type:"resolved",silent:true,
-        title:"Incident résolu par notre technicien Mathis",
+        title:"Incident résolu par votre technicien Mathis",
         eventName:eventName||"",booth:boothInfo?.name||"",printer:printerInfo?.name||"",
         incident:symptomLabel(),
         message:`${eventName?eventName+" · ":""}${boothInfo?.name||""} · ${printerInfo?.name||""} · ${symptomLabel()} · résolu`,
@@ -3368,10 +3372,11 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       `📸 Borne : ${boothInfo?.name||"—"}`,
       `🖨️ Imprimante : ${printerInfo?.name||"—"}`,
       `⚠️ Incident : ${symptomLabel()}`,
+      contactFirstName?`☎️ Interlocuteur sur place : ${contactFirstName} — ${contactPhone||"numéro non renseigné"}`:"",
       led?`💡 LED : ${led.label} → ${led.status}`:"",
       `📷 Prise de photos : ${led?.photos===false?"indisponible":"possible"}`,
       `🧾 Impression : ${printerAnswer==="solved"?"rétablie":"indisponible / à contrôler"}`,
-      `📍 État : ${printerAnswer==="failed"?"INTERVENTION NIVEAU 2 REQUISE":printerAnswer==="solved"?"Incident résolu":"Diagnostic en cours"}`,
+      `📍 État : ${savStatus==="level3"?"NIVEAU 3 — DÉPLACEMENT JOHAN":savStatus==="remote"?"NIVEAU 2 — PRISE EN MAIN À DISTANCE":printerAnswer==="failed"?"NIVEAU 2 — CONTRÔLE À DISTANCE REQUIS":printerAnswer==="solved"?"Incident résolu":"Diagnostic en cours"}`,
       `🕒 ${new Date().toLocaleString("fr-FR")}`
     ];
     return lines.filter(Boolean).join("\n");
@@ -3386,6 +3391,22 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     setPrinterAnswer("failed");setPrinterStage("result");
     if(isEventUser)playMathisAlert();
   }
+  function startRemoteSupport(){
+    if(!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable)return;
+    setSavStatus("remote");
+    try{window.dispatchEvent(new CustomEvent("lp28:mathis-sav-status",{detail:{status:"remote",eventName,booth:boothInfo?.name||"",printer:printerInfo?.name||"",incident:symptomLabel(),contactFirstName:contactFirstName.trim(),contactPhone:contactPhone.trim(),createdAt:new Date().toISOString()}}));}catch(e){}
+  }
+  function resolveRemoteSupport(){
+    setSavStatus("resolved");setPrinterAnswer("solved");
+    if(isEventUser)notifyResolvedSilently();
+  }
+  function decideLevel3(){
+    setSavStatus("level3");
+    if(isEventUser)playMathisAlert();
+    try{window.dispatchEvent(new CustomEvent("lp28:mathis-sav-status",{detail:{status:"level3",eventName,booth:boothInfo?.name||"",printer:printerInfo?.name||"",incident:symptomLabel(),contactFirstName:contactFirstName.trim(),contactPhone:contactPhone.trim(),createdAt:new Date().toISOString()}}));}catch(e){}
+  }
+  function closeLevel3(){setSavStatus("closed");setPrinterAnswer("solved");}
+
   function handleAlertSoundFile(e){
     const file=e.target.files?.[0];
     if(!file)return;
@@ -3398,11 +3419,12 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     const canPhotos=led?led.photos:true;
     const canPrint=printerAnswer==="solved";
     return <div className="mathis-report">
-      <div className="mathis-bubble mathis-bubble-bot"><b>📋 Compte rendu de notre technicien Mathis</b><br/>
+      <div className="mathis-bubble mathis-bubble-bot"><b>📋 Compte rendu de votre technicien Mathis</b><br/>
         {eventName&&<><b>Événement :</b> {eventName}<br/></>}
         <b>Borne :</b> {boothInfo?.name||"—"}<br/>
         <b>Imprimante :</b> {printerInfo?.name||"—"}<br/>
         <b>Incident :</b> {symptomLabel()}<br/>
+        {contactFirstName&&<><b>Interlocuteur sur place :</b> {contactFirstName} · {contactPhone}<br/></>}
         {led&&<><b>Lecture LED :</b> {led.label} → {led.status}<br/><b>Niveau :</b> {riskBadge(led.level)}<br/></>}
         <b>Prise de photos :</b> {canPhotos?"✅ possible":"🔴 indisponible"}<br/>
         <b>Impression :</b> {canPrint?"✅ rétablie":"🟠 à contrôler / indisponible"}<br/>
@@ -3424,7 +3446,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       <div className="mathis-actions"><button onClick={()=>{setLedCode("");setPrinterStage("symptom")}}>↩️ Aucun voyant ne clignote finalement</button></div>
     </>;
     return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>{riskBadge(led.level)} — {led.status}</b><br/><b>Voyants :</b> {led.label}<br/><b>Action autorisée :</b> {led.safe}<br/><br/>📸 <b>Les invités peuvent continuer à prendre leurs photos</b> tant que Nikon et LumaBooth fonctionnent. L'impression peut rester indisponible pendant le diagnostic.</div>
+      <div className="mathis-bubble mathis-bubble-bot"><b>{riskBadge(led.level)} — {led.status}</b><br/><b>Voyants :</b> {led.label}<br/><b>Action autorisée :</b> {led.safe}{(ledCode==="paper-end"||ledCode==="ribbon-end")&&<><br/><br/>🖨️ <b>Important :</b> le client ne remplace jamais le papier ni le ruban. Johan gère les consommables. Il est aussi possible que le forfait d’impressions de l’événement soit arrivé à son terme : Johan le vérifiera au niveau 2.</>}<br/><br/>📸 <b>Les invités peuvent continuer à prendre leurs photos</b> tant que Nikon et LumaBooth fonctionnent. L'impression peut rester indisponible pendant le diagnostic.</div>
       <div className="mathis-actions"><button onClick={printerSolved}>✅ Impression rétablie</button><button onClick={printerStillBroken}>❌ Toujours en panne</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>
     </>;
   }
@@ -3444,15 +3466,9 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       {commonButtons}
     </>;
 
-    if(printerSymptom==="paper") return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>Problème papier sur {printerInfo?.name}.</b><br/>{isDnp?"Sur la DS620, un voyant PAPER signale généralement qu'il faut contrôler le rouleau papier.":"Sur la Citizen, contrôle d'abord le rouleau papier et sa bonne mise en place."}<br/>Ouvre normalement le tiroir, vérifie qu'il reste du papier et qu'il est correctement chargé, puis referme complètement l'imprimante.</div>
-      {tornVideo&&<VideoHelp video={tornVideo} label="Voir la vidéo : papier déchiré"/>}
-      {commonButtons}
-    </>;
-
-    if(printerSymptom==="ribbon") return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>Problème ruban sur {printerInfo?.name}.</b><br/>Ouvre normalement l'imprimante, contrôle que le ruban n'est pas terminé, détendu ou mal positionné. Replace la cassette/le ruban sans forcer puis referme complètement.<br/><b>Ne touche pas la tête thermique et n'utilise aucun outil métallique.</b></div>
-      {commonButtons}
+    if(printerSymptom==="paper"||printerSymptom==="ribbon") return <>
+      <div className="mathis-bubble mathis-bubble-bot"><b>Consommable signalé sur {printerInfo?.name}.</b><br/>🛡️ <b>Ne remplacez ni le papier ni le ruban et n’ouvrez pas l’imprimante pour intervenir sur les consommables.</b><br/>Johan gère systématiquement les consommables et vérifiera également si le forfait d’impressions prévu pour l’événement est arrivé à son terme.<br/><br/>📸 Si Nikon et LumaBooth fonctionnent, continuez à prendre des photos normalement pendant que l’impression reste suspendue.</div>
+      <div className="mathis-actions"><button onClick={escalateLevel2}>🟠 Demander le contrôle de Johan</button><button onClick={printerBack}>↩️ Autre symptôme</button></div>
     </>;
 
     if(printerSymptom==="jam") return <>
@@ -3526,10 +3542,19 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     </>;
 
     if(printerStage==="result"&&printerAnswer==="failed") return <>
-      <div className="mathis-bubble mathis-bubble-bot"><b>🔴 Notre technicien Mathis passe votre demande au niveau 2.</b><br/>Le diagnostic a identifié : <b>{boothInfo?.name}</b> + <b>{printerInfo?.name}</b> + symptôme <b>{printerSymptom||"impression"}</b>.<br/>N'effectuez pas de démontage supplémentaire. 📸 Si Nikon et LumaBooth fonctionnent, les invités peuvent continuer à prendre leurs photos pendant que l'impression reste suspendue.</div>
+      <div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>Le diagnostic concerne <b>{boothInfo?.name}</b> · <b>{printerInfo?.name}</b> · <b>{symptomLabel()}</b>.<br/>Johan pourra prendre la main sur l’ordinateur de la borne pour poursuivre les vérifications. <b>Ne manipulez pas les consommables.</b><br/><br/>📸 Si la prise de photos fonctionne toujours, continuez à profiter de la borne normalement pendant que l’impression reste suspendue.</div>
+      {isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Pour que Johan puisse vous joindre pendant la téléassistance, indiquez les coordonnées de la personne qui est actuellement devant la borne. Il peut s’agir d’un invité : ces coordonnées concernent uniquement cet incident.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l’assistance.</label><button disabled={!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>💻 Demander la prise en charge à distance</button></div>}
+      {isEventUser&&savStatus==="remote"&&<div className="mathis-bubble mathis-bubble-bot"><b>💻 Johan a pris en compte votre demande.</b><br/>Il effectue maintenant les vérifications à distance. Gardez votre téléphone à proximité et restez près de la borne si possible.<br/><br/>📸 Si les photos fonctionnent, continuez à profiter de votre événement : nous nous occupons du reste.</div>}
+      {isEventUser&&savStatus==="level3"&&<div className="mathis-bubble mathis-bubble-bot"><b>🚗 Johan va intervenir sur place.</b><br/>Après son contrôle à distance, Johan a déterminé qu’une intervention physique est nécessaire. Le temps de la route, continuez à utiliser la prise de photos si elle reste disponible.<br/><br/>Nous sommes navrés de la gêne occasionnée. Ce type d’incident peut malheureusement arriver et nous faisons le nécessaire pour rétablir le service au plus vite.</div>}
+      {isEventUser&&savStatus==="closed"&&<div className="mathis-bubble mathis-bubble-bot"><b>✅ Intervention terminée.</b><br/>Johan a clôturé l’assistance. Merci pour votre patience et profitez pleinement de votre événement. 📸</div>}
       {isEventUser&&<IncidentReport/>}
-      {isEventUser&&<div className="mathis-sav-alert"><b>🚨 ALERTE SAV — {eventName||"Événement"}</b><span>Notre technicien Mathis demande une intervention.</span></div>}
-      <div className="mathis-actions">{isEventUser&&supportPhone&&<button onClick={openWhatsAppReport}>📱 Préparer le message WhatsApp SAV</button>}<button onClick={printerBack}>↩️ Reprendre le diagnostic</button><button onClick={reset}>🆕 Nouveau diagnostic</button></div>
+      {isEventUser&&<div className="mathis-sav-alert"><b>{savStatus==="level3"?"🔴 NIVEAU 3 — DÉPLACEMENT":"🟠 NIVEAU 2 — TÉLÉASSISTANCE"} — {eventName||"Événement"}</b><span>{contactFirstName?`${contactFirstName} · ${contactPhone}`:"Johan doit contrôler la situation à distance."}</span></div>}
+      <div className="mathis-actions">
+        {savStatus==="remote"&&<><button onClick={resolveRemoteSupport}>✅ Résolu à distance</button><button onClick={decideLevel3}>🚗 Je dois me déplacer</button></>}
+        {savStatus==="level3"&&<button onClick={closeLevel3}>✅ Intervention terminée</button>}
+        {isEventUser&&supportPhone&&<button onClick={openWhatsAppReport}>📱 Préparer le message WhatsApp SAV</button>}
+        <button onClick={printerBack}>↩️ Reprendre le diagnostic</button><button onClick={reset}>🆕 Nouveau diagnostic</button>
+      </div>
     </>;
 
     return null;
@@ -3549,11 +3574,11 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   }
 
   return <div className={`mathis-shell ${open?"open":""}`}>
-    {!open?<button className="mathis-launch" onClick={()=>setOpen(true)}><img src="/mathis-assistant.png" alt="Mathis"/><span><b>🤖 Notre technicien Mathis</b><small>Premier intervenant en cas de problème · Ouvrir l'assistant</small></span><strong>Ouvrir →</strong></button>:
+    {!open?<button className="mathis-launch" onClick={()=>setOpen(true)}><img src="/mathis-assistant.png" alt="Mathis"/><span><b>🤖 Votre technicien Mathis</b><small>Premier intervenant en cas de problème · Ouvrir l'assistant</small></span><strong>Ouvrir →</strong></button>:
     <div className="mathis-panel">
-      <div className="mathis-head"><img src="/mathis-assistant.png" alt="Mathis"/><div><span className="mathis-online">● DISPONIBLE À LA DEMANDE</span><h3>🤖 Notre technicien Mathis — Assistant technique</h3><p>Location Photobooth 28 · dépannage léger, sans surveillance permanente</p></div><button onClick={()=>setOpen(false)} aria-label="Fermer">✕</button></div>
+      <div className="mathis-head"><img src="/mathis-assistant.png" alt="Mathis"/><div><span className="mathis-online">● DISPONIBLE À LA DEMANDE</span><h3>🤖 Votre technicien Mathis — Assistant technique</h3><p>Location Photobooth 28 · Assistance et dépannage</p></div><button onClick={()=>setOpen(false)} aria-label="Fermer">✕</button></div>
       <div className="mathis-chat">
-        <div className="mathis-bubble mathis-bubble-bot">Bonjour 👋 Je suis <b>notre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais avancer avec toi <b>une question à la fois</b>, sans lancer de surveillance en arrière-plan.</div>
+        <div className="mathis-bubble mathis-bubble-bot">Bonjour 👋 Je suis <b>votre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais vous accompagner <b>une question à la fois</b> afin d’identifier le problème et de trouver la solution la plus adaptée.</div>
         {step==="booth"&&<><div className="mathis-bubble mathis-bubble-bot"><b>Quelle borne est impactée ?</b></div><div className="mathis-choice-grid mathis-booths">{Object.entries(MATHIS_BOOTHS).map(([id,b])=><button key={id} onClick={()=>chooseBooth(id)}><span>{b.icon}</span><b>{b.name}</b><small>{b.trigger}</small></button>)}</div></>}
         {step!=="booth"&&<div className="mathis-bubble mathis-bubble-user">{boothInfo?.icon} Borne <b>{boothInfo?.name}</b></div>}
         {step==="issue"&&<><div className="mathis-bubble mathis-bubble-bot">D'accord 👍 <b>Quel problème rencontres-tu sur {boothInfo?.name} ?</b></div><div className="mathis-choice-grid">{MATHIS_ISSUES.map(([id,icon,label,desc])=><button key={id} onClick={()=>chooseIssue(id)}><span>{icon}</span><b>{label}</b><small>{desc}</small></button>)}</div></>}

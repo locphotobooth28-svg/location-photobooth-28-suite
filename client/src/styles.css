@@ -544,3 +544,9 @@ html[data-lp28-theme="light"] .mathis-sav-alert{background:#fff1f0;color:#7a271a
 .mathis-led-first-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .mathis-led-first-actions button{min-height:58px;font-weight:800}
 @media(max-width:700px){.mathis-led-first-actions{grid-template-columns:1fr}}
+
+/* Mathis SAV N2/N3 — interlocuteur présent sur site */
+.mathis-contact-card{display:flex;flex-direction:column;gap:10px;margin:12px 0;padding:16px;border:1px solid rgba(185,150,47,.5);border-radius:14px;background:rgba(185,150,47,.08)}
+.mathis-contact-card p{margin:0;font-size:13px;line-height:1.45}.mathis-contact-card label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:700}.mathis-contact-card input[type="text"],.mathis-contact-card input[type="tel"],.mathis-contact-card label>input:not([type="checkbox"]){width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(127,127,127,.35);border-radius:9px;background:var(--panel,#171717);color:var(--text,#fff)}
+.mathis-contact-card .mathis-check{flex-direction:row;align-items:flex-start;font-weight:500}.mathis-contact-card .mathis-check input{margin-top:3px}.mathis-contact-card button{padding:11px 14px;border:0;border-radius:10px;font-weight:800;cursor:pointer}.mathis-contact-card button:disabled{opacity:.45;cursor:not-allowed}
+html[data-lp28-theme="light"] .mathis-contact-card{background:#fffdf7;color:#171717}html[data-lp28-theme="light"] .mathis-contact-card input:not([type="checkbox"]){background:#fff;color:#171717}
