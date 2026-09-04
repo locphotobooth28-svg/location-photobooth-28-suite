@@ -3550,9 +3550,9 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       {isEventUser&&<IncidentReport/>}
       {isEventUser&&<div className="mathis-sav-alert"><b>{savStatus==="level3"?"🔴 NIVEAU 3 — DÉPLACEMENT":"🟠 NIVEAU 2 — TÉLÉASSISTANCE"} — {eventName||"Événement"}</b><span>{contactFirstName?`${contactFirstName} · ${contactPhone}`:"Johan doit contrôler la situation à distance."}</span></div>}
       <div className="mathis-actions">
-        {savStatus==="remote"&&<><button onClick={resolveRemoteSupport}>✅ Résolu à distance</button><button onClick={decideLevel3}>🚗 Je dois me déplacer</button></>}
-        {savStatus==="level3"&&<button onClick={closeLevel3}>✅ Intervention terminée</button>}
-        {isEventUser&&supportPhone&&<button onClick={openWhatsAppReport}>📱 Préparer le message WhatsApp SAV</button>}
+        {!isEventUser&&savStatus==="remote"&&<><button onClick={resolveRemoteSupport}>✅ Résolu à distance</button><button onClick={decideLevel3}>🚗 Je dois me déplacer</button></>}
+        {!isEventUser&&savStatus==="level3"&&<button onClick={closeLevel3}>✅ Intervention terminée</button>}
+        {!isEventUser&&supportPhone&&savStatus!=="diagnostic"&&<button onClick={openWhatsAppReport}>📱 Préparer le message WhatsApp SAV</button>}
         <button onClick={printerBack}>↩️ Reprendre le diagnostic</button><button onClick={reset}>🆕 Nouveau diagnostic</button>
       </div>
     </>;
