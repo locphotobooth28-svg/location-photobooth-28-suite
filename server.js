@@ -278,6 +278,17 @@ async function userOnly(req,res,next){
   if(!req.session?.userId&&req.session?.admin===true)return next();
   return res.status(401).json({ok:false,message:"Non autorisé."});
 }
+function requireEventAction(action){return async(req,res,next)=>{
+  const u=await sessionUser(req);
+  if(u?.role==="ADMIN"){req.currentUser=u;return next();}
+  if(!req.session?.userId&&req.session?.admin===true)return next();
+  if(!u)return res.status(401).json({ok:false,message:"Non autorisé."});
+  const p=permissionsObject(u);
+  const defaults=u.role==="INTERVENANT"?["view","navigate","share","start","complete"]:u.role==="VIEWER"?["view"]:[];
+  const actions=Array.isArray(p.eventActions)?p.eventActions:defaults;
+  if(!actions.includes(action))return res.status(403).json({ok:false,message:"Cette action n'est pas autorisée pour votre compte."});
+  req.currentUser=u;return next();
+};}
 function moduleViewOnly(moduleId){
   return async(req,res,next)=>{
     const u=await sessionUser(req);
@@ -1281,10 +1292,12 @@ app.patch("/api/admin/users/:id/permissions",adminOnly,async(req,res)=>{
   if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});
   if(target.role==="ADMIN")return res.status(400).json({ok:false,message:"Les comptes administrateurs conservent l'accès complet."});
   const SAFE_MODULES=["dashboard","events","planning","materialPlanning","galleries","booths","collaborators"];
+  const SAFE_EVENT_ACTIONS=["view","navigate","share","start","complete","contract","documents","edit","archive","delete","google"];
   const allowed=Array.isArray(req.body?.allowedModules)?req.body.allowedModules.filter(x=>SAFE_MODULES.includes(x)):[];
+  const eventActions=Array.isArray(req.body?.eventActions)?req.body.eventActions.filter(x=>SAFE_EVENT_ACTIONS.includes(x)):[];
   if(!allowed.includes("dashboard"))allowed.unshift("dashboard");
   const p=permissionsObject(target);
-  const u=await prisma.user.update({where:{id:target.id},data:{permissions:{...p,allowedModules:allowed}}});
+  const u=await prisma.user.update({where:{id:target.id},data:{permissions:{...p,allowedModules:allowed,eventActions}}});
   res.json({ok:true,user:safeUser(u)});
 });
 app.patch("/api/admin/users/:id/access",adminOnly,async(req,res)=>{
@@ -2276,7 +2289,7 @@ googleDriveFolderId: e.googleDriveFolderId,
     })})
   });
 });
-app.patch("/api/events/:id/start", adminOnly, async (req,res)=>{
+app.patch("/api/events/:id/start", requireEventAction("start"), async (req,res)=>{
   try{
     const event = await prisma.event.findUnique({
       where:{id:req.params.id}
@@ -2331,7 +2344,7 @@ app.patch("/api/events/:id/start", adminOnly, async (req,res)=>{
   }
 });
 
-app.patch("/api/events/:id/complete", adminOnly, async (req,res)=>{
+app.patch("/api/events/:id/complete", requireEventAction("complete"), async (req,res)=>{
   try{
     const event = await prisma.event.findUnique({
       where:{id:req.params.id}
@@ -4028,6 +4041,10 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
 
     let organizerDocuments=null;
     let guestShare=null;
+    let prep=event.preparation;
+    if(typeof prep==="string"){try{prep=JSON.parse(prep)}catch{prep={}}}
+    const savedPortal=prep?.portalPermissions&&typeof prep.portalPermissions==="object"?prep.portalPermissions:{};
+    const portalPermissions={organizerContract:savedPortal.organizerContract!==false,organizerDocuments:savedPortal.organizerDocuments!==false,organizerShare:savedPortal.organizerShare!==false,organizerMathis:savedPortal.organizerMathis!==false,guestGallery:savedPortal.guestGallery!==false,guestMathis:savedPortal.guestMathis!==false};
 
     if(access.role==="ORGANIZER"){
 
@@ -4109,8 +4126,15 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
       };
     }
 
+    if(access.role==="ORGANIZER"&&organizerDocuments){
+      if(!portalPermissions.organizerContract)organizerDocuments.contract=null;
+      if(!portalPermissions.organizerDocuments){organizerDocuments.files=[];organizerDocuments.invoices=[];}
+      if(!portalPermissions.organizerShare)guestShare=null;
+    }
+
     res.json({
       ok:true,
+      portalPermissions,
 
       event:{
         name:event.name,

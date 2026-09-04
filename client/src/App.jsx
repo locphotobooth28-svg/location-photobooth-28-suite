@@ -224,7 +224,16 @@ function SettingsPage({user}){
     {id:"booths",label:"Mes bornes",icon:"🖥️"},
     {id:"collaborators",label:"Collaborateurs",icon:"👷"}
   ];
+  const EVENT_ACTIONS=[
+    {id:"view",label:"Voir l’événement",icon:"👁️"},{id:"navigate",label:"Se rendre à l’événement",icon:"🚗"},
+    {id:"share",label:"Partager",icon:"📱"},{id:"start",label:"Début événement",icon:"▶️"},
+    {id:"complete",label:"Prestation terminée",icon:"✅"},{id:"contract",label:"Voir le contrat",icon:"📄"},
+    {id:"documents",label:"Documents",icon:"📁"},{id:"edit",label:"Modifier",icon:"✏️"},
+    {id:"archive",label:"Archiver",icon:"📦"},{id:"delete",label:"Supprimer",icon:"🗑️"},{id:"google",label:"Sync Google",icon:"☁️"}
+  ];
+  const defaultActionsForRole=role=>role==="INTERVENANT"?["view","navigate","share","start","complete"]:role==="VIEWER"?["view"]:[];
   const [userModules,setUserModules]=useState({});
+  const [userEventActions,setUserEventActions]=useState({});
   async function load(){
     const requests=[
       fetch("/api/session").then(r=>r.json()),
@@ -237,15 +246,18 @@ function SettingsPage({user}){
     if(isAdmin){
       loadPushHistory();
       const us=all[2].users||[];setUsers(us);setCollaborators(all[3].collaborators||[]);
-      const map={};for(const u of us)map[u.id]=Array.isArray(u.permissions?.allowedModules)?u.permissions.allowedModules:(u.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
-      setUserModules(map);
+      const map={},actionMap={};for(const u of us){
+        map[u.id]=Array.isArray(u.permissions?.allowedModules)?u.permissions.allowedModules:(u.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
+        actionMap[u.id]=Array.isArray(u.permissions?.eventActions)?u.permissions.eventActions:defaultActionsForRole(u.role);
+      }
+      setUserModules(map);setUserEventActions(actionMap);
     }
   }
   useEffect(()=>{load()},[isAdmin]);
   async function createInvite(){
     if(!invite.firstName.trim()||!invite.lastName.trim())return alert("Le prénom et le nom sont obligatoires.");
     const defaultModules=invite.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:invite.role==="VIEWER"?["dashboard","planning"]:[];
-    const payload={...invite,permissions:invite.role==="ADMIN"?{}:{allowedModules:defaultModules}};
+    const payload={...invite,permissions:invite.role==="ADMIN"?{}:{allowedModules:defaultModules,eventActions:defaultActionsForRole(invite.role)}};
     const r=await fetch("/api/admin/invitations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)return alert(d.message);setInviteUrl(d.url);
   }
   function chooseCollaborator(id){const c=collaborators.find(x=>x.id===id);setInvite(v=>({...v,collaboratorId:id,firstName:c?.firstName||v.firstName,lastName:c?.lastName||v.lastName,email:c?.email||v.email,phone:c?.phone||v.phone}));}
@@ -260,11 +272,14 @@ function SettingsPage({user}){
   }
   async function savePermissions(u){
     const allowed=(userModules[u.id]||[]).filter(Boolean);
-    const r=await fetch(`/api/admin/users/${u.id}/permissions`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({allowedModules:allowed})});const d=await r.json().catch(()=>({}));
+    const r=await fetch(`/api/admin/users/${u.id}/permissions`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({allowedModules:allowed,eventActions:(userEventActions[u.id]||[])})});const d=await r.json().catch(()=>({}));
     if(!r.ok)return alert(d.message||"Impossible d'enregistrer les accès.");alert(`✅ Accès de ${u.displayName||u.name||u.username} enregistrés.`);await load();
   }
   function toggleModule(uid,id){
     setUserModules(v=>{const cur=new Set(v[uid]||[]);if(id==="dashboard"){cur.add(id);}else if(cur.has(id))cur.delete(id);else cur.add(id);return {...v,[uid]:[...cur]};});
+  }
+  function toggleEventAction(uid,id){
+    setUserEventActions(v=>{const cur=new Set(v[uid]||[]);if(cur.has(id))cur.delete(id);else cur.add(id);return {...v,[uid]:[...cur]};});
   }
   function statusLabel(u){return u.accountStatus==="REVOKED"?"⛔ Révoqué":u.accountStatus==="BLOCKED"?"🔒 Bloqué":"✅ Actif";}
   function dateFr(v){return v?new Date(v).toLocaleString("fr-FR"):"—";}
@@ -327,6 +342,8 @@ function SettingsPage({user}){
           {u.role!=="ADMIN"&&<>
             <div style={{marginTop:14,fontWeight:900}}>👁️ Modules autorisés</div>
             <div className="permission-grid">{SAFE_MODULES.map(m=><label key={m.id}><input type="checkbox" checked={(userModules[u.id]||[]).includes(m.id)} disabled={m.id==="dashboard"} onChange={()=>toggleModule(u.id,m.id)}/>{m.icon} {m.label}</label>)}</div>
+            <div style={{marginTop:16,fontWeight:900}}>🎛️ Actions autorisées dans Événements</div>
+            <div className="permission-grid">{EVENT_ACTIONS.map(a=><label key={a.id}><input type="checkbox" checked={(userEventActions[u.id]||[]).includes(a.id)} onChange={()=>toggleEventAction(u.id,a.id)}/>{a.icon} {a.label}</label>)}</div>
             <div className="muted" style={{marginTop:8}}>🔒 Toujours masqués pour les comptes non administrateurs : montants, règlements, « Don / prestation offerte », Inventaire admin, Documents/contrats, Google et réglages administrateur.</div>
             <div className="account-actions"><button className="primary" onClick={()=>savePermissions(u)}>💾 Enregistrer les accès</button>
               {u.accountStatus==="ACTIVE"&&<button className="warn-btn" onClick={()=>accessAction(u.id,"BLOCK")}>🔒 Bloquer</button>}
@@ -399,6 +416,11 @@ function EventForm({event,onClose,onSaved}) {
   const [googleCalendars,setGoogleCalendars]=useState([]);
 const [addressSuggestions,setAddressSuggestions]=useState([]);
 const [addressLoading,setAddressLoading]=useState(false);
+
+const [portalPermissions,setPortalPermissions]=useState(()=>{
+  const saved=event?.preparation?.portalPermissions||{};
+  return {organizerContract:saved.organizerContract!==false,organizerDocuments:saved.organizerDocuments!==false,organizerShare:saved.organizerShare!==false,organizerMathis:saved.organizerMathis!==false,guestGallery:saved.guestGallery!==false,guestMathis:saved.guestMathis!==false};
+});
 
 const [collaboratorPermissions,setCollaboratorPermissions]=useState(()=>{
   const saved=event?.preparation?.collaboratorPermissions||{};
@@ -693,7 +715,8 @@ if (
           ...form,
           preparation:{
             ...(form.preparation||{}),
-            collaboratorPermissions
+            collaboratorPermissions,
+            portalPermissions
           },
           materials:[...new Set(form.materials||[])]
         })
@@ -941,7 +964,7 @@ Johan — Location Photobooth 28`;
       <h3>Informations générales</h3>
       <div className="form-grid">
         <div><label>Nom de l'événement *</label><input value={form.name} onChange={e=>set("name",e.target.value)} required/></div>
-        <div><label>Type</label><select value={form.type} onChange={e=>set("type",e.target.value)}><option>Mariage</option><option>Anniversaire</option><option>Baptême</option><option>Entreprise</option><option>Association</option><option>Autre</option></select></div>
+        <div><label>Type</label><select value={form.type} onChange={e=>set("type",e.target.value)}><option>Mariage</option><option>Anniversaire</option><option>Baptême</option><option>Entreprise</option><option>Association</option><option>Administration</option><option>Autre</option></select></div>
         <div><label>Date *</label><input type="date" value={form.date} onChange={e=>set("date",e.target.value)} required/></div>
         <div><label>Heure d'installation</label><input type="time" value={form.time} onChange={e=>set("time",e.target.value)}/></div>
         <div><label>Date de reprise</label><input type="date" value={form.pickupDate||form.date||""} onChange={e=>set("pickupDate",e.target.value)}/></div>
@@ -1386,6 +1409,14 @@ Johan — Location Photobooth 28`;
         <div className="accordion-content"><div className="form-grid">
           <label className="switch-line"><input type="checkbox" checked={Boolean(form.portalEnabled)} onChange={e=>set("portalEnabled",e.target.checked)}/> Activer le portail</label>
           {form.portalEnabled && <>
+            <div className="wide" style={{padding:"12px",border:"1px solid rgba(214,185,79,.25)",borderRadius:12}}><strong>🔐 Visibilité des portails</strong><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:8,marginTop:10}}>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerContract} onChange={e=>setPortalPermissions(p=>({...p,organizerContract:e.target.checked}))}/> Organisateur : contrat</label>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerDocuments} onChange={e=>setPortalPermissions(p=>({...p,organizerDocuments:e.target.checked}))}/> Organisateur : documents / factures</label>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerShare} onChange={e=>setPortalPermissions(p=>({...p,organizerShare:e.target.checked}))}/> Organisateur : partage / QR invités</label>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerMathis} onChange={e=>setPortalPermissions(p=>({...p,organizerMathis:e.target.checked}))}/> Organisateur : assistance Mathis</label>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.guestGallery} onChange={e=>setPortalPermissions(p=>({...p,guestGallery:e.target.checked}))}/> Invité : galerie</label>
+              <label className="switch-line"><input type="checkbox" checked={portalPermissions.guestMathis} onChange={e=>setPortalPermissions(p=>({...p,guestMathis:e.target.checked}))}/> Invité : assistance Mathis</label>
+            </div></div>
             <label className="switch-line"><input type="checkbox" checked={Boolean(form.guestUploadEnabled)} onChange={e=>set("guestUploadEnabled",e.target.checked)}/> Autoriser les photos invités</label>
             <label className="switch-line"><input type="checkbox" checked={Boolean(form.guestVideoEnabled)} onChange={e=>set("guestVideoEnabled",e.target.checked)}/> Autoriser les vidéos invités</label>
             <label className="switch-line"><input type="checkbox" checked={form.guestUploadModerated!==false} onChange={e=>set("guestUploadModerated",e.target.checked)}/> Modération avant publication (optionnelle)</label>
@@ -3727,6 +3758,8 @@ function PortalPage({token}){
   },[token]);
 
   const organizer=data?.role==="ORGANIZER";
+  const portalPermissions=data?.portalPermissions||{};
+  const canPortalMathis=organizer?portalPermissions.organizerMathis!==false:portalPermissions.guestMathis!==false;
   const organizerDocuments=data?.documents||null;
 const contract=organizerDocuments?.contract||null;
 const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[];
@@ -4058,7 +4091,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
   {e.type ? ` • ${e.type}` : ""}
 </p>
 
-{organizer&&(
+{organizer&&(portalPermissions.organizerContract!==false||portalPermissions.organizerDocuments!==false)&&(
   <section className="portal-section">
 
     <h2>📄 Mes documents</h2>
@@ -4068,7 +4101,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       gap:14
     }}>
 
-      <div className="portal-document-card">
+      {portalPermissions.organizerContract!==false&&<div className="portal-document-card">
 
         <h3>📄 Contrat</h3>
 
@@ -4131,9 +4164,9 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
           </>
         )}
 
-      </div>
+      </div>}
 
-      <div className="portal-document-card">
+      {portalPermissions.organizerDocuments!==false&&<div className="portal-document-card">
 
         <h3>📁 Documents</h3>
 
@@ -4169,7 +4202,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
           </p>
         )}
 
-      </div>
+      </div>}
 
     </div>
 
@@ -4177,7 +4210,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 )}
     {organizer&&<div className="portal-role">🔐 Espace organisateur</div>}
 
-    {organizer&&guestShare&&(
+    {organizer&&portalPermissions.organizerShare!==false&&guestShare&&(
       <section className="portal-section">
         <h2>📱 QR Code invités</h2>
 
@@ -4309,7 +4342,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       </section>
     )}
 
-    <section className="portal-section">
+    {(organizer||portalPermissions.guestGallery!==false)&&<section className="portal-section">
       <div className="memories-heading">
         <div><h2>📸 LP28 Memories</h2><p className="muted">{galleryMedia.length} souvenir{galleryMedia.length>1?"s":""}</p></div>
         {organizer&&galleryMedia.length>0&&<button className="memory-select-toggle" onClick={()=>{setSelectMode(v=>!v);setSelected([])}}>{selectMode?"Annuler":"☑ Sélectionner"}</button>}
@@ -4409,18 +4442,18 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
       {!galleryMedia.length&&<p className="muted">Aucun souvenir ajouté pour le moment.</p>}
       {visibleCount<galleryMedia.length&&<button className="memory-load-more" onClick={()=>setVisibleCount(v=>v+80)}>Afficher 80 photos de plus</button>}
-    </section>
+    </section>}
 
     {support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}
 
-    <section className="portal-section">
+    {canPortalMathis&&<section className="portal-section">
       <MathisAssistant
         videos={data.assistanceVideos||[]}
         eventContext={e}
         userRole={organizer?"organizer":"guest"}
         supportPhone={support.supportPhone||support.phone||""}
       />
-    </section>
+    </section>}
 
     <footer>Location Photobooth 28</footer>
 
@@ -6052,6 +6085,9 @@ function Dashboard({onLogout,user}) {
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
   const isAdmin=user?.role==="ADMIN";
+  const defaultEventActions=user?.role==="INTERVENANT"?["view","navigate","share","start","complete"]:user?.role==="VIEWER"?["view"]:[];
+  const eventActions=Array.isArray(user?.permissions?.eventActions)?user.permissions.eventActions:defaultEventActions;
+  const canEventAction=id=>isAdmin||eventActions.includes(id);
 
   const NAV_DEFAULT=[
     {id:"dashboard",label:"Tableau de bord",icon:"🏠",locked:true},
@@ -6690,13 +6726,13 @@ function Dashboard({onLogout,user}) {
                 {event.googleDriveFolderId&&<span>☁️ Drive ✓</span>}
               </div>
               <div className="event-actions">
-                <button onClick={()=>setViewEvent(event)} style={{border:"1px solid #60a5fa",background:"rgba(30,64,175,.22)",color:"#bfdbfe",fontWeight:900}}>👁️ Voir l'événement</button>
-                {event.address&&<button onClick={()=>window.open(`https://waze.com/ul?q=${encodeURIComponent(event.address)}&navigate=yes&utm_source=lp28-suite`,`_blank`,`noopener,noreferrer`)} style={{border:"1px solid #38bdf8",background:"rgba(14,116,144,.20)",color:"#bae6fd",fontWeight:900}}>🚗 Se rendre à l’événement</button>}
-                <button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>
-                <button onClick={()=>setShareEvent(event)}>📱 Partager</button>
-                <button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>
-                <button onClick={()=>setDocumentEvent(event)}>📁 Documents</button>
-                {event.contractStatus==="SIGNED" ? (
+                {canEventAction("view")&&<button onClick={()=>setViewEvent(event)} style={{border:"1px solid #60a5fa",background:"rgba(30,64,175,.22)",color:"#bfdbfe",fontWeight:900}}>👁️ Voir l'événement</button>}
+                {canEventAction("navigate")&&event.address&&<button onClick={()=>window.open(`https://waze.com/ul?q=${encodeURIComponent(event.address)}&navigate=yes&utm_source=lp28-suite`,`_blank`,`noopener,noreferrer`)} style={{border:"1px solid #38bdf8",background:"rgba(14,116,144,.20)",color:"#bae6fd",fontWeight:900}}>🚗 Se rendre à l’événement</button>}
+                {canEventAction("google")&&<button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>}
+                {canEventAction("share")&&<button onClick={()=>setShareEvent(event)}>📱 Partager</button>}
+                {canEventAction("contract")&&<button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>}
+                {canEventAction("documents")&&<button onClick={()=>setDocumentEvent(event)}>📁 Documents</button>}
+                {(isAdmin||canEventAction("contract"))&&(event.contractStatus==="SIGNED" ? (
                   <button
                     className="danger-btn"
                     onClick={()=>cancelContractSignature(event)}
@@ -6713,12 +6749,12 @@ function Dashboard({onLogout,user}) {
                       catch{prompt("Copie ce lien et envoie-le au client :",d.signatureUrl)}
                     }catch(err){console.error(err);alert("Erreur lors de la création du lien de signature.")}
                   }}>✍️ Faire signer</button>
-                )}
-                {event.status!=="COMPLETED"&&event.status!=="IN_PROGRESS"&&<button onClick={()=>startEvent(event)} style={{border:"1px solid #f59e0b",background:"rgba(146,64,14,.28)",color:"#fdba74",fontWeight:900}}>▶️ Début événement</button>}
-                {event.status==="IN_PROGRESS"&&<button onClick={()=>completeEvent(event)} style={{border:"1px solid #22c55e",background:"rgba(22,101,52,.24)",color:"#86efac",fontWeight:900}}>✅ Prestation terminée</button>}
-                <button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button>
-                <button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button>
-                <button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>
+                ))}
+                {canEventAction("start")&&event.status!=="COMPLETED"&&event.status!=="IN_PROGRESS"&&<button onClick={()=>startEvent(event)} style={{border:"1px solid #f59e0b",background:"rgba(146,64,14,.28)",color:"#fdba74",fontWeight:900}}>▶️ Début événement</button>}
+                {canEventAction("complete")&&event.status==="IN_PROGRESS"&&<button onClick={()=>completeEvent(event)} style={{border:"1px solid #22c55e",background:"rgba(22,101,52,.24)",color:"#86efac",fontWeight:900}}>✅ Prestation terminée</button>}
+                {canEventAction("edit")&&<button onClick={()=>{setFormEvent(event);setShowForm(true)}}>✏️ Modifier</button>}
+                {canEventAction("archive")&&<button onClick={()=>archive(event)}>{event.archived?"♻️ Réactiver":"📦 Archiver"}</button>}
+                {canEventAction("delete")&&<button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>}
               </div>
             </div>
           </article>;})}
