@@ -3994,6 +3994,61 @@ function normalizeDriveDocument(file){
   };
 }
 
+
+// === Mathis SAV V3 — incidents persistants et synchronisés ===
+app.post("/api/guest/:token/mathis/incidents", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event || !access.event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
+    const firstName=String(req.body?.contactFirstName||"").trim();
+    const phone=String(req.body?.contactPhone||"").trim();
+    if(!firstName || !phone)return res.status(400).json({ok:false,message:"Prénom et téléphone obligatoires."});
+    const incident=await prisma.mathisIncident.create({data:{
+      eventId:access.event.id,portalRole:access.role,
+      booth:String(req.body?.booth||"").slice(0,120),printer:String(req.body?.printer||"").slice(0,120),
+      issue:String(req.body?.issue||"").slice(0,160),diagnostic:String(req.body?.diagnostic||"").slice(0,500),
+      led:String(req.body?.led||"").slice(0,180),contactFirstName:firstName.slice(0,80),contactPhone:phone.slice(0,40),
+      photosAvailable:req.body?.photosAvailable!==false,printsAvailable:req.body?.printsAvailable===true,status:"REQUESTED"
+    }});
+    await prisma.appNotification.create({data:{title:"🤖 Mathis — demande N2",message:`${access.event.name} · ${firstName} · ${phone} · ${incident.issue||"Assistance"}`,type:"WARNING",source:"MATHIS",audience:"ADMIN",eventId:access.event.id}}).catch(()=>{});
+    res.json({ok:true,incident});
+  }catch(err){console.error("Mathis create incident",err);res.status(500).json({ok:false,message:"Impossible de transmettre la demande."});}
+});
+app.get("/api/guest/:token/mathis/incidents/active", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event)return res.status(404).json({ok:false});
+    const incident=await prisma.mathisIncident.findFirst({where:{eventId:access.event.id,status:{in:["REQUESTED","REMOTE","LEVEL3"]}},orderBy:{createdAt:"desc"}});
+    res.json({ok:true,incident});
+  }catch(err){res.status(500).json({ok:false});}
+});
+app.get("/api/guest/:token/mathis/incidents/:id", async(req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event)return res.status(404).json({ok:false});
+    const incident=await prisma.mathisIncident.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+    if(!incident)return res.status(404).json({ok:false});
+    res.json({ok:true,incident});
+  }catch(err){res.status(500).json({ok:false});}
+});
+app.get("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
+  const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}}},orderBy:{createdAt:"desc"},take:100});
+  res.json({ok:true,incidents});
+});
+app.patch("/api/admin/mathis/incidents/:id/status", adminOnly, async(req,res)=>{
+  const allowed=["REMOTE","LEVEL3","RESOLVED","CLOSED"];
+  const status=String(req.body?.status||"").toUpperCase();
+  if(!allowed.includes(status))return res.status(400).json({ok:false,message:"Statut invalide."});
+  const now=new Date();
+  const data={status,adminNote:req.body?.adminNote==null?undefined:String(req.body.adminNote).slice(0,1000)};
+  if(status==="REMOTE")data.takenAt=now;
+  if(status==="LEVEL3")data.level3At=now;
+  if(status==="RESOLVED"||status==="CLOSED")data.resolvedAt=now;
+  const incident=await prisma.mathisIncident.update({where:{id:req.params.id},data});
+  res.json({ok:true,incident});
+});
+// === fin Mathis SAV V3 ===
+
 app.get("/api/guest/:token/portal", async (req,res)=>{
   try{
     await ensureV82Settings();

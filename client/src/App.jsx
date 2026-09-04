@@ -3304,7 +3304,7 @@ const MATHIS_LED_CODES={
   ]
 };
 
-function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPhone=""}){
+function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPhone="",portalToken=""}){
   const [open,setOpen]=useState(false);
   const [booth,setBooth]=useState("");
   const [issue,setIssue]=useState("");
@@ -3322,15 +3322,40 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [contactFirstName,setContactFirstName]=useState("");
   const [contactPhone,setContactPhone]=useState("");
   const [contactAvailable,setContactAvailable]=useState(false);
+  const [incidentId,setIncidentId]=useState("");
+  const [incidentSending,setIncidentSending]=useState(false);
   const isEventUser=userRole==="organizer"||userRole==="guest"||userRole==="organisateur"||userRole==="invite";
   const eventName=eventContext?.name||eventContext?.title||eventContext?.eventName||"";
   const boothInfo=MATHIS_BOOTHS[booth];
   const issueInfo=MATHIS_ISSUES.find(x=>x[0]===issue);
   const printerInfo=MATHIS_PRINTERS[printer];
 
+  useEffect(()=>{
+    if(!isEventUser||!portalToken)return;
+    let alive=true;
+    const sync=async()=>{
+      try{
+        const endpoint=incidentId?`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents/${encodeURIComponent(incidentId)}`:`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents/active`;
+        const r=await fetch(endpoint);
+        if(!r.ok)return;
+        const d=await r.json();
+        const i=d.incident;if(!alive||!i)return;
+        setIncidentId(i.id||"");
+        if(i.contactFirstName)setContactFirstName(i.contactFirstName);
+        if(i.contactPhone)setContactPhone(i.contactPhone);
+        if(i.status==="REQUESTED")setSavStatus("requested");
+        else if(i.status==="REMOTE")setSavStatus("remote");
+        else if(i.status==="LEVEL3")setSavStatus("level3");
+        else if(i.status==="RESOLVED"||i.status==="CLOSED")setSavStatus("closed");
+      }catch(e){}
+    };
+    sync();const timer=setInterval(sync,5000);
+    return()=>{alive=false;clearInterval(timer)};
+  },[isEventUser,portalToken,incidentId]);
+
   function reset(){
     setBooth("");setIssue("");setPrinter("");setStep("booth");
-    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);
+    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);setIncidentId("");
   }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
@@ -3438,10 +3463,23 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     setPrinterAnswer("failed");setPrinterStage("result");
     if(isEventUser)playMathisAlert();
   }
-  function startRemoteSupport(){
+  async function startRemoteSupport(){
     if(!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable)return;
+    if(isEventUser&&portalToken){
+      setIncidentSending(true);
+      try{
+        const led=ledInfo();
+        const r=await fetch(`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+          booth:boothInfo?.name||"",printer:printerInfo?.name||"",issue:symptomLabel(),diagnostic:led?.status||symptomLabel(),led:led?`${led.label} → ${led.status}`:"",contactFirstName:contactFirstName.trim(),contactPhone:contactPhone.trim(),photosAvailable:led?.photos!==false,printsAvailable:false
+        })});
+        const d=await r.json();
+        if(!r.ok)throw new Error(d.message||"Transmission impossible");
+        setIncidentId(d.incident?.id||"");setSavStatus("requested");
+      }catch(err){alert(err.message||"Impossible de transmettre la demande à Johan.");}
+      finally{setIncidentSending(false);}
+      return;
+    }
     setSavStatus("remote");
-    try{window.dispatchEvent(new CustomEvent("lp28:mathis-sav-status",{detail:{status:"remote",eventName,booth:boothInfo?.name||"",printer:printerInfo?.name||"",incident:symptomLabel(),contactFirstName:contactFirstName.trim(),contactPhone:contactPhone.trim(),createdAt:new Date().toISOString()}}));}catch(e){}
   }
   function resolveRemoteSupport(){
     setSavStatus("resolved");setPrinterAnswer("solved");
@@ -3487,6 +3525,8 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       ? {icon:"🚗",title:"Johan se déplace",text:"Après les vérifications à distance, Johan doit intervenir sur place. Gardez votre téléphone à proximité et restez près de la borne si possible."}
       : savStatus==="remote"
       ? {icon:"💻",title:"Téléassistance en cours",text:"Johan a pris en compte votre demande et effectue actuellement les vérifications à distance."}
+      : savStatus==="requested"
+      ? {icon:"📨",title:"Demande transmise à Johan",text:"Votre demande a bien été transmise. Johan va la prendre en charge à distance. Gardez votre téléphone à proximité."}
       : {icon:"🟠",title:"Demande de téléassistance",text:"Votre technicien Mathis a terminé son diagnostic. Renseignez l’interlocuteur présent près de la borne afin que Johan puisse prendre le relais."};
     return <div className={`mathis-client-status status-${savStatus}`}>
       <div className="mathis-client-status-head"><span>{status.icon}</span><div><small>STATUT DE VOTRE PRISE EN CHARGE</small><b>{status.title}</b></div></div>
@@ -3605,7 +3645,8 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
     if(printerStage==="result"&&printerAnswer==="failed") return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>Le diagnostic concerne <b>{boothInfo?.name}</b> · <b>{printerInfo?.name}</b> · <b>{symptomLabel()}</b>.<br/>Johan pourra prendre la main sur l’ordinateur de la borne pour poursuivre les vérifications. <b>Ne manipulez pas les consommables.</b><br/><br/>📸 Si la prise de photos fonctionne toujours, continuez à profiter de la borne normalement pendant que l’impression reste suspendue.</div>
-      {isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Pour que Johan puisse vous joindre pendant la téléassistance, indiquez les coordonnées de la personne qui est actuellement devant la borne. Il peut s’agir d’un invité : ces coordonnées concernent uniquement cet incident.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l’assistance.</label><button disabled={!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>💻 Demander la prise en charge à distance</button></div>}
+      {isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Pour que Johan puisse vous joindre pendant la téléassistance, indiquez les coordonnées de la personne qui est actuellement devant la borne. Il peut s’agir d’un invité : ces coordonnées concernent uniquement cet incident.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l’assistance.</label><button disabled={incidentSending||!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>{incidentSending?"⏳ Transmission…":"📨 Transmettre la demande à Johan"}</button></div>}
+      {isEventUser&&savStatus==="requested"&&<div className="mathis-bubble mathis-bubble-bot"><b>📨 Votre demande a bien été transmise à Johan.</b><br/>Il va prendre connaissance du diagnostic de Mathis et décider de la prise en charge à distance. Vous n’avez rien d’autre à faire pour le moment.</div>}
       {isEventUser&&savStatus==="remote"&&<div className="mathis-bubble mathis-bubble-bot"><b>💻 Johan a pris en compte votre demande.</b><br/>Il effectue maintenant les vérifications à distance. Gardez votre téléphone à proximité et restez près de la borne si possible.<br/><br/>📸 Si les photos fonctionnent, continuez à profiter de votre événement : nous nous occupons du reste.</div>}
       {isEventUser&&savStatus==="level3"&&<div className="mathis-bubble mathis-bubble-bot"><b>🚗 Johan va intervenir sur place.</b><br/>Après son contrôle à distance, Johan a déterminé qu’une intervention physique est nécessaire. Le temps de la route, continuez à utiliser la prise de photos si elle reste disponible.<br/><br/>Nous sommes navrés de la gêne occasionnée. Ce type d’incident peut malheureusement arriver et nous faisons le nécessaire pour rétablir le service au plus vite.</div>}
       {isEventUser&&savStatus==="closed"&&<div className="mathis-bubble mathis-bubble-bot"><b>✅ Intervention terminée.</b><br/>Johan a clôturé l’assistance. Merci pour votre patience et profitez pleinement de votre événement. 📸</div>}
@@ -3672,6 +3713,37 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   </div>;
 }
 
+function MathisSavAdmin({remoteDesktopUrl=""}){
+  const [incidents,setIncidents]=useState([]),[loading,setLoading]=useState(true);
+  async function load(){try{const r=await fetch("/api/admin/mathis/incidents");if(r.ok){const d=await r.json();setIncidents(d.incidents||[])}}finally{setLoading(false)}}
+  useEffect(()=>{load();const t=setInterval(load,5000);return()=>clearInterval(t)},[]);
+  async function setStatus(id,status){
+    const r=await fetch(`/api/admin/mathis/incidents/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+    if(!r.ok){const d=await r.json().catch(()=>({}));return alert(d.message||"Impossible de mettre à jour l'assistance.")}
+    load();
+  }
+  const active=incidents.filter(i=>!["RESOLVED","CLOSED"].includes(i.status));
+  const history=incidents.filter(i=>["RESOLVED","CLOSED"].includes(i.status)).slice(0,12);
+  const label=s=>({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 Déplacement",RESOLVED:"✅ Résolu",CLOSED:"✅ Terminé"}[s]||s);
+  const Card=({i})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()}`}>
+    <div className="mathis-sav-admin-top"><div><small>{label(i.status)}</small><h4>{i.event?.name||"Événement"}</h4></div><time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time></div>
+    <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>
+    <div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>
+    <div className="mathis-actions">
+      {i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>💻 Prendre en charge à distance</button>}
+      {i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Je dois me déplacer</button></>}
+      {i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}
+      {i.status==="REQUESTED"&&remoteDesktopUrl&&<a className="mathis-admin-link" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir prise en main</a>}
+      {i.status==="REMOTE"&&remoteDesktopUrl&&<a className="mathis-admin-link" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Prise en main distante</a>}
+    </div>
+  </article>;
+  return <section className="mathis-sav-admin">
+    <div className="mathis-sav-admin-title"><div><div className="eyebrow">SAV MATHIS</div><h3>🛠️ Prises en charge en direct</h3><p className="muted">Les demandes N2 des organisateurs et invités apparaissent ici automatiquement.</p></div><button className="secondary-btn" onClick={load}>↻ Actualiser</button></div>
+    {loading?<p className="muted">Chargement…</p>:active.length?<div className="mathis-sav-admin-list">{active.map(i=><Card key={i.id} i={i}/>)}</div>:<div className="mathis-sav-empty">✅ Aucune assistance en attente.</div>}
+    {!!history.length&&<details className="mathis-sav-history"><summary>📚 Dernières assistances terminées ({history.length})</summary><div className="mathis-sav-admin-list">{history.map(i=><Card key={i.id} i={i}/>)}</div></details>}
+  </section>;
+}
+
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");
   const [settings,setSettings]=useState({});
@@ -3725,6 +3797,7 @@ function AssistanceCenter(){
   return <section className="assistance-center">
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div><h2>🆘 Assistance & pilotage</h2><p className="muted">Tes outils de contrôle et l'assistance que tu mets à disposition des organisateurs.</p></div></div>
     <MathisAssistant videos={data.videos||[]} userRole="admin" supportPhone={settings.supportPhone||settings.phone||"07 56 83 21 85"}/>
+    <MathisSavAdmin remoteDesktopUrl={settings.remoteDesktopUrl||""}/>
     <div className="assistance-links">{quick.map(([i,l,h])=><a key={l} className="assist-link-card" href={h||"#"} target="_blank" rel="noreferrer"><span>{i}</span><strong>{l}</strong><small>Ouvrir ↗</small></a>)}</div>
 
     <div className="assist-video-admin">
@@ -4468,6 +4541,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
         eventContext={e}
         userRole={organizer?"organizer":"guest"}
         supportPhone={support.supportPhone||support.phone||""}
+        portalToken={token}
       />
     </section>}
 

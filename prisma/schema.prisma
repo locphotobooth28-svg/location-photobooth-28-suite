@@ -141,6 +141,8 @@ model Event {
   organizerToken String? @unique
   guestToken     String? @unique
 
+  mathisIncidents MathisIncident[]
+
   // Signature électronique du contrat
   contractToken         String?   @unique
   contractStatus        String    @default("NOT_SENT")
@@ -434,6 +436,35 @@ model CollaboratorAction {
   @@index([eventId])
   @@index([collaboratorId])
   @@index([eventId, action])
+}
+
+
+model MathisIncident {
+  id               String   @id @default(uuid())
+  eventId          String
+  portalRole       String
+  booth            String?
+  printer          String?
+  issue            String?
+  diagnostic       String?
+  led              String?
+  contactFirstName String
+  contactPhone     String
+  photosAvailable  Boolean  @default(true)
+  printsAvailable  Boolean  @default(false)
+  status           String   @default("REQUESTED")
+  adminNote        String?
+  createdAt        DateTime @default(now())
+  takenAt          DateTime?
+  level3At         DateTime?
+  resolvedAt       DateTime?
+  updatedAt        DateTime @updatedAt
+
+  event Event @relation(fields:[eventId], references:[id], onDelete:Cascade)
+
+  @@index([eventId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model AppNotification {
