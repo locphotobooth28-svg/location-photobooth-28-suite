@@ -1317,6 +1317,20 @@ app.patch("/api/admin/users/:id/access",adminOnly,async(req,res)=>{
   res.json({ok:true,user:safeUser(u)});
 });
 app.post("/api/admin/users/:id/reset-password",adminOnly,async(req,res)=>{const raw=randomToken();const expiresAt=new Date(Date.now()+10*60*1000);const target=await prisma.user.findUnique({where:{id:req.params.id}});if(!target)return res.status(404).json({ok:false,message:"Compte introuvable."});const inv=await prisma.userInvitation.create({data:{tokenHash:sha256(raw),name:target.name,firstName:target.firstName,lastName:target.lastName,email:target.email,phone:target.phone,collaboratorId:target.collaboratorId,role:target.role,permissions:target.permissions||{},targetUserId:target.id,expiresAt,createdById:req.session.userId}});res.json({ok:true,url:`${appBaseUrl(req)}/inscription/${raw}`,expiresAt:inv.expiresAt,reset:true});});
+app.post("/api/account/change-password",userOnly,async(req,res)=>{
+  try{
+    const user=await prisma.user.findUnique({where:{id:req.session.userId}});
+    if(!user)return res.status(401).json({ok:false,message:"Session expirée."});
+    const current=String(req.body?.currentPassword||""), next=String(req.body?.newPassword||"");
+    if(!verifyPassword(current,user.passwordHash))return res.status(400).json({ok:false,message:"Le mot de passe actuel est incorrect."});
+    if(next.length<8||!/[A-ZÀ-ÖØ-Ý]/.test(next)||!/[0-9]/.test(next)||!/[^A-Za-z0-9À-ÖØ-öø-ÿ]/.test(next))return res.status(400).json({ok:false,message:"Le nouveau mot de passe doit contenir au moins 8 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial."});
+    if(verifyPassword(next,user.passwordHash))return res.status(400).json({ok:false,message:"Choisis un mot de passe différent de l’actuel."});
+    await prisma.user.update({where:{id:user.id},data:{passwordHash:hashPassword(next)}});
+    await prisma.trustedDevice.deleteMany({where:{userId:user.id}});
+    res.clearCookie(TRUST_COOKIE,{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production"});
+    res.json({ok:true,message:"Mot de passe modifié."});
+  }catch(err){console.error("CHANGE PASSWORD ERROR",err);res.status(500).json({ok:false,message:"Impossible de modifier le mot de passe."});}
+});
 app.post("/api/account/2fa/setup",userOnly,async(req,res)=>{const user=await prisma.user.findUnique({where:{id:req.session.userId}});if(!user)return res.status(401).json({ok:false});const secret=base32Encode(crypto.randomBytes(20));req.session.pendingTotpSecret=secret;const label=encodeURIComponent(`LP28 Suite:${user.username||user.email||user.name}`);const issuer=encodeURIComponent("LP28 Suite");const uri=`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;const qrDataUrl=await QRCode.toDataURL(uri);req.session.save(()=>res.json({ok:true,secret,qrDataUrl}));});
 app.post("/api/account/2fa/enable",userOnly,async(req,res)=>{const secret=req.session.pendingTotpSecret;if(!secret||!verifyTotp(secret,req.body?.code))return res.status(400).json({ok:false,message:"Code Authenticator incorrect."});const codes=Array.from({length:8},()=>`${crypto.randomBytes(4).toString("hex").slice(0,4)}-${crypto.randomBytes(4).toString("hex").slice(0,4)}`.toUpperCase());await prisma.user.update({where:{id:req.session.userId},data:{totpEnabled:true,totpSecret:secret,recoveryCodes:codes.map(sha256)}});delete req.session.pendingTotpSecret;req.session.save(()=>res.json({ok:true,recoveryCodes:codes}));});
 app.get("/api/account/trusted-devices",userOnly,async(req,res)=>{

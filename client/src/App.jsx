@@ -234,6 +234,8 @@ function SettingsPage({user}){
   const defaultActionsForRole=role=>role==="INTERVENANT"?["view","navigate","share","start","complete"]:role==="VIEWER"?["view"]:[];
   const [userModules,setUserModules]=useState({});
   const [userEventActions,setUserEventActions]=useState({});
+  const [passwordForm,setPasswordForm]=useState({current:"",next:"",confirm:""});
+  const [passwordBusy,setPasswordBusy]=useState(false);
   async function load(){
     const requests=[
       fetch("/api/session").then(r=>r.json()),
@@ -281,6 +283,13 @@ function SettingsPage({user}){
   function toggleEventAction(uid,id){
     setUserEventActions(v=>{const cur=new Set(v[uid]||[]);if(cur.has(id))cur.delete(id);else cur.add(id);return {...v,[uid]:[...cur]};});
   }
+  async function changeMyPassword(){
+    if(passwordForm.next!==passwordForm.confirm)return alert("Les deux nouveaux mots de passe sont différents.");
+    if(passwordForm.next.length<8||!/[A-ZÀ-ÖØ-Ý]/.test(passwordForm.next)||!/[0-9]/.test(passwordForm.next)||!/[^A-Za-z0-9À-ÖØ-öø-ÿ]/.test(passwordForm.next))return alert("Le nouveau mot de passe doit contenir au moins 8 caractères, 1 majuscule, 1 chiffre et 1 caractère spécial.");
+    setPasswordBusy(true);
+    try{const r=await fetch("/api/account/change-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({currentPassword:passwordForm.current,newPassword:passwordForm.next})});const d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.message||"Impossible de modifier le mot de passe.");setPasswordForm({current:"",next:"",confirm:""});alert("✅ Mot de passe administrateur modifié.");}
+    finally{setPasswordBusy(false);}
+  }
   function statusLabel(u){return u.accountStatus==="REVOKED"?"⛔ Révoqué":u.accountStatus==="BLOCKED"?"🔒 Bloqué":"✅ Actif";}
   function dateFr(v){return v?new Date(v).toLocaleString("fr-FR"):"—";}
   function previewAppearance(next){const p=normalizeAppearance(next);setAppearance(p);setAppearancePreview(applyAppearance(p));}
@@ -301,7 +310,12 @@ function SettingsPage({user}){
       .settings-tabs{display:flex;overflow-x:auto;margin:0 0 16px;border-bottom:1px solid rgba(214,185,79,.28)}
       .settings-tabs button{min-width:170px;padding:13px 18px;border:1px solid rgba(255,255,255,.09);border-bottom:0;border-radius:0;background:#151518;color:#ddd;font-weight:800;white-space:nowrap}
       .settings-tabs button.active{color:#f1d45b;background:rgba(214,185,79,.10);box-shadow:inset 0 -3px 0 #d6b94f}
-      .account-admin-card{padding:16px;margin-top:10px;border:1px solid rgba(214,185,79,.22);border-radius:14px;background:rgba(255,255,255,.02)}
+      .accounts-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:14px;align-items:start}
+      .account-admin-card{padding:18px;margin:0;border:1px solid rgba(214,185,79,.22);border-radius:14px;background:rgba(255,255,255,.02);min-width:0}
+      .account-admin-card.account-admin-owner{grid-column:1/-1}
+      .account-admin-owner .account-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .account-admin-owner-note{margin-top:12px;padding:12px 14px;border-radius:11px;border:1px solid rgba(214,185,79,.2);background:rgba(214,185,79,.06);font-weight:800}
+      .password-change-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.password-change-grid label{display:block;font-weight:800}.password-change-grid input{margin-top:6px;width:100%}
       .account-admin-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
       .account-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:7px 16px;margin-top:12px}
       .permission-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:12px}
@@ -320,7 +334,8 @@ function SettingsPage({user}){
       .trusted-table-wrap{width:100%;overflow-x:auto}.trusted-table{width:100%;border-collapse:collapse;min-width:650px}
       .trusted-table th,.trusted-table td{text-align:left;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.09)}
       .trusted-table th{color:#d6b94f}.trusted-table td:last-child,.trusted-table th:last-child{text-align:right}
-      @media(max-width:700px){.settings-tabs button{min-width:150px}.account-admin-card{padding:12px}}
+      @media(max-width:1050px){.accounts-admin-grid{grid-template-columns:1fr}.account-admin-card.account-admin-owner{grid-column:auto}.password-change-grid{grid-template-columns:1fr}}
+      @media(max-width:700px){.settings-tabs button{min-width:150px}.account-admin-card{padding:12px}.permission-grid{grid-template-columns:1fr}.account-meta,.account-admin-owner .account-meta{grid-template-columns:1fr}.account-actions button{width:100%}}
     `}</style>
     <div className="calendar-toolbar"><div><div className="eyebrow">{isAdmin?"ADMINISTRATION LP28":"MON COMPTE LP28"}</div><h2>⚙️ Paramètres</h2><p className="muted">{isAdmin?"Comptes utilisateurs, sécurité et droits d'accès.":"Sécurité et appareils de ton compte."}</p></div></div>
 
@@ -336,9 +351,10 @@ function SettingsPage({user}){
       <div className="panel" style={{marginBottom:16}}>
         <h2>👥 Comptes utilisateurs</h2>
         <p className="muted">Tu choisis précisément les modules visibles pour chaque compte. Les montants, paiements, dons et prestations offertes restent réservés à l'administrateur, quel que soit le compte.</p>
-        {users.map(u=><div key={u.id} className="account-admin-card">
+        <div className="accounts-admin-grid">{users.map(u=><div key={u.id} className={`account-admin-card ${u.role==="ADMIN"?"account-admin-owner":""}`}>
           <div className="account-admin-head"><div><strong style={{fontSize:"1.08rem"}}>{u.displayName||u.name||u.username||u.email}</strong> · {u.role}<div className="muted">{u.username||"—"} · {u.email||"—"} · {u.phone||"—"}</div></div><strong>{statusLabel(u)}</strong></div>
           <div className="account-meta"><span>📅 Inscription : <strong>{dateFr(u.createdAt)}</strong></span><span>🕒 Dernière connexion : <strong>{dateFr(u.lastLoginAt)}</strong></span><span>🔐 2FA : <strong>{u.totpEnabled?"Activée":"Non activée"}</strong></span></div>
+          {u.role==="ADMIN"&&<div className="account-admin-owner-note">👑 Administrateur principal — accès complet à LP28 et gestion exclusive des droits sensibles.</div>}
           {u.role!=="ADMIN"&&<>
             <div style={{marginTop:14,fontWeight:900}}>👁️ Modules autorisés</div>
             <div className="permission-grid">{SAFE_MODULES.map(m=><label key={m.id}><input type="checkbox" checked={(userModules[u.id]||[]).includes(m.id)} disabled={m.id==="dashboard"} onChange={()=>toggleModule(u.id,m.id)}/>{m.icon} {m.label}</label>)}</div>
@@ -352,12 +368,12 @@ function SettingsPage({user}){
               {u.accountStatus==="REVOKED"&&<button onClick={()=>accessAction(u.id,"RESTORE")}>♻️ Réactiver</button>}
             </div>
           </>}
-        </div>)}
+        </div>)}</div>
       </div>
       <div className="panel" style={{marginBottom:16}}><h2>📲 Inviter une personne</h2><p className="muted">Prénom et nom obligatoires. Le lien est personnel, à usage unique et expire après 10 minutes.</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}><input placeholder="Prénom *" value={invite.firstName} onChange={e=>setInvite({...invite,firstName:e.target.value})} required/><input placeholder="Nom *" value={invite.lastName} onChange={e=>setInvite({...invite,lastName:e.target.value})} required/><input placeholder="E-mail" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})}/><input placeholder="Téléphone" value={invite.phone} onChange={e=>setInvite({...invite,phone:e.target.value})}/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value,collaboratorId:e.target.value==="INTERVENANT"?invite.collaboratorId:""})}><option value="VIEWER">Consultation</option><option value="INTERVENANT">Intervenant</option><option value="ADMIN">Administrateur</option></select>{invite.role==="INTERVENANT"&&<select value={invite.collaboratorId} onChange={e=>chooseCollaborator(e.target.value)}><option value="">Créer automatiquement l'intervenant</option>{collaborators.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.firstName} {c.lastName||""}</option>)}</select>}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><button className="primary" onClick={createInvite}>🔗 Générer le lien 10 min</button>{inviteUrl&&<button onClick={whatsapp}>📲 Envoyer par WhatsApp</button>}</div>{inviteUrl&&<div className="card" style={{marginTop:10,wordBreak:"break-all"}}>{inviteUrl}</div>}</div>
     </>}
 
-    {settingsTab==="security"&&<div className="panel"><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div>}
+    {settingsTab==="security"&&<><div className="panel" style={{marginBottom:16}}><h2>🔑 Modifier mon mot de passe</h2><p className="muted">Le mot de passe actuel n’est jamais affiché. Après modification, utilise le nouveau mot de passe à ta prochaine connexion.</p><div className="password-change-grid"><label>Mot de passe actuel<input type="password" autoComplete="current-password" value={passwordForm.current} onChange={e=>setPasswordForm(p=>({...p,current:e.target.value}))}/></label><label>Nouveau mot de passe<input type="password" autoComplete="new-password" value={passwordForm.next} onChange={e=>setPasswordForm(p=>({...p,next:e.target.value}))}/></label><label>Confirmer le nouveau<input type="password" autoComplete="new-password" value={passwordForm.confirm} onChange={e=>setPasswordForm(p=>({...p,confirm:e.target.value}))}/></label></div><div className="account-actions"><button className="primary" disabled={passwordBusy||!passwordForm.current||!passwordForm.next||!passwordForm.confirm} onClick={changeMyPassword}>{passwordBusy?"Modification…":"🔐 Modifier mon mot de passe"}</button></div></div><div className="panel"><h2>🔐 Authentification à deux facteurs</h2><p>{session?.user?.totpEnabled?"✅ 2FA activée sur ton compte.":"La 2FA n'est pas encore activée sur ton compte."}</p>{!session?.user?.totpEnabled&&!qr&&<button className="primary" onClick={setup2fa}>🔐 Activer avec Google Authenticator</button>}{qr&&<div style={{marginTop:12}}><p>1. Ouvre Google Authenticator → + → Scanner un QR code.</p><img src={qr.qrDataUrl} alt="QR code 2FA" style={{width:220,maxWidth:"100%",background:"white",padding:8,borderRadius:12}}/><p className="muted">Clé manuelle : {qr.secret}</p><p>2. Saisis le code à 6 chiffres :</p><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><input value={totpCode} onChange={e=>setTotpCode(e.target.value)} inputMode="numeric" placeholder="123456" style={{maxWidth:180}}/><button className="primary" onClick={enable2fa}>Valider la 2FA</button></div></div>}{codes.length>0&&<div className="alert" style={{marginTop:12}}><strong>⚠️ Codes de récupération — conserve-les hors de LP28 :</strong><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:6,marginTop:8}}>{codes.map(c=><code key={c}>{c}</code>)}</div></div>}</div></>}
 
     {settingsTab==="devices"&&<div className="panel"><h2>💻 Appareils de confiance</h2><p className="muted">Chaque appareil peut être révoqué séparément.</p>{devices.length===0&&<p className="muted">Aucun appareil de confiance actif.</p>}{Object.entries(devices.reduce((groups,d)=>{const owner=d.ownerName||"Compte LP28";(groups[owner]||(groups[owner]=[])).push(d);return groups;},{})).map(([owner,ownerDevices])=><div key={owner} className="trusted-owner-block"><h3>👤 {owner}</h3><div className="trusted-table-wrap"><table className="trusted-table"><thead><tr><th>Appareil</th><th>Dernière utilisation</th><th>Approuvé jusqu’au</th><th>Action</th></tr></thead><tbody>{ownerDevices.map(d=><tr key={d.id}><td><strong>{d.label||"Appareil"}</strong></td><td>{new Date(d.lastUsedAt).toLocaleString("fr-FR")}</td><td>{new Date(d.expiresAt).toLocaleDateString("fr-FR")}</td><td><button onClick={()=>revokeDevice(d.id)}>Révoquer</button></td></tr>)}</tbody></table></div></div>)}</div>}
 
