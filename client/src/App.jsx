@@ -3487,7 +3487,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       {commonButtons}
     </>;
 
-    if(printerSymptom==="error") return <LedDiagnostic/>;
+    if(printerSymptom==="error") return LedDiagnostic();
 
     if(printerSymptom==="not-printing") return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>L'imprimante est prête mais aucune photo ne sort.</b><br/>On doit séparer Windows de LumaBooth : essaie d'imprimer une petite image directement depuis Windows sur <b>{printerInfo?.name}</b>.<br/><b>Si Windows imprime, le problème est probablement côté LumaBooth/configuration. Si Windows n'imprime pas, on reste côté imprimante/USB/Windows.</b></div>
@@ -3524,7 +3524,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       </div>
     </>;
 
-    if(printerStage==="action") return <PrinterAction/>;
+    if(printerStage==="action") return PrinterAction();
 
     if(printerStage==="result"&&printerAnswer==="solved") return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>✅ Parfait, la panne semble résolue.</b><br/>Avant de remettre la borne au public, faites <b>une session photo complète avec un tirage test</b>. Si le tirage est correct, la prestation peut reprendre.{isEventUser&&<><br/><br/>📋 Un compte rendu est remonté <b>silencieusement</b> à Location Photobooth 28. Aucune alerte sonore ni WhatsApp n'est déclenché.</>}</div>
@@ -3563,7 +3563,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   function diagnostic(){
     if(!boothInfo||!issueInfo)return null;
     const trigger=boothInfo.trigger;
-    if(issue==="printer") return <PrinterDiagnostic/>;
+    if(issue==="printer") return PrinterDiagnostic();
     if(issue==="flash") return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise le déclencheur {trigger}.</b><br/>On commence sans toucher aux réglages compliqués : le Godox MS300/MS300V est-il allumé et le bouton TEST déclenche-t-il un éclair ?</div><div className="mathis-actions"><button>⚡ Oui, TEST fonctionne</button><button>❌ TEST ne déclenche pas</button><button>⛔ Le flash ne s'allume pas</button></div></>;
     if(issue==="quality") return <><div className="mathis-bubble mathis-bubble-bot">Je vais d'abord déterminer si le défaut vient de la prise de vue ou de l'impression.<br/><b>La photo est-elle déjà mauvaise à l'écran avant son impression ?</b></div><div className="mathis-actions"><button>🖥️ Oui, à l'écran aussi</button><button>🖨️ Non, seulement imprimée</button><button>👀 Je ne sais pas</button></div></>;
     if(issue==="internet") return <><div className="mathis-bubble mathis-bubble-bot">La prestation photo et l'impression doivent rester prioritaires, même sans Internet.<br/><b>Quel est le symptôme sur {boothInfo.name} ?</b></div><div className="mathis-actions"><button>📶 Wi-Fi / 4G absent</button><button>🌐 Connecté mais pas Internet</button><button>🔳 QR Code ne fonctionne pas</button><button>☁️ Galerie non synchronisée</button></div></>;
