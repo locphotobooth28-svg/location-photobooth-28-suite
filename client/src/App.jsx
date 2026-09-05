@@ -3683,12 +3683,11 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
     if(printerStage==="result"&&printerAnswer==="failed") return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>Le diagnostic concerne <b>{boothInfo?.name}</b> · <b>{printerInfo?.name}</b> · <b>{symptomLabel()}</b>.<br/>Johan pourra prendre la main sur l’ordinateur de la borne pour poursuivre les vérifications. <b>Ne manipulez pas les consommables.</b><br/><br/>📸 Si la prise de photos fonctionne toujours, continuez à profiter de la borne normalement pendant que l’impression reste suspendue.</div>
-      {isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Pour que Johan puisse vous joindre pendant la téléassistance, indiquez les coordonnées de la personne qui est actuellement devant la borne. Il peut s’agir d’un invité : ces coordonnées concernent uniquement cet incident.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l’assistance.</label><button disabled={incidentSending||!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>{incidentSending?"⏳ Transmission…":"📨 Transmettre la demande à Johan"}</button></div>}
       {isEventUser&&savStatus==="requested"&&<div className="mathis-bubble mathis-bubble-bot"><b>📨 Votre demande a bien été transmise à Johan.</b><br/>Il va prendre connaissance du diagnostic de Mathis et décider de la prise en charge à distance. Vous n’avez rien d’autre à faire pour le moment.</div>}
       {isEventUser&&savStatus==="remote"&&<div className="mathis-bubble mathis-bubble-bot"><b>💻 Johan a pris en compte votre demande.</b><br/>Il effectue maintenant les vérifications à distance. Gardez votre téléphone à proximité et restez près de la borne si possible.<br/><br/>📸 Si les photos fonctionnent, continuez à profiter de votre événement : nous nous occupons du reste.</div>}
       {isEventUser&&savStatus==="level3"&&<div className="mathis-bubble mathis-bubble-bot"><b>🚗 Johan va intervenir sur place.</b><br/>Après son contrôle à distance, Johan a déterminé qu’une intervention physique est nécessaire. Le temps de la route, continuez à utiliser la prise de photos si elle reste disponible.<br/><br/>Nous sommes navrés de la gêne occasionnée. Ce type d’incident peut malheureusement arriver et nous faisons le nécessaire pour rétablir le service au plus vite.</div>}
       {isEventUser&&savStatus==="closed"&&<div className="mathis-bubble mathis-bubble-bot"><b>✅ Intervention terminée.</b><br/>Johan a clôturé l’assistance. Merci pour votre patience et profitez pleinement de votre événement. 📸</div>}
-      {isEventUser&&<ClientSupportStatus/>}
+      {isEventUser&&ClientSupportStatus()}
       {!isEventUser&&<IncidentReport/>}
       {!isEventUser&&<div className="mathis-sav-alert"><b>{savStatus==="level3"?"🔴 NIVEAU 3 — DÉPLACEMENT":"🟠 NIVEAU 2 — TÉLÉASSISTANCE"} — {eventName||"Diagnostic administrateur"}</b><span>{contactFirstName?`${contactFirstName} · ${contactPhone}`:"Contrôle technique en cours."}</span></div>}
       <div className="mathis-actions">
@@ -3705,7 +3704,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   function diagnostic(){
     if(!boothInfo||!issueInfo)return null;
     if(issue==="printer") return PrinterDiagnostic();
-    if(printerAnswer==="failed")return <><div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>{diagAnswer||issueInfo?.[2]}<br/><br/>Aucune autre manipulation technique n'est demandée au client.</div>{isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Indiquez les coordonnées de la personne actuellement devant la borne afin que Johan puisse la joindre pendant la téléassistance.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l'assistance.</label><button disabled={incidentSending||!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>{incidentSending?"⏳ Transmission…":"📨 Transmettre la demande à Johan"}</button></div>}{isEventUser&&<ClientSupportStatus/>}<div className="mathis-actions"><button onClick={reset}>🆕 Nouveau diagnostic</button></div></>;
+    if(printerAnswer==="failed")return <><div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>{diagAnswer||issueInfo?.[2]}<br/><br/>Aucune autre manipulation technique n'est demandée au client.</div>{isEventUser&&ClientSupportStatus()}<div className="mathis-actions"><button onClick={reset}>🆕 Nouveau diagnostic</button></div></>;
 
 
     if(issue==="system"){
@@ -6759,7 +6758,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.79</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.80</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;

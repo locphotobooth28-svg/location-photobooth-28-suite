@@ -1,3 +1,9 @@
+
+## 8.5.80 — Correctif saisie mobile SAV
+- Corrige la perte de focus du clavier Android lors de la saisie du prénom et du téléphone dans la demande N2.
+- Évite le remontage du bloc de statut Mathis à chaque caractère saisi.
+- Supprime les formulaires N2 dupliqués et conserve une seule source de saisie.
+- Corrige l’affichage des cases à cocher de consentement/analyse photo et de disponibilité sur mobile et desktop.
 # LP28 Suite — Changelog
 
 ## 8.5.77 — Nettoyage SAV, aperçu client et diagnostic photo Mathis

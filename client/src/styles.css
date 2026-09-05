@@ -1033,3 +1033,7 @@ html[data-lp28-theme="light"] .event-modal .accordion-content{background:#161618
 @media(max-width:760px){.mathis-settings-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.preview-role-menu>div{right:0;left:auto}}
 html[data-lp28-theme="light"] .preview-role-menu>div{background:#fff;border-color:#d6c78d}
 html[data-lp28-theme="light"] .preview-role-menu>div button{background:#f6f3e8;color:#171717}
+
+/* LP28 8.5.80 — stabilité saisie mobile + cases à cocher Mathis */
+.mathis-ai-consent-warning input[type="checkbox"],.mathis-contact-card .mathis-check input[type="checkbox"]{width:auto!important;min-width:16px;height:16px;flex:0 0 auto;margin:3px 0 0!important;padding:0!important}
+.mathis-ai-consent-warning label,.mathis-contact-card .mathis-check{width:100%;box-sizing:border-box}
