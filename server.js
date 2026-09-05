@@ -3996,6 +3996,15 @@ function normalizeDriveDocument(file){
 }
 
 
+const mathisSavPhotoUpload=multer({
+  storage:memoriesStorage,
+  limits:{fileSize:12*1024*1024,files:1},
+  fileFilter:(req,file,cb)=>{
+    const ok=["image/jpeg","image/png","image/webp","image/heic","image/heif"].includes(file.mimetype);
+    cb(ok?null:new Error("Format photo SAV non autorisé."),ok);
+  }
+});
+
 // === Mathis SAV V3 — incidents persistants et synchronisés ===
 app.post("/api/guest/:token/mathis/incidents", async (req,res)=>{
   try{
@@ -4029,6 +4038,20 @@ app.post("/api/guest/:token/mathis/incidents/resolved", async (req,res)=>{
     res.json({ok:true,incident});
   }catch(err){console.error("Mathis resolved N1",err);res.status(500).json({ok:false,message:"Impossible d'enregistrer le compte rendu."});}
 });
+app.post("/api/guest/:token/mathis/incidents/:id/photos", mathisSavPhotoUpload.single("photo"), async(req,res)=>{
+  const f=req.file;
+  if(!f)return res.status(400).json({ok:false,message:"Photo manquante."});
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event || !access.event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
+    const incident=await prisma.mathisIncident.findFirst({where:{id:req.params.id,eventId:access.event.id}});
+    if(!incident)return res.status(404).json({ok:false,message:"Assistance introuvable."});
+    const uploaded=await googleService.uploadMathisSavPhoto(req,access.event,incident,f,String(req.body?.controlType||"controle").slice(0,100));
+    const photo=await prisma.mathisIncidentPhoto.create({data:{incidentId:incident.id,eventId:access.event.id,fileName:uploaded.name||f.originalname,mimeType:f.mimetype,sizeBytes:f.size,driveFileId:uploaded.id,driveUrl:uploaded.webViewLink||uploaded.webContentLink||null,controlType:String(req.body?.controlType||"controle").slice(0,100),booth:incident.booth||null}});
+    res.json({ok:true,photo});
+  }catch(err){console.error("Mathis SAV photo",err);res.status(500).json({ok:false,message:"Impossible d'enregistrer la photo de contrôle SAV."});}
+  finally{if(f?.path)fs.unlink(f.path,()=>{});}
+});
 app.get("/api/guest/:token/mathis/incidents/active", async (req,res)=>{
   try{
     const access=await portalAccess(req.params.token);
@@ -4047,7 +4070,7 @@ app.get("/api/guest/:token/mathis/incidents/:id", async(req,res)=>{
   }catch(err){res.status(500).json({ok:false});}
 });
 app.get("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
-  const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}}},orderBy:{createdAt:"desc"},take:100});
+  const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}},photos:{orderBy:{createdAt:"asc"}}},orderBy:{createdAt:"desc"},take:100});
   res.json({ok:true,incidents});
 });
 app.patch("/api/admin/mathis/incidents/:id/read", adminOnly, async(req,res)=>{

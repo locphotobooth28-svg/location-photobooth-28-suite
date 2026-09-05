@@ -1,0 +1,554 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String?  @unique
+  phone               String?  @unique
+  username            String?  @unique
+  passwordHash        String
+  name                 String?
+  firstName            String?
+  lastName             String?
+  collaboratorId       String?  @unique
+  collaborator         Collaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
+  role                 String   @default("VIEWER")
+  active               Boolean  @default(true)
+  permissions          Json?
+  totpEnabled          Boolean  @default(false)
+  totpSecret           String?
+  recoveryCodes        Json?
+  lastLoginAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  invitationsCreated  UserInvitation[] @relation("InvitationCreator")
+  trustedDevices       TrustedDevice[]
+}
+
+model UserInvitation {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique
+  name        String?
+  firstName   String?
+  lastName    String?
+  email       String?
+  phone       String?
+  collaboratorId String?
+  role        String   @default("VIEWER")
+  permissions Json?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  targetUserId String?
+  createdById String
+  createdBy   User     @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model TrustedDevice {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  label     String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  firstName String?
+  lastName  String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events    Event[]
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  name        String
+  type        String?
+  eventDate   DateTime
+  installTime String?
+  pickupDate  DateTime?
+  pickupTime  String?
+  address     String?
+  guestCount  Int?
+  status      EventStatus @default(TO_PREPARE)
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  organizerName             String?
+  organizerEmail            String?
+  organizerPhone            String?
+  responsibleCollaboratorId String?
+  installerCollaboratorId   String?
+  pickupCollaboratorId      String?
+
+  responsibleCollaborator Collaborator? @relation("EventResponsible", fields: [responsibleCollaboratorId], references: [id], onDelete: SetNull)
+  installerCollaborator   Collaborator? @relation("EventInstaller", fields: [installerCollaboratorId], references: [id], onDelete: SetNull)
+  pickupCollaborator      Collaborator? @relation("EventPickup", fields: [pickupCollaboratorId], references: [id], onDelete: SetNull)
+  totalPrice              Decimal?      @db.Decimal(10, 2)
+  deposit                 Decimal?      @db.Decimal(10, 2)
+  balance                 Decimal?      @db.Decimal(10, 2)
+  customPrintCount        Int?
+  customPrintPrice        Decimal?      @db.Decimal(10, 2)
+  // Remise commerciale sur l'ensemble de la prestation
+  // PERCENT | FIXED
+  globalDiscountType      String?
+  globalDiscountValue     Decimal?      @db.Decimal(10, 2)
+  globalDiscountReason    String?
+
+  depositPaid     Boolean @default(false)
+  balancePaid     Boolean @default(false)
+  cautionReceived Boolean @default(false)
+  cautionReturned Boolean @default(false)
+
+  bookingStatus        BookingStatus @default(CONFIRMED)
+  optionUntil          DateTime?
+  sceneJets            Json?
+  portalEnabled        Boolean       @default(false)
+  guestUploadEnabled   Boolean       @default(false)
+  guestVideoEnabled    Boolean       @default(false)
+  guestUploadModerated Boolean       @default(false)
+  portalExpiresAt      DateTime?
+  portalPassword       String?
+  fotoshareUrl         String?
+
+  frameSource FrameSource @default(NONE)
+  frameStatus FrameStatus @default(NOT_REQUIRED)
+  preparation Json?
+
+  notes String?
+
+  googleCalendarEventId String?
+  googleCalendarId      String?
+  googleDriveFolderId   String?
+
+  printerId String?
+  printer   Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
+
+  organizerToken String? @unique
+  guestToken     String? @unique
+
+  mathisIncidents MathisIncident[]
+  mathisIncidentPhotos MathisIncidentPhoto[]
+
+  // Signature électronique du contrat
+  contractToken         String?   @unique
+  contractStatus        String    @default("NOT_SENT")
+  contractGeneratedAt   DateTime?
+  contractSignedAt      DateTime?
+  contractSignerName    String?
+  contractSignerEmail   String?
+  contractSignatureData String?
+  contractDocumentHash  String?
+
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  materials            EventMaterial[]
+  memories             MemoryMedia[]
+  collaboratorAccesses CollaboratorAccess[]
+  collaboratorActions  CollaboratorAction[]
+}
+
+enum EventStatus {
+  TO_PREPARE
+  READY
+  IN_PROGRESS
+  COMPLETED
+  PROBLEM
+  CANCELLED
+}
+
+model Material {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  category String?
+  active   Boolean @default(true)
+
+  // V8 : vraie logique de stock / planning
+  capacity       Int      @default(1)
+  blocksPlanning Boolean  @default(true)
+  bookingVisible Boolean  @default(true)
+  resourceKind   String   @default("SHARED")
+  defaultPrice   Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events           EventMaterial[]
+  unavailabilities MaterialUnavailability[]
+}
+
+model MaterialUnavailability {
+  id         String @id @default(uuid())
+  materialId String
+
+  startAt DateTime
+  endAt   DateTime
+
+  reason String
+  notes  String? @db.Text
+  status String  @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  material  Material @relation(fields: [materialId], references: [id])
+}
+
+model EventMaterial {
+  eventId    String
+  materialId String
+  quantity   Int    @default(1)
+
+  // Prix réellement appliqué lors de cette prestation
+  unitPrice Decimal? @db.Decimal(10, 2)
+
+  // STANDARD | DISCOUNTED | OFFERED | HIDDEN
+  pricingMode String @default("STANDARD")
+
+  // Remise éventuelle sur cette ligne
+  // PERCENT | FIXED
+  discountType   String?
+  discountValue  Decimal? @db.Decimal(10, 2)
+  discountReason String?
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, materialId])
+}
+
+model Consumable {
+  id           String          @id @default(uuid())
+  name         String          @unique
+  printer      String
+  unitsPerBox  Int
+  currentUnits Int             @default(0)
+  warningAt    Int             @default(300)
+  criticalAt   Int             @default(100)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  movements    StockMovement[]
+}
+
+model StockMovement {
+  id           String     @id @default(uuid())
+  consumableId String
+  quantity     Int
+  reason       String?
+  eventName    String?
+  createdAt    DateTime   @default(now())
+  consumable   Consumable @relation(fields: [consumableId], references: [id], onDelete: Cascade)
+}
+
+model GoogleConnection {
+  id                     String   @id @default("primary")
+  tokenEncrypted         String   @db.Text
+  googleEmail            String?
+  scopes                 String?  @db.Text
+  driveRootFolderId      String?
+  defaultCalendarId      String?
+  defaultCalendarSummary String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+enum FrameSource {
+  NONE
+  CLIENT
+  LP28
+}
+
+enum FrameStatus {
+  NOT_REQUIRED
+  TO_DO
+  IN_PROGRESS
+  DONE
+}
+
+enum BookingStatus {
+  QUOTE_DRAFT
+  QUOTE_SENT
+  OPTION
+  CONFIRMED
+  CANCELLED
+  DECLINED
+  COMPLETED
+}
+
+model Printer {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  model  String
+  active Boolean @default(true)
+
+  // Quantité réellement présente dans l'imprimante au moment du suivi.
+  loadedCapacity  Int @default(0)
+  remainingPrints Int @default(0)
+  warningAt       Int @default(100)
+
+  totalPrints  Int       @default(0)
+  lastReloadAt DateTime?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events    Event[]
+  movements PrinterPaperMovement[]
+}
+
+model PrinterPaperMovement {
+  id           String   @id @default(uuid())
+  printerId    String
+  eventId      String?
+  quantity     Int
+  movementType String
+  note         String?
+  createdAt    DateTime @default(now())
+
+  printer Printer @relation(fields: [printerId], references: [id], onDelete: Cascade)
+}
+
+model AssistanceVideo {
+  id        String   @id @default(uuid())
+  title     String
+  url       String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+model MemoryMedia {
+  id      String @id @default(uuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  mediaType    String
+
+  driveFileId String?
+  driveUrl    String?
+  storageType String  @default("LOCAL")
+
+  status     String    @default("VISIBLE")
+  source     String    @default("PORTAL")
+  deletedAt  DateTime?
+  uploadedBy String    @default("GUEST")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId, status])
+  @@index([driveFileId])
+}
+
+model Collaborator {
+  id        String  @id @default(uuid())
+  firstName String
+  lastName  String?
+  phone     String?
+  email     String?
+  active    Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  canInstall Boolean @default(true)
+  canPickup  Boolean @default(true)
+  canManage  Boolean @default(true)
+
+  responsibleEvents Event[] @relation("EventResponsible")
+  installEvents     Event[] @relation("EventInstaller")
+  pickupEvents      Event[] @relation("EventPickup")
+
+  accesses CollaboratorAccess[]
+  actions  CollaboratorAction[]
+  user     User?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CollaboratorAccess {
+  id             String @id @default(uuid())
+  eventId        String
+  collaboratorId String
+
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  collaborator Collaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+
+  token  String  @unique
+  active Boolean @default(true)
+
+  canSeeClient       Boolean @default(true)
+  canSeeContract     Boolean @default(true)
+  canSeeInvoice      Boolean @default(false)
+  canSeeBalance      Boolean @default(true)
+  canManageCaution   Boolean @default(true)
+  canSeeInstructions Boolean @default(true)
+
+  missionNotes       String?
+  collaboratorReport String?
+  status             String  @default("ASSIGNED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, collaboratorId])
+  @@index([eventId])
+  @@index([collaboratorId])
+}
+
+model CollaboratorAction {
+  id             String  @id @default(uuid())
+  eventId        String
+  collaboratorId String?
+  action         String
+  notes          String?
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  collaborator Collaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([collaboratorId])
+  @@index([eventId, action])
+}
+
+
+model MathisIncident {
+  id               String   @id @default(uuid())
+  eventId          String
+  portalRole       String
+  booth            String?
+  printer          String?
+  issue            String?
+  diagnostic       String?
+  led              String?
+  contactFirstName String
+  contactPhone     String
+  photosAvailable  Boolean  @default(true)
+  printsAvailable  Boolean  @default(false)
+  status           String   @default("REQUESTED")
+  level            Int      @default(2)
+  adminNote        String?
+  createdAt        DateTime @default(now())
+  takenAt          DateTime?
+  level3At         DateTime?
+  resolvedAt       DateTime?
+  reminder5SentAt  DateTime?
+  adminReadAt      DateTime?
+  updatedAt        DateTime @updatedAt
+
+  event Event @relation(fields:[eventId], references:[id], onDelete:Cascade)
+  photos MathisIncidentPhoto[]
+
+  @@index([eventId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+
+model MathisIncidentPhoto {
+  id          String   @id @default(uuid())
+  incidentId  String
+  eventId     String
+  fileName    String
+  mimeType    String?
+  sizeBytes   Int?
+  driveFileId String
+  driveUrl    String?
+  controlType String?
+  booth       String?
+  createdAt   DateTime @default(now())
+
+  incident MathisIncident @relation(fields:[incidentId], references:[id], onDelete:Cascade)
+  event    Event          @relation(fields:[eventId], references:[id], onDelete:Cascade)
+
+  @@index([incidentId])
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model AppNotification {
+  id String @id @default(uuid())
+  title String
+  message String
+  type String @default("INFO")
+  source String @default("MANUAL")
+  audience String @default("ADMIN")
+  targetUserId String?
+  eventId String?
+  startsAt DateTime @default(now())
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  reads AppNotificationRead[]
+}
+model AppNotificationRead {
+  id String @id @default(uuid())
+  notificationId String
+  userId String
+  readAt DateTime @default(now())
+  dismissedAt DateTime?
+  notification AppNotification @relation(fields:[notificationId],references:[id],onDelete:Cascade)
+  @@unique([notificationId,userId])
+}
+
+model PushSubscription {
+  id String @id @default(uuid())
+  userId String
+  endpoint String @unique
+  p256dh String
+  auth String
+  deviceLabel String?
+  userAgent String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+}
+
+
+model PushDelivery {
+  id String @id @default(uuid())
+  notificationId String
+  userId String
+  subscriptionId String
+  receiptToken String @unique
+  deviceLabel String?
+  status String @default("PENDING")
+  sentAt DateTime?
+  receivedAt DateTime?
+  openedAt DateTime?
+  failedAt DateTime?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([notificationId])
+  @@index([userId])
+  @@index([createdAt])
+}

@@ -1,0 +1,30 @@
+# Secrets / configuration locale
+.env
+.env.local
+.env.*.local
+
+# Dépendances
+node_modules/
+
+# Build
+dist/
+
+# Photos et fichiers clients
+uploads/
+
+# Données locales
+data/
+
+# Sauvegardes de développement
+server-AVANT-CORRECTION-V83.js
+*-SAUVEGARDE*
+*.bak
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
