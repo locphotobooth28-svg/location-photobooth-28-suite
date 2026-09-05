@@ -1,3 +1,8 @@
+## 8.5.83 — Widget Android V1.1
+- API widget : compteur d’impressions par borne (sans nom d’imprimante).
+- API widget : compteur Assistance N1 informatif.
+- Préparation de l’affichage séparé des événements et du mode alerte N2/N3.
+
 ## 8.5.82 — API Widget Android LP28
 
 - Ajout de `/api/widget/summary` protégé par la session utilisateur.

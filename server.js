@@ -1121,36 +1121,45 @@ app.get("/api/widget/summary", userOnly, async(req,res)=>{
         byName[String(s.boothName||"").trim().toUpperCase()]=s;
       }catch{}
     }
-    const booths=["LOLA","NINA","GABIN"].map(name=>{
-      const s=byName[name]||{};
-      return {
-        boothName:name,
-        online:Boolean(s.online),
-        lumaActive:Boolean(s.lumaActive),
-        eventName:s.eventName||null,
-        lastSeen:s.lastSeen||null,
-        ageSeconds:Number.isFinite(Number(s.ageSeconds))?Number(s.ageSeconds):null
-      };
-    });
-    const [events,incidents]=await Promise.all([
+    const [events,incidents,n1Count]=await Promise.all([
       prisma.event.findMany({
         where:{archived:false,status:"IN_PROGRESS"},
         orderBy:{eventDate:"asc"},
         take:5,
-        select:{id:true,name:true,eventDate:true,address:true}
+        select:{id:true,name:true,eventDate:true,address:true,printer:{select:{remainingPrints:true,loadedCapacity:true}}}
       }),
       prisma.mathisIncident.findMany({
         where:{level:{gte:2},status:{notIn:["RESOLVED","CLOSED"]}},
         orderBy:{createdAt:"desc"},
         take:20,
         select:{id:true,level:true,status:true,booth:true,issue:true,createdAt:true,event:{select:{id:true,name:true}}}
+      }),
+      prisma.mathisIncident.count({
+        where:{level:1,event:{archived:false,status:"IN_PROGRESS"}}
       })
     ]);
+    const eventById=new Map(events.map(e=>[e.id,e]));
+    const eventByName=new Map(events.map(e=>[String(e.name||"").trim().toLowerCase(),e]));
+    const booths=["LOLA","NINA","GABIN"].map(name=>{
+      const s=byName[name]||{};
+      const event=(s.eventId&&eventById.get(s.eventId)) || eventByName.get(String(s.eventName||"").trim().toLowerCase()) || null;
+      const printer=event?.printer||null;
+      return {
+        boothName:name,
+        online:Boolean(s.online),
+        lumaActive:Boolean(s.lumaActive),
+        eventName:s.eventName||event?.name||null,
+        lastSeen:s.lastSeen||null,
+        ageSeconds:Number.isFinite(Number(s.ageSeconds))?Number(s.ageSeconds):null,
+        printCounter:printer?{remaining:Number(printer.remainingPrints||0),capacity:Number(printer.loadedCapacity||0)}:null
+      };
+    });
     res.json({
       ok:true,
       generatedAt:new Date().toISOString(),
       booths,
       events:events.map(e=>({id:e.id,name:e.name,eventDate:e.eventDate,address:e.address||null})),
+      n1Count,
       alerts:incidents.map(i=>({id:i.id,level:i.level,status:i.status,booth:i.booth||null,issue:i.issue||null,createdAt:i.createdAt,event:i.event||null})),
       alertCount:incidents.length
     });
