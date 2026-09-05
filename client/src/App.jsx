@@ -3569,6 +3569,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       <div className="mathis-client-status-head"><span>{status.icon}</span><div><small>STATUT DE VOTRE PRISE EN CHARGE</small><b>{status.title}</b></div></div>
       <p>{status.text}</p>
       {savStatus!=="closed"&&<p className="mathis-client-status-note">📱 Gardez votre téléphone à proximité. {savStatus!=="level3"&&"📸 Si la prise de photos fonctionne, continuez à profiter normalement de votre événement."}</p>}
+      {isEventUser&&savStatus==="diagnostic"&&(printerAnswer==="failed"||diagAnswer)&&<div className="mathis-contact-card mathis-contact-card-status"><b>☎️ Personne présente près de la borne</b><p>Pour transmettre réellement la demande à Johan, indiquez la personne actuellement devant la borne.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l’assistance.</label><button disabled={incidentSending||!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>{incidentSending?"⏳ Transmission…":"📨 Transmettre la demande à Johan"}</button><small>La demande apparaîtra dans Assistance Admin uniquement après cette transmission.</small></div>}
     </div>;
   }
 
@@ -6758,7 +6759,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.78</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.79</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
