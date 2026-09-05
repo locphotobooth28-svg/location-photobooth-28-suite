@@ -1,3 +1,9 @@
+# LP28 V8.5.84 — Correctif compteurs Widget V1.2
+
+- Le widget utilise désormais le compteur média remonté directement par l’imprimante connectée à chaque borne (`mediaRemaining / mediaCapacity`).
+- Le compteur n’est plus déduit de l’imprimante affectée à l’événement.
+- Préparation de LP28 Supervision Android V1.2.
+
 ## 8.5.83 — Widget Android V1.1
 - API widget : compteur d’impressions par borne (sans nom d’imprimante).
 - API widget : compteur Assistance N1 informatif.

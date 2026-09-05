@@ -1151,7 +1151,11 @@ app.get("/api/widget/summary", userOnly, async(req,res)=>{
         eventName:s.eventName||event?.name||null,
         lastSeen:s.lastSeen||null,
         ageSeconds:Number.isFinite(Number(s.ageSeconds))?Number(s.ageSeconds):null,
-        printCounter:printer?{remaining:Number(printer.remainingPrints||0),capacity:Number(printer.loadedCapacity||0)}:null
+        // Widget: afficher le compteur média réellement remonté par l'imprimante de CETTE borne.
+        // On ne lie pas le compteur au stock/imprimante affecté à l'événement.
+        printCounter:(s.printer && Number.isFinite(Number(s.printer.mediaRemaining)) && Number.isFinite(Number(s.printer.mediaCapacity)) && Number(s.printer.mediaCapacity)>0)
+          ? {remaining:Number(s.printer.mediaRemaining),capacity:Number(s.printer.mediaCapacity)}
+          : null
       };
     });
     res.json({
