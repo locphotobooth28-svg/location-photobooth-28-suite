@@ -1103,6 +1103,63 @@ app.get("/api/admin/booths",moduleViewOnly("booths"),async(req,res)=>{
   }
 });
 
+
+// ======================================================
+// LP28 WIDGET ANDROID - SUPERVISION V1
+// ======================================================
+app.get("/api/widget/summary", userOnly, async(req,res)=>{
+  try{
+    const now=Date.now();
+    const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}});
+    const byName={};
+    for(const row of rows){
+      try{
+        const s=JSON.parse(row.value||"{}");
+        const ageMs=s.lastSeen?now-new Date(s.lastSeen).getTime():Number.MAX_SAFE_INTEGER;
+        s.online=ageMs<=60000;
+        s.ageSeconds=Number.isFinite(ageMs)?Math.max(0,Math.round(ageMs/1000)):null;
+        byName[String(s.boothName||"").trim().toUpperCase()]=s;
+      }catch{}
+    }
+    const booths=["LOLA","NINA","GABIN"].map(name=>{
+      const s=byName[name]||{};
+      return {
+        boothName:name,
+        online:Boolean(s.online),
+        lumaActive:Boolean(s.lumaActive),
+        eventName:s.eventName||null,
+        lastSeen:s.lastSeen||null,
+        ageSeconds:Number.isFinite(Number(s.ageSeconds))?Number(s.ageSeconds):null
+      };
+    });
+    const [events,incidents]=await Promise.all([
+      prisma.event.findMany({
+        where:{archived:false,status:"IN_PROGRESS"},
+        orderBy:{eventDate:"asc"},
+        take:5,
+        select:{id:true,name:true,eventDate:true,address:true}
+      }),
+      prisma.mathisIncident.findMany({
+        where:{level:{gte:2},status:{notIn:["RESOLVED","CLOSED"]}},
+        orderBy:{createdAt:"desc"},
+        take:20,
+        select:{id:true,level:true,status:true,booth:true,issue:true,createdAt:true,event:{select:{id:true,name:true}}}
+      })
+    ]);
+    res.json({
+      ok:true,
+      generatedAt:new Date().toISOString(),
+      booths,
+      events:events.map(e=>({id:e.id,name:e.name,eventDate:e.eventDate,address:e.address||null})),
+      alerts:incidents.map(i=>({id:i.id,level:i.level,status:i.status,booth:i.booth||null,issue:i.issue||null,createdAt:i.createdAt,event:i.event||null})),
+      alertCount:incidents.length
+    });
+  }catch(err){
+    console.error("WIDGET SUMMARY ERROR",err);
+    res.status(500).json({ok:false,message:"Impossible de charger le widget LP28."});
+  }
+});
+
 // ======================================================
 // LUMABOOTH / FOTOSHARE - MODE TEST WEBHOOK
 // ======================================================

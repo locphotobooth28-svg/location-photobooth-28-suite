@@ -1,6 +1,6 @@
 {
   "name": "location-photobooth-28-suite",
-  "version": "8.5.81",
+  "version": "8.5.82",
   "private": true,
   "description": "LP28 Suite V8.3 - Galeries Admin, QR Code et supervision Memories",
   "main": "server.js",

@@ -1,3 +1,9 @@
+## 8.5.82 — API Widget Android LP28
+
+- Ajout de `/api/widget/summary` protégé par la session utilisateur.
+- Supervision Lola/Nina/Gabin, événements en cours et alertes Mathis N2/N3.
+- Aucun secret API embarqué dans le widget Android : authentification par la session LP28.
+
 ## 8.5.81 — Diagnostic photo manuel ChatGPT
 - Suppression de l’appel automatique à l’API OpenAI pour les photos SAV.
 - Récupération sécurisée de la dernière photo de la galerie client, avec repli sur la photo SAV.
