@@ -4010,7 +4010,7 @@ app.post("/api/guest/:token/mathis/incidents", async (req,res)=>{
       led:String(req.body?.led||"").slice(0,180),contactFirstName:firstName.slice(0,80),contactPhone:phone.slice(0,40),
       photosAvailable:req.body?.photosAvailable!==false,printsAvailable:req.body?.printsAvailable===true,status:"REQUESTED"
     }});
-    await prisma.appNotification.create({data:{title:"🤖 Mathis — demande N2",message:`${access.event.name} · ${firstName} · ${phone} · ${incident.issue||"Assistance"}`,type:"WARNING",source:"MATHIS",audience:"ADMIN",eventId:access.event.id}}).catch(()=>{});
+    await addNotification({title:"🚨 Mathis — demande N2",message:`${access.event.name} · ${firstName} · ${phone} · ${incident.issue||"Assistance"}`,type:"URGENT",source:"MATHIS",audience:"ADMIN",eventId:access.event.id}).catch(()=>{});
     res.json({ok:true,incident});
   }catch(err){console.error("Mathis create incident",err);res.status(500).json({ok:false,message:"Impossible de transmettre la demande."});}
 });
@@ -4069,6 +4069,19 @@ app.patch("/api/admin/mathis/incidents/:id/status", adminOnly, async(req,res)=>{
   const incident=await prisma.mathisIncident.update({where:{id:req.params.id},data});
   res.json({ok:true,incident});
 });
+// Rappel SAV unique après 5 minutes si le N2 n'a pas encore été pris en charge.
+setInterval(async()=>{
+ try{
+  const cutoff=new Date(Date.now()-5*60*1000);
+  const pending=await prisma.mathisIncident.findMany({where:{status:"REQUESTED",createdAt:{lte:cutoff},reminder5SentAt:null},include:{event:{select:{name:true}}},take:20});
+  for(const incident of pending){
+   const claimed=await prisma.mathisIncident.updateMany({where:{id:incident.id,status:"REQUESTED",reminder5SentAt:null},data:{reminder5SentAt:new Date()}});
+   if(!claimed.count)continue;
+   await addNotification({title:"🚨 Rappel Mathis — N2 en attente",message:`${incident.event?.name||"Événement"} · ${incident.booth||"Borne"} · ${incident.issue||"Assistance"} — demande non prise en charge depuis 5 min`,type:"URGENT",source:"MATHIS",audience:"ADMIN",eventId:incident.eventId}).catch(()=>{});
+  }
+ }catch(err){console.error("Rappel Mathis N2 :",err.message);}
+},60*1000);
+
 // === fin Mathis SAV V3 ===
 
 app.get("/api/guest/:token/portal", async (req,res)=>{

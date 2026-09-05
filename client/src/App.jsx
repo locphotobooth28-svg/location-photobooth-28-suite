@@ -3864,25 +3864,7 @@ function AssistanceCenter(){
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div><h2>🆘 Assistance & pilotage</h2><p className="muted">Tes outils de contrôle et l'assistance que tu mets à disposition des organisateurs.</p></div></div>
     <MathisAssistant videos={data.videos||[]} userRole="admin" supportPhone={settings.supportPhone||settings.phone||"07 56 83 21 85"}/>
     <MathisSavAdmin remoteDesktopUrl={settings.remoteDesktopUrl||""}/>
-    <div className="assistance-links">{quick.map(([i,l,h])=><a key={l} className="assist-link-card" href={h||"#"} target="_blank" rel="noreferrer"><span>{i}</span><strong>{l}</strong><small>Ouvrir ↗</small></a>)}</div>
-
-    <div className="assist-video-admin">
-      <h3>👰 Assistance organisateur</h3>
-      <p className="muted">Ces coordonnées et vidéos sont les seules informations d'assistance accessibles depuis le portail événement.</p>
-      <div className="form-grid">
-        <div><label>Téléphone assistance</label><input value={settings.supportPhone||""} onChange={e=>setSettings(x=>({...x,supportPhone:e.target.value}))} placeholder="07 ..."/></div>
-        <div><label>Lien WhatsApp</label><input value={settings.whatsappUrl||""} onChange={e=>setSettings(x=>({...x,whatsappUrl:e.target.value}))} placeholder="https://wa.me/..."/></div>
-        <div className="wide"><label>Lien Avis Google</label><input value={settings.googleReviewUrl||""} onChange={e=>setSettings(x=>({...x,googleReviewUrl:e.target.value}))} placeholder="https://..."/></div>
-      </div>
-      <button className="secondary-btn" onClick={saveSettings}>Enregistrer les coordonnées</button>
-    </div>
-
-    <div className="assist-video-admin">
-      <h3>🎥 Vidéos de dépannage organisateur</h3>
-      <div className="form-grid"><div><label>Titre</label><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Changer le papier"/></div><div><label>Lien vidéo</label><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://..."/></div></div>
-      <button className="primary" onClick={addVideo}>Ajouter la vidéo</button>
-      <div className="assist-video-list">{(data.videos||[]).map(v=><div className="assist-video-row" key={v.id}><div><strong>▶️ {v.title}</strong><small>{v.url}</small></div><div className="assist-video-actions"><a href={v.url} target="_blank" rel="noreferrer">Voir</a><button onClick={()=>removeVideo(v.id)}>Supprimer</button></div></div>)}{!data.videos?.length&&<p className="muted">Aucune vidéo pour le moment.</p>}</div>
-    </div>
+    {/* V8.5.67 : raccourcis et réglages organisateur masqués de la vue Admin ; données conservées. */}
   </section>;
 }
 
@@ -6202,13 +6184,14 @@ function NotificationBell({onOpen}){
     <style>{`
       @keyframes lp28BellPulse{0%,100%{transform:rotate(0) scale(1)}25%{transform:rotate(-9deg) scale(1.08)}50%{transform:rotate(9deg) scale(1.08);box-shadow:0 0 20px rgba(214,185,79,.8)}75%{transform:rotate(-5deg) scale(1.04)}}
       @keyframes lp28ToastIn{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+      @keyframes lp28SavToastBlink{0%,100%{background:#7f1d1d;border-color:#ef4444}50%{background:#dc2626;border-color:#fecaca;box-shadow:0 20px 65px rgba(239,68,68,.78)}}
       .lp28-notification-bell.unread{animation:lp28BellPulse 1.15s ease-in-out infinite;border-color:#d6b94f!important}
-      .lp28-notification-toast{position:fixed;right:18px;top:74px;z-index:11000;width:min(390px,calc(100vw - 24px));padding:14px 16px;border-radius:15px;background:#111827;color:#f8fafc;border:1px solid #d6b94f;box-shadow:0 20px 55px rgba(0,0,0,.38);animation:lp28ToastIn .22s ease-out}
+      .lp28-notification-toast{position:fixed;right:18px;top:74px;z-index:11000;width:min(390px,calc(100vw - 24px));padding:14px 16px;border-radius:15px;background:#111827;color:#f8fafc;border:1px solid #d6b94f;box-shadow:0 20px 55px rgba(0,0,0,.38);animation:lp28ToastIn .22s ease-out}.lp28-notification-toast.sav-urgent{animation:lp28ToastIn .22s ease-out,lp28SavToastBlink 1s ease-in-out .22s infinite}
     `}</style>
     <button onClick={onOpen} className={`lp28-notification-bell ${count>0?"unread":""}`} style={{position:"relative",fontSize:"1.25rem",minWidth:46,height:46,borderRadius:14}} title="Notifications">
       🔔{count>0&&<span style={{position:"absolute",right:-5,top:-7,background:"#ef4444",color:"#fff",borderRadius:999,padding:"2px 6px",fontSize:11,fontWeight:900}}>{count>99?"99+":count}</span>}
     </button>
-    {toast&&<div className="lp28-notification-toast" onClick={()=>{setToast(null);onOpen?.()}} role="status">
+    {toast&&<div className={`lp28-notification-toast ${toast.source==="MATHIS"?"sav-urgent":""}`} onClick={()=>{setToast(null);onOpen?.()}} role="status">
       <div style={{display:"flex",justifyContent:"space-between",gap:12}}>
         <strong style={{color:"#fff"}}>{toast.title}</strong>
         <button onClick={e=>{e.stopPropagation();setToast(null)}} style={{background:"#fff",color:"#111827",minWidth:30,height:30}}>✕</button>
@@ -6752,8 +6735,9 @@ function Dashboard({onLogout,user}) {
     <style>{`
       @keyframes lp28AssistBlink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.28;transform:scale(1.14)}}
       @keyframes lp28TickerMove{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+      @keyframes lp28UrgentBarBlink{0%,100%{background:linear-gradient(90deg,#7f1d1d,#dc2626,#7f1d1d);border-color:#ef4444;box-shadow:0 0 0 rgba(239,68,68,0)}50%{background:linear-gradient(90deg,#ef4444,#fecaca,#ef4444);border-color:#dc2626;color:#7f1d1d;box-shadow:0 0 18px rgba(239,68,68,.72)}}
       .sidebar .nav-item{display:flex;align-items:center;gap:8px}.sidebar .nav-main-label{min-width:0;flex:1;text-align:left}.booth-live-pill{margin-left:auto;white-space:nowrap;padding:3px 7px;border-radius:999;font-size:.68rem;font-weight:900;letter-spacing:.02em}.booth-live-pill.online{background:rgba(22,163,74,.14);color:#16a34a}.booth-live-pill.offline{background:rgba(220,38,38,.12);color:#dc2626}.nav-assistance-triangle{margin-left:auto;font-size:1.05rem;filter:drop-shadow(0 0 5px rgba(239,68,68,.75));animation:lp28AssistBlink .85s ease-in-out infinite}.nav-assistance-alert{position:relative}
-      .lp28-ops-banner{width:100%;height:42px;margin:0 0 16px;border-radius:12px;border:1px solid;display:flex;align-items:center;gap:10px;overflow:hidden;padding:0 12px;font-weight:900;cursor:pointer}.lp28-ops-banner.urgent{background:linear-gradient(90deg,#991b1b,#dc2626,#991b1b);border-color:#ef4444;color:#fff}.lp28-ops-banner.info{background:linear-gradient(90deg,#075985,#0284c7,#075985);border-color:#38bdf8;color:#fff}.lp28-ops-icon{font-size:1.2rem;flex:0 0 auto}.lp28-ops-banner.urgent .lp28-ops-icon{animation:lp28AssistBlink .85s ease-in-out infinite}.lp28-ops-marquee{overflow:hidden;white-space:nowrap;flex:1}.lp28-ops-marquee>span{display:inline-block;min-width:max-content;animation:lp28TickerMove 18s linear infinite}.lp28-ops-banner:hover .lp28-ops-marquee>span{animation-play-state:paused}
+      .lp28-ops-banner{width:100%;height:42px;margin:0 0 16px;border-radius:12px;border:1px solid;display:flex;align-items:center;gap:10px;overflow:hidden;padding:0 12px;font-weight:900;cursor:pointer}.lp28-ops-banner.urgent{background:linear-gradient(90deg,#991b1b,#dc2626,#991b1b);border-color:#ef4444;color:#fff;animation:lp28UrgentBarBlink 1s ease-in-out infinite}.lp28-ops-banner.info{background:linear-gradient(90deg,#075985,#0284c7,#075985);border-color:#38bdf8;color:#fff}.lp28-ops-icon{font-size:1.2rem;flex:0 0 auto}.lp28-ops-banner.urgent .lp28-ops-icon{animation:lp28AssistBlink .85s ease-in-out infinite}.lp28-ops-marquee{overflow:hidden;white-space:nowrap;flex:1}.lp28-ops-marquee>span{display:inline-block;min-width:max-content;animation:lp28TickerMove 18s linear infinite}.lp28-ops-banner:hover .lp28-ops-marquee>span{animation-play-state:paused}
       .event-list-section-title{grid-column:1/-1;padding:8px 12px;border-left:4px solid #d4ad2d;border-radius:8px;background:rgba(212,173,45,.10);font-size:.82rem;font-weight:950;letter-spacing:.045em;color:#8a6500}.event-list-section-title.upcoming{margin-top:4px;border-left-color:#3b82f6;background:rgba(59,130,246,.08);color:#2563eb}html[data-lp28-theme="dark"] .event-list-section-title{color:#f4d76b;background:rgba(212,173,45,.10)}html[data-lp28-theme="dark"] .event-list-section-title.upcoming{color:#93c5fd;background:rgba(59,130,246,.10)}
       @media(max-width:760px){.booth-live-pill{font-size:.62rem;padding:2px 6px}.lp28-ops-banner{height:38px;border-radius:9px;font-size:.78rem}.event-list-section-title{font-size:.74rem}}
     `}</style>
@@ -6765,7 +6749,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.66</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.67</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
