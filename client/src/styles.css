@@ -761,3 +761,131 @@ html[data-lp28-theme="light"] body .share-modal .whatsapp-link{
   .mathis-home-welcome{font-size:14px;padding:13px 14px}
   .mathis-start{grid-column:1/-1!important;font-size:15px!important;line-height:1.25;padding:14px 12px!important}
 }
+
+
+/* LP28 8.5.73 — harmonisation globale des fenêtres en thème clair
+   Principe : les fenêtres utilitaires suivent le thème actif.
+   Exception conservée : .event-modal reste volontairement sombre. */
+html[data-lp28-theme="light"] body .modal-backdrop{
+  background:rgba(38,34,27,.42) !important;
+  backdrop-filter:blur(6px);
+}
+
+/* Partage : vraie surface claire lorsque le site est en thème clair. */
+html[data-lp28-theme="light"] body .share-modal{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#d8d2c6 !important;
+  box-shadow:0 24px 70px rgba(42,35,21,.18) !important;
+}
+html[data-lp28-theme="light"] body .share-modal .modal-head{
+  border-bottom-color:#ded8cc !important;
+}
+html[data-lp28-theme="light"] body .share-modal h1,
+html[data-lp28-theme="light"] body .share-modal h2,
+html[data-lp28-theme="light"] body .share-modal h3,
+html[data-lp28-theme="light"] body .share-modal label,
+html[data-lp28-theme="light"] body .share-modal strong{
+  color:#171717 !important;
+}
+html[data-lp28-theme="light"] body .share-modal .eyebrow{
+  color:#8a6800 !important;
+}
+html[data-lp28-theme="light"] body .share-modal input{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#cfc8ba !important;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.015);
+}
+html[data-lp28-theme="light"] body .share-modal .secondary-btn,
+html[data-lp28-theme="light"] body .share-modal .icon-btn{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#cfc8ba !important;
+}
+html[data-lp28-theme="light"] body .share-modal .secondary-btn:hover,
+html[data-lp28-theme="light"] body .share-modal .icon-btn:hover{
+  background:#f6f3ed !important;
+  border-color:#b9aa88 !important;
+}
+html[data-lp28-theme="light"] body .share-modal .whatsapp-link{
+  color:#111 !important;
+  background:linear-gradient(135deg,#d9b64b,#b58b1f) !important;
+  border-color:#b58b1f !important;
+}
+
+/* Dossier client : même logique que Partage, plus de fenêtre noire en thème clair. */
+html[data-lp28-theme="light"] body .client-documents-modal{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#d8d2c6 !important;
+  box-shadow:0 24px 70px rgba(42,35,21,.18) !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal .modal-head{
+  border-bottom-color:#ded8cc !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal h1,
+html[data-lp28-theme="light"] body .client-documents-modal h2,
+html[data-lp28-theme="light"] body .client-documents-modal h3,
+html[data-lp28-theme="light"] body .client-documents-modal label,
+html[data-lp28-theme="light"] body .client-documents-modal strong,
+html[data-lp28-theme="light"] body .client-documents-modal .portal-document-card,
+html[data-lp28-theme="light"] body .client-documents-modal .portal-document-card div{
+  color:#171717 !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal .eyebrow{color:#8a6800 !important;}
+html[data-lp28-theme="light"] body .client-documents-modal .muted{color:#5f6368 !important;}
+html[data-lp28-theme="light"] body .client-documents-modal input:not([type="checkbox"]),
+html[data-lp28-theme="light"] body .client-documents-modal select,
+html[data-lp28-theme="light"] body .client-documents-modal textarea,
+html[data-lp28-theme="light"] body .client-documents-modal input[type="file"]{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#cfc8ba !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal .portal-document-card{
+  background:#faf8f3 !important;
+  border-color:#ddd6c8 !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal .portal-action,
+html[data-lp28-theme="light"] body .client-documents-modal button:not(.primary):not(.danger-btn){
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#cfc8ba !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal hr{
+  border-top-color:#ded8cc !important;
+}
+
+/* Confirmations Galerie / suppression : mêmes contrastes que le reste du thème clair. */
+html[data-lp28-theme="light"] body .memory-modal{
+  background:rgba(38,34,27,.42) !important;
+  backdrop-filter:blur(6px);
+}
+html[data-lp28-theme="light"] body .memory-modal-card{
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#d8d2c6 !important;
+  box-shadow:0 24px 70px rgba(42,35,21,.18) !important;
+}
+html[data-lp28-theme="light"] body .memory-modal-card h1,
+html[data-lp28-theme="light"] body .memory-modal-card h2,
+html[data-lp28-theme="light"] body .memory-modal-card h3,
+html[data-lp28-theme="light"] body .memory-modal-card p,
+html[data-lp28-theme="light"] body .memory-modal-card label{
+  color:#171717 !important;
+}
+html[data-lp28-theme="light"] body .memory-modal-actions button:not(.danger){
+  background:#ffffff !important;
+  color:#171717 !important;
+  border-color:#cfc8ba !important;
+}
+
+/* Responsive des fenêtres utilitaires : largeur et actions propres sur téléphone/tablette. */
+@media(max-width:700px){
+  .share-modal,.client-documents-modal{border-radius:18px;padding:16px}
+  .share-modal .qr-large{width:min(280px,88%);margin:16px auto}
+  .share-modal .copy-row{grid-template-columns:1fr;gap:8px}
+  .share-modal .copy-row .secondary-btn{width:100%}
+  .share-modal .whatsapp-link{width:100%;text-align:center}
+}
