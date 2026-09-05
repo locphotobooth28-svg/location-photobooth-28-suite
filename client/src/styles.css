@@ -619,3 +619,145 @@ html[data-lp28-theme="light"] .mathis-sav-admin{background:#fff;color:#171717;bo
 .mathis-photo-request{margin:12px 0;padding:14px;border:1px dashed var(--border);border-radius:14px;background:var(--panel,#fff);display:grid;gap:8px}
 .mathis-photo-request p,.mathis-photo-request small{margin:0;color:var(--muted)}
 .nav-assistance-info{margin-left:auto;font-size:20px;color:#2878d0;font-weight:800;line-height:1}
+
+/* V8.5.69 — séparation N1/N2-N3 et état lu/non lu */
+.sav-section{margin:14px 0 20px}.sav-section>h4{margin:0 0 10px;padding:10px 12px;border-radius:10px}.sav-alerts>h4{background:rgba(220,38,38,.10);border:1px solid rgba(220,38,38,.28)}.sav-infos>h4{background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.25)}.sav-read-state{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:900}.sav-read-state.unread{background:#dbeafe;color:#1d4ed8}.sav-read-state.read{background:#e5e7eb;color:#4b5563}.sav-unread{border-left:4px solid #3b82f6!important}
+
+
+/* V8.5.70 — lisibilité du dossier client dans le thème clair */
+.client-documents-modal{
+  color:#f7f5ef;
+}
+.client-documents-modal h2,
+.client-documents-modal h3,
+.client-documents-modal label,
+.client-documents-modal strong,
+.client-documents-modal .portal-document-card,
+.client-documents-modal .portal-document-card div{
+  color:#f7f5ef;
+}
+.client-documents-modal .eyebrow{color:#d9b64b;}
+.client-documents-modal input:not([type="checkbox"]):not([type="file"]),
+.client-documents-modal select,
+.client-documents-modal textarea{
+  background:#0c0c0e;
+  color:#fff;
+  border-color:#3a3a40;
+}
+.client-documents-modal input::placeholder{color:#a7a7ad;}
+.client-documents-modal input[type="file"]{
+  background:#f7f7f7;
+  color:#222;
+  border-color:#cfcfcf;
+}
+.client-documents-modal .portal-document-card{
+  background:#171719;
+  border:1px solid #34343a;
+  border-radius:14px;
+  padding:14px;
+}
+.client-documents-modal .portal-action,
+.client-documents-modal button:not(.primary):not(.icon-btn){
+  background:#19191c;
+  color:#f7f5ef;
+  border:1px solid #45454d;
+  border-radius:10px;
+  padding:10px 12px;
+  text-decoration:none;
+  cursor:pointer;
+}
+.client-documents-modal .portal-action:hover,
+.client-documents-modal button:not(.primary):not(.icon-btn):hover{
+  border-color:#d9b64b;
+}
+.client-documents-modal .danger-btn{
+  background:#2a1517 !important;
+  color:#ffb0b0 !important;
+  border-color:#6b3034 !important;
+}
+.client-documents-modal hr{border:0;border-top:1px solid #3a3a40;}
+html[data-lp28-theme="light"] body .client-documents-modal{
+  background:#111113 !important;
+  color:#f7f5ef !important;
+  border-color:#423719 !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal h2,
+html[data-lp28-theme="light"] body .client-documents-modal h3,
+html[data-lp28-theme="light"] body .client-documents-modal label,
+html[data-lp28-theme="light"] body .client-documents-modal strong,
+html[data-lp28-theme="light"] body .client-documents-modal .portal-document-card,
+html[data-lp28-theme="light"] body .client-documents-modal .portal-document-card div{
+  color:#f7f5ef !important;
+}
+html[data-lp28-theme="light"] body .client-documents-modal .muted{color:#b8b5ad !important;}
+
+
+/* V8.5.71 — lisibilité de la fenêtre Partage en thème clair */
+.share-modal{
+  color:#f7f5ef;
+}
+.share-modal h2,
+.share-modal label,
+.share-modal strong{
+  color:#f7f5ef;
+}
+.share-modal .eyebrow{color:#d9b64b;}
+.share-modal input{
+  background:#f7f7f7;
+  color:#222;
+  border-color:#cfcfcf;
+}
+.share-modal .secondary-btn{
+  background:#f7f7f7;
+  color:#222;
+  border:1px solid #cfcfcf;
+}
+.share-modal .whatsapp-link{
+  color:#111 !important;
+  font-weight:900;
+}
+html[data-lp28-theme="light"] body .share-modal{
+  background:#111113 !important;
+  color:#f7f5ef !important;
+  border-color:#423719 !important;
+}
+html[data-lp28-theme="light"] body .share-modal h2,
+html[data-lp28-theme="light"] body .share-modal label,
+html[data-lp28-theme="light"] body .share-modal strong{
+  color:#f7f5ef !important;
+}
+html[data-lp28-theme="light"] body .share-modal .eyebrow{color:#d9b64b !important;}
+html[data-lp28-theme="light"] body .share-modal input{
+  background:#f7f7f7 !important;
+  color:#222 !important;
+  border-color:#cfcfcf !important;
+}
+html[data-lp28-theme="light"] body .share-modal .secondary-btn{
+  background:#f7f7f7 !important;
+  color:#222 !important;
+  border-color:#cfcfcf !important;
+}
+html[data-lp28-theme="light"] body .share-modal .whatsapp-link{
+  color:#111 !important;
+}
+
+/* LP28 8.5.72 — Mathis responsive harmonisé */
+.mathis-home-welcome{grid-column:1/-1;min-width:0}
+@media(max-width:900px){
+  .mathis-home-card{grid-template-columns:120px minmax(0,1fr);gap:14px;padding:15px}
+  .mathis-home-photo{width:120px;max-width:100%}
+  .mathis-home-main{min-width:0;align-self:start}
+  .mathis-home-main h3{font-size:22px;line-height:1.15}
+  .mathis-home-subtitle{font-size:14px;line-height:1.35}
+  .mathis-available{white-space:normal;line-height:1.25}
+  .mathis-home-welcome{grid-column:1/-1;margin-top:0;font-size:15px;line-height:1.55;width:auto}
+}
+@media(max-width:520px){
+  .mathis-home-card{grid-template-columns:88px minmax(0,1fr);gap:12px;padding:12px}
+  .mathis-home-photo{width:88px;border-radius:14px}
+  .mathis-home-main h3{font-size:19px}
+  .mathis-home-subtitle{font-size:12px;margin-bottom:8px}
+  .mathis-available{font-size:9px;padding:6px 8px}
+  .mathis-home-welcome{font-size:14px;padding:13px 14px}
+  .mathis-start{grid-column:1/-1!important;font-size:15px!important;line-height:1.25;padding:14px 12px!important}
+}

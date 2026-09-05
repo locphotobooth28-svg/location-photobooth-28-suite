@@ -1031,6 +1031,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
     const payload={
       boothName,
       agentVersion:String(req.body?.agentVersion||"").slice(0,40),
+      lumaVersion:String(req.body?.lumaVersion||req.body?.lumaboothVersion||"").slice(0,40),
       eventId:String(req.body?.eventId||"").trim()||null,
       eventName:String(req.body?.eventName||"").trim().slice(0,200)||null,
       lumaActive:Boolean(req.body?.lumaActive),
@@ -1090,11 +1091,11 @@ app.get("/api/admin/booths",moduleViewOnly("booths"),async(req,res)=>{
         byName[String(s.boothName||"").trim().toUpperCase()]=s;
       }catch{}
     }
-    const configured=["NINA","LOLA","GABIN"].map(name=>byName[name]||{
+    const configured=["LOLA","NINA","GABIN"].map(name=>byName[name]||{
       boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,
       syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null
     });
-    const extras=Object.values(byName).filter(s=>!["NINA","LOLA","GABIN"].includes(String(s.boothName||"").toUpperCase()));
+    const extras=Object.values(byName).filter(s=>!["LOLA","NINA","GABIN"].includes(String(s.boothName||"").toUpperCase()));
     res.json({ok:true,booths:[...configured,...extras]});
   }catch(err){
     console.error("ADMIN BOOTHS ERROR :",err);
@@ -4048,6 +4049,14 @@ app.get("/api/guest/:token/mathis/incidents/:id", async(req,res)=>{
 app.get("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
   const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}}},orderBy:{createdAt:"desc"},take:100});
   res.json({ok:true,incidents});
+});
+app.patch("/api/admin/mathis/incidents/:id/read", adminOnly, async(req,res)=>{
+  try{
+    const incident=await prisma.mathisIncident.findUnique({where:{id:req.params.id}});
+    if(!incident || incident.level!==1)return res.status(404).json({ok:false,message:"Information N1 introuvable."});
+    const updated=await prisma.mathisIncident.update({where:{id:req.params.id},data:{adminReadAt:new Date()}});
+    res.json({ok:true,incident:updated});
+  }catch(err){console.error("Mathis N1 read",err);res.status(500).json({ok:false,message:"Impossible de marquer cette information comme lue."});}
 });
 app.delete("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
   try{

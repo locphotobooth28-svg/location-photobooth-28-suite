@@ -460,6 +460,7 @@ model MathisIncident {
   level3At         DateTime?
   resolvedAt       DateTime?
   reminder5SentAt  DateTime?
+  adminReadAt      DateTime?
   updatedAt        DateTime @updatedAt
 
   event Event @relation(fields:[eventId], references:[id], onDelete:Cascade)

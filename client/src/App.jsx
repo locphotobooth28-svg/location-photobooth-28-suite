@@ -3425,15 +3425,15 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       audio.play().catch(()=>{});
     }catch(e){}
   }
-  function notifyResolvedSilently(){
+  function notifyResolvedSilently(reasonOverride=""){
     if(!isEventUser)return;
     try{
       window.dispatchEvent(new CustomEvent("lp28:mathis-report",{detail:{
         type:"resolved",silent:true,
         title:"Incident résolu par votre technicien Mathis",
         eventName:eventName||"",booth:boothInfo?.name||"",printer:printerInfo?.name||"",
-        incident:symptomLabel(),
-        message:`${eventName?eventName+" · ":""}${boothInfo?.name||""} · ${printerInfo?.name||""} · ${symptomLabel()} · résolu`,
+        incident:reasonOverride||symptomLabel(),
+        message:`${eventName?eventName+" · ":""}${boothInfo?.name||""} · ${printerInfo?.name||""} · ${reasonOverride||symptomLabel()} · résolu`,
         createdAt:new Date().toISOString()
       }}));
       // Un N1 résolu par Mathis doit aussi remonter dans l'historique Admin, sans alerte sonore.
@@ -3442,16 +3442,23 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
         fetch(`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents/resolved`,{
           method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({
-            booth:boothInfo?.name||"",printer:printerInfo?.name||"",issue:symptomLabel(),
-            diagnostic:issue==="printer"?"Impression rétablie":(led?.status||"Résolu par Mathis"),
+            booth:boothInfo?.name||"",printer:printerInfo?.name||"",issue:reasonOverride||symptomLabel(),
+            diagnostic:issue==="printer"?"Impression rétablie":(reasonOverride||led?.status||"Résolu par Mathis"),
             led:led?`${led.label} → ${led.status}`:"",photosAvailable:led?.photos!==false,printsAvailable:true
           })
         }).catch(()=>{});
       }
       if("Notification" in window && Notification.permission==="granted"){
-        new Notification("🤖 Incident Mathis résolu",{body:`${eventName?eventName+" — ":""}${boothInfo?.name||""} — ${symptomLabel()}`,silent:true});
+        new Notification("🤖 Incident Mathis résolu",{body:`${eventName?eventName+" — ":""}${boothInfo?.name||""} — ${reasonOverride||symptomLabel()}`,silent:true});
       }
     }catch(e){}
+  }
+  function finishN1(reason="Résolu par Mathis"){
+    // Tous les boutons de fin N1 utilisent exactement la même sortie :
+    // enregistrer silencieusement, fermer Mathis et revenir au portail événement.
+    setDiagAnswer(reason);
+    if(isEventUser)notifyResolvedSilently(reason);
+    setOpen(false);
   }
   function reportText(){
     const led=ledInfo();
@@ -3701,9 +3708,9 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     if(issue==="photo"){
       if(!diagStage)return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise un Nikon D7200 · {boothInfo.trigger}.</b><br/>Quel défaut constatez-vous ? Les réglages ISO, vitesse, ouverture et puissance flash restent réservés à Johan.</div><div className="mathis-choice-grid"><button onClick={()=>setDiagStage("no-photo")}><span>📷</span><b>La photo ne se prend plus</b></button><button onClick={()=>setDiagStage("no-flash")}><span>⚡</span><b>Le flash ne déclenche plus</b></button><button onClick={()=>setDiagStage("dark")}><span>🌑</span><b>Photo sombre / claire</b></button><button onClick={()=>setDiagStage("blur")}><span>🫥</span><b>Photo floue / voilée</b></button><button onClick={()=>setDiagStage("color")}><span>🎨</span><b>Couleurs / cadrage anormaux</b></button><button onClick={()=>setDiagStage("describe")}><span>✍️</span><b>Décrire mon problème</b></button></div></>;
       if(diagStage==="no-flash")return <><div className="mathis-bubble mathis-bubble-bot"><b>Vérification du déclencheur {boothInfo.trigger}</b><br/>{booth==="nina"?"Ouvrez la porte arrière de Nina et regardez le X2T au-dessus du Nikon. Vérifiez qu'il est bien enclenché et que son écran est allumé. S'il est éteint, utilisez uniquement le bouton marche/arrêt sur son côté droit. Ne touchez à aucun autre réglage.":booth==="lola"?"Vérifiez simplement que le X2T est allumé et correctement enclenché, sans modifier ses réglages.":"Gabin utilise un Godox AT-16 : ne modifiez aucun réglage du déclencheur."}</div><div className="mathis-actions"><button onClick={()=>setDiagStage("flash-test")}>✅ Déclencheur allumé et en place</button><button onClick={()=>goN2("Déclencheur Godox sans réaction")}>❌ Aucune réaction → Johan</button></div></>;
-      if(diagStage==="flash-test")return <><div className="mathis-bubble mathis-bubble-bot">Faites une photo test. Le flash est habituellement réglé à <b>1/8</b> et ce réglage fonctionne normalement : <b>ne le modifiez pas</b>.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Flash rétabli");notifyResolvedSilently()}}>✅ Le flash fonctionne</button><button onClick={()=>goN2("Flash toujours absent malgré déclencheur allumé")}>❌ Toujours pas de flash</button></div></>;
+      if(diagStage==="flash-test")return <><div className="mathis-bubble mathis-bubble-bot">Faites une photo test. Le flash est habituellement réglé à <b>1/8</b> et ce réglage fonctionne normalement : <b>ne le modifiez pas</b>.</div><div className="mathis-actions"><button onClick={()=>finishN1("Flash rétabli")}>✅ Le flash fonctionne</button><button onClick={()=>goN2("Flash toujours absent malgré déclencheur allumé")}>❌ Toujours pas de flash</button></div></>;
       if(diagStage==="blur")return <><div className="mathis-bubble mathis-bubble-bot"><b>Avant de modifier quoi que ce soit :</b><br/>1. Une machine à fumée/brouillard fonctionne-t-elle près de la borne ? Le flash peut éclairer la fumée et créer un voile blanc.<br/>2. Regardez l'objectif : s'il porte une trace, passez uniquement un <b>chiffon doux, propre et sec</b>. Aucun produit, aucune eau.</div><div className="mathis-actions"><button onClick={()=>setDiagStage("smoke")}>🌫️ Oui, il y a de la fumée</button><button onClick={()=>setDiagStage("photo-analysis")}>📸 Non / problème toujours présent</button></div></>;
-      if(diagStage==="smoke")return <><div className="mathis-bubble mathis-bubble-bot">Demandez au DJ de couper momentanément la machine et attendez quelques minutes que le brouillard se dissipe, puis faites une photo test.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Voile lié à la fumée DJ");notifyResolvedSilently()}}>✅ La photo est redevenue normale</button><button onClick={()=>setDiagStage("photo-analysis")}>❌ Toujours pareil</button></div></>;
+      if(diagStage==="smoke")return <><div className="mathis-bubble mathis-bubble-bot">Demandez au DJ de couper momentanément la machine et attendez quelques minutes que le brouillard se dissipe, puis faites une photo test.</div><div className="mathis-actions"><button onClick={()=>finishN1("Voile lié à la fumée DJ")}>✅ La photo est redevenue normale</button><button onClick={()=>setDiagStage("photo-analysis")}>❌ Toujours pareil</button></div></>;
       if(["dark","color","photo-analysis"].includes(diagStage))return <><div className="mathis-bubble mathis-bubble-bot"><b>Mathis va comparer la situation au rendu photo.</b><br/>La priorité est la dernière photo synchronisée dans la galerie LP28. Si elle n'est pas disponible, photographiez le tirage ou l'image affichée. Mathis peut aussi vous demander une <b>vue depuis la borne</b> : placez le téléphone près de l'objectif, dans la même direction que le Nikon, sans zoom ni flash, afin de voir l'éclairage et l'environnement devant la borne.</div>{askPhoto("Photo du résultat ou vue depuis la borne")}<div className="mathis-bubble mathis-bubble-bot">Johan pourra ensuite ajuster à distance, si nécessaire, <b>ISO · vitesse · ouverture</b>. La puissance flash de référence LP28 reste <b>1/8</b>.</div><div className="mathis-actions"><button onClick={()=>goN2("Analyse qualité photo Nikon D7200")}>📨 Transmettre l'analyse à Johan</button></div></>;
       if(diagStage==="no-photo")return <><div className="mathis-bubble mathis-bubble-bot">Ne modifiez aucun réglage du Nikon. Si LumaBooth ne déclenche plus la prise de vue, Johan doit vérifier la connexion et les réglages à distance.</div>{askPhoto("Photo de l'écran de la borne si utile")}<div className="mathis-actions"><button onClick={()=>goN2("Nikon D7200 — prise de vue indisponible")}>🟠 Demander l'aide de Johan</button></div></>;
       if(diagStage==="describe")return <><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Décrivez ce qui se passe avec la photo, le Nikon ou l'éclairage…"/>{askPhoto("Mathis peut utiliser une photo si elle aide au diagnostic")}<div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan</button></div></>;
@@ -3711,10 +3718,10 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
     if(issue==="internet"){
       if(!diagStage)return <><div className="mathis-bubble mathis-bubble-bot"><b>Quel problème rencontrez-vous ?</b><br/>Une absence de réseau n'empêche pas la borne de prendre et d'imprimer les photos.</div><div className="mathis-choice-grid"><button onClick={()=>setDiagStage("4g")}><span>📶</span><b>Pas / peu de réseau 4G</b></button><button onClick={()=>setDiagStage("qr")}><span>🔳</span><b>QR Code en sous-brillance</b></button><button onClick={()=>setDiagStage("sync")}><span>🔄</span><b>Photos pas encore synchronisées</b></button><button onClick={()=>setDiagStage("describe")}><span>✍️</span><b>Décrire mon problème</b></button></div></>;
-      if(diagStage==="4g")return <><div className="mathis-bubble mathis-bubble-bot"><b>Vérifiez les voyants du routeur 4G.</b><br/>{booth==="nina"||booth==="gabin"?"Il se trouve de préférence sous la table, sous l'imprimante. S'il n'est pas là, il peut être accessible en ouvrant la porte de la borne.":"Repérez le routeur 4G de la borne et regardez uniquement ses voyants."}<br/><br/>Si le signal est faible, déplacez <b>uniquement le routeur et son câble d'alimentation</b> de 3 à 4 mètres vers un endroit plus dégagé, puis rebranchez uniquement le routeur. <b>Ne déplacez ni la borne ni l'imprimante.</b></div>{askPhoto("Photo des voyants du routeur si Mathis en a besoin")}<div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Réseau 4G rétabli");notifyResolvedSilently()}}>✅ Le réseau est revenu</button><button onClick={()=>setDiagStage("no-network")}>❌ Toujours aucun réseau</button></div></>;
-      if(diagStage==="no-network")return <><div className="mathis-bubble mathis-bubble-bot"><b>📸 Pas d'inquiétude : vos photos sont bien présentes et conservées.</b><br/>La borne et l'imprimante continuent de fonctionner normalement sans Internet. Certaines zones restent malheureusement mal couvertes par le réseau mobile et nous ne pouvons pas agir sur cette couverture.<br/><br/>Comme Johan l'indique aux organisateurs, Location Photobooth 28 s'occupera de la synchronisation dès que la connexion le permettra ou au retour du matériel à l'atelier. Aucune manipulation supplémentaire n'est nécessaire.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Zone blanche / fonctionnement hors ligne confirmé");notifyResolvedSilently()}}>✅ J'ai compris, continuer l'événement</button></div></>;
-      if(diagStage==="qr")return <><div className="mathis-bubble mathis-bubble-bot"><b>QR Code en sous-brillance = connexion Internet absente ou insuffisante.</b><br/>Réessayez dans environ <b>20 minutes</b>. Si le réseau reste indisponible, la borne et l'imprimante continuent normalement. Nous sommes navrés pour ce désagrément : certaines zones blanches existent encore.<br/><br/><b>Vos photos sont bien présentes.</b> LP28 gère la synchronisation.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("QR temporairement indisponible — réseau 4G");notifyResolvedSilently()}}>✅ J'ai compris</button><button onClick={()=>setDiagStage("4g")}>📶 Vérifier le routeur 4G</button></div></>;
-      if(diagStage==="sync")return <><div className="mathis-bubble mathis-bubble-bot"><b>Pas d'inquiétude : vos photos sont bien présentes.</b><br/>Une connexion faible peut simplement retarder leur apparition dans la galerie LP28. La gestion de la galerie et de la synchronisation est assurée par Location Photobooth 28. Vous n'avez rien à modifier.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Synchronisation différée — photos conservées");notifyResolvedSilently()}}>✅ Continuer l'événement</button></div></>;
+      if(diagStage==="4g")return <><div className="mathis-bubble mathis-bubble-bot"><b>Vérifiez les voyants du routeur 4G.</b><br/>{booth==="nina"||booth==="gabin"?"Il se trouve de préférence sous la table, sous l'imprimante. S'il n'est pas là, il peut être accessible en ouvrant la porte de la borne.":"Repérez le routeur 4G de la borne et regardez uniquement ses voyants."}<br/><br/>Si le signal est faible, déplacez <b>uniquement le routeur et son câble d'alimentation</b> de 3 à 4 mètres vers un endroit plus dégagé, puis rebranchez uniquement le routeur. <b>Ne déplacez ni la borne ni l'imprimante.</b></div>{askPhoto("Photo des voyants du routeur si Mathis en a besoin")}<div className="mathis-actions"><button onClick={()=>finishN1("Réseau 4G rétabli")}>✅ Le réseau est revenu</button><button onClick={()=>setDiagStage("no-network")}>❌ Toujours aucun réseau</button></div></>;
+      if(diagStage==="no-network")return <><div className="mathis-bubble mathis-bubble-bot"><b>📸 Pas d'inquiétude : vos photos sont bien présentes et conservées.</b><br/>La borne et l'imprimante continuent de fonctionner normalement sans Internet. Certaines zones restent malheureusement mal couvertes par le réseau mobile et nous ne pouvons pas agir sur cette couverture.<br/><br/>Comme Johan l'indique aux organisateurs, Location Photobooth 28 s'occupera de la synchronisation dès que la connexion le permettra ou au retour du matériel à l'atelier. Aucune manipulation supplémentaire n'est nécessaire.</div><div className="mathis-actions"><button onClick={()=>finishN1("Zone blanche / fonctionnement hors ligne confirmé")}>✅ J'ai compris, continuer l'événement</button></div></>;
+      if(diagStage==="qr")return <><div className="mathis-bubble mathis-bubble-bot"><b>QR Code en sous-brillance = connexion Internet absente ou insuffisante.</b><br/>Réessayez dans environ <b>20 minutes</b>. Si le réseau reste indisponible, la borne et l'imprimante continuent normalement. Nous sommes navrés pour ce désagrément : certaines zones blanches existent encore.<br/><br/><b>Vos photos sont bien présentes.</b> LP28 gère la synchronisation.</div><div className="mathis-actions"><button onClick={()=>finishN1("QR temporairement indisponible — réseau 4G")}>✅ J'ai compris</button><button onClick={()=>setDiagStage("4g")}>📶 Vérifier le routeur 4G</button></div></>;
+      if(diagStage==="sync")return <><div className="mathis-bubble mathis-bubble-bot"><b>Pas d'inquiétude : vos photos sont bien présentes.</b><br/>Une connexion faible peut simplement retarder leur apparition dans la galerie LP28. La gestion de la galerie et de la synchronisation est assurée par Location Photobooth 28. Vous n'avez rien à modifier.</div><div className="mathis-actions"><button onClick={()=>finishN1("Synchronisation différée — photos conservées")}>✅ Continuer l'événement</button></div></>;
       if(diagStage==="describe")return <><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Décrivez le problème Internet, QR ou galerie…"/><div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan si nécessaire</button></div></>;
     }
 
@@ -3733,8 +3740,8 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
           <h3>Votre technicien Mathis</h3>
           <p className="mathis-home-subtitle">Assistant technique — Location Photobooth 28</p>
           <span className="mathis-available">● ASSISTANCE DISPONIBLE 24H/24</span>
-          <div className="mathis-home-welcome">Bonjour 👋 Je suis <b>votre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais vous accompagner <b>une question à la fois</b> afin d’identifier le problème et de trouver la solution la plus adaptée.</div>
         </div>
+        <div className="mathis-home-welcome">Bonjour 👋 Je suis <b>votre technicien Mathis</b>, votre premier intervenant technique.<br/>Je vais vous accompagner <b>une question à la fois</b> afin d’identifier le problème et de trouver la solution la plus adaptée.</div>
         <button className="mathis-start" onClick={()=>setOpen(true)}>💬 <span>Démarrer l’assistance avec Mathis</span> <b>›</b></button>
         <div className="mathis-benefits"><span>◷<b>Disponible<br/>24H/24</b></span><span>⚙️<b>Diagnostic<br/>guidé</b></span><span>🛡️<b>Une solution<br/>adaptée</b></span></div>
       </div>
@@ -3761,55 +3768,28 @@ function MathisSavAdmin({remoteDesktopUrl=""}){
   const [incidents,setIncidents]=useState([]),[loading,setLoading]=useState(true),[selectedIds,setSelectedIds]=useState([]),[deleting,setDeleting]=useState(false);
   async function load(){try{const r=await fetch("/api/admin/mathis/incidents");if(r.ok){const d=await r.json();const next=d.incidents||[];setIncidents(next);setSelectedIds(ids=>ids.filter(id=>next.some(i=>i.id===id)))} }finally{setLoading(false)}}
   useEffect(()=>{load();const t=setInterval(load,5000);return()=>clearInterval(t)},[]);
-  async function setStatus(id,status){
-    const r=await fetch(`/api/admin/mathis/incidents/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
-    if(!r.ok){const d=await r.json().catch(()=>({}));return alert(d.message||"Impossible de mettre à jour l'assistance.")}
-    load();
-  }
-  async function deleteSelected(){
-    if(!selectedIds.length)return;
-    if(!confirm(`Supprimer définitivement ${selectedIds.length} assistance(s) terminée(s) de l'historique ?`))return;
-    setDeleting(true);
-    try{
-      const r=await fetch("/api/admin/mathis/incidents",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:selectedIds})});
-      const d=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(d.message||"Suppression impossible.");
-      setSelectedIds([]);await load();
-    }catch(err){alert(err.message||"Suppression impossible.");}
-    finally{setDeleting(false)}
-  }
-  const active=incidents.filter(i=>!["RESOLVED","CLOSED"].includes(i.status));
-  const history=incidents.filter(i=>["RESOLVED","CLOSED"].includes(i.status));
-  const allHistorySelected=history.length>0&&history.every(i=>selectedIds.includes(i.id));
-  const label=i=>i.level===1?"🟢 N1 — Résolu par Mathis":({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 Déplacement",RESOLVED:"✅ Résolu",CLOSED:"✅ Terminé"}[i.status]||i.status);
-  const Card=({i,selectable=false})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()} ${i.level===1?"sav-level1":""}`}>
-    <div className="mathis-sav-admin-top">
-      <div className="mathis-sav-admin-heading">{selectable&&<input className="mathis-sav-check" type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...new Set([...ids,i.id])]:ids.filter(id=>id!==i.id))} aria-label={`Sélectionner ${i.event?.name||"assistance"}`}/>}<div><small>{label(i)}</small><h4>{i.event?.name||"Événement"}</h4></div></div>
-      <time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time>
-    </div>
+  async function setStatus(id,status){const r=await fetch(`/api/admin/mathis/incidents/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});if(!r.ok){const d=await r.json().catch(()=>({}));return alert(d.message||"Impossible de mettre à jour l'assistance.")}load()}
+  async function markRead(id){const r=await fetch(`/api/admin/mathis/incidents/${id}/read`,{method:"PATCH"});if(!r.ok){const d=await r.json().catch(()=>({}));return alert(d.message||"Impossible de marquer comme lu.")}load()}
+  async function deleteSelected(){if(!selectedIds.length)return;if(!confirm(`Supprimer définitivement ${selectedIds.length} assistance(s) terminée(s) de l'historique ?`))return;setDeleting(true);try{const r=await fetch("/api/admin/mathis/incidents",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:selectedIds})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Suppression impossible.");setSelectedIds([]);await load()}catch(err){alert(err.message||"Suppression impossible.")}finally{setDeleting(false)}}
+  const active=incidents.filter(i=>i.level!==1&&!['RESOLVED','CLOSED'].includes(i.status));
+  const n1=incidents.filter(i=>i.level===1&&['RESOLVED','CLOSED'].includes(i.status));
+  const n1Unread=n1.filter(i=>!i.adminReadAt);
+  const history=incidents.filter(i=>i.level!==1&&['RESOLVED','CLOSED'].includes(i.status));
+  const deletable=[...n1,...history];const allHistorySelected=deletable.length>0&&deletable.every(i=>selectedIds.includes(i.id));
+  const label=i=>i.level===1?"🟢 N1 — Résolu par notre technicien virtuel Mathis":({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 N3 — Déplacement",RESOLVED:"✅ N2 — Résolu",CLOSED:"✅ N3 — Terminé"}[i.status]||i.status);
+  const Card=({i,selectable=false})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()} ${i.level===1?"sav-level1":""} ${i.level===1&&!i.adminReadAt?"sav-unread":""}`}>
+    <div className="mathis-sav-admin-top"><div className="mathis-sav-admin-heading">{selectable&&<input className="mathis-sav-check" type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...new Set([...ids,i.id])]:ids.filter(id=>id!==i.id))}/>}<div><small>{label(i)} {i.level===1&&<span className={`sav-read-state ${i.adminReadAt?"read":"unread"}`}>{i.adminReadAt?"✓ LUE":"● NON LUE"}</span>}</small><h4>{i.event?.name||"Événement"}</h4></div></div><time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time></div>
     <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>
-    {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
-    <div className="mathis-actions">
-      {i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>🟠 Prendre en charge le N2</button>}
-      {i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Je dois me déplacer</button></>}
-      {i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}
-      {(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir la prise en main distante</a>}
-    </div>
+    {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par notre technicien virtuel Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
+    <div className="mathis-actions">{i.level===1&&!i.adminReadAt&&<button onClick={()=>markRead(i.id)}>✓ Marquer comme lu</button>}{i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>🟠 Prendre en charge le N2</button>}{i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Passage N3 — Je dois me déplacer</button></>}{i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}{(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir la prise en main distante</a>}</div>
   </article>;
-  return <section className="mathis-sav-admin">
-    <div className="mathis-sav-admin-title"><div><div className="eyebrow">SAV MATHIS</div><h3>🛠️ Prises en charge en direct</h3><p className="muted">Les demandes N2 des organisateurs et invités apparaissent ici automatiquement.</p></div><button className="secondary-btn" onClick={load}>↻ Actualiser</button></div>
-    {loading?<p className="muted">Chargement…</p>:active.length?<div className="mathis-sav-admin-list">{active.map(i=><Card key={i.id} i={i}/>)}</div>:<div className="mathis-sav-empty">✅ Aucune assistance en attente.</div>}
-    {!!history.length&&<details className="mathis-sav-history"><summary>📚 Dernières assistances terminées ({history.length})</summary>
-      <div className="mathis-sav-history-tools">
-        <label><input type="checkbox" checked={allHistorySelected} onChange={e=>setSelectedIds(e.target.checked?history.map(i=>i.id):[])}/> Tout sélectionner ({history.length})</label>
-        <span>{selectedIds.length} sélectionnée{selectedIds.length>1?"s":""}</span>
-        <button className="danger-btn" disabled={!selectedIds.length||deleting} onClick={deleteSelected}>🗑️ {deleting?"Suppression…":"Supprimer la sélection"}</button>
-      </div>
-      <div className="mathis-sav-admin-list">{history.map(i=><Card key={i.id} i={i} selectable/>)}</div>
-    </details>}
+  return <section className="mathis-sav-admin"><div className="mathis-sav-admin-title"><div><div className="eyebrow">SAV MATHIS</div><h3>🛠️ Prises en charge en direct</h3><p className="muted">🔵 N1 non lus : {n1Unread.length} · 🚨 Assistance à traiter : {active.length}</p></div><button className="secondary-btn" onClick={load}>↻ Actualiser</button></div>
+    {loading?<p className="muted">Chargement…</p>:<><section className="sav-section sav-alerts"><h4>🔴 Alertes N2 / N3 — Intervention requise ({active.length})</h4>{active.length?<div className="mathis-sav-admin-list">{active.map(i=><Card key={i.id} i={i}/>)}</div>:<div className="mathis-sav-empty">✅ Aucune assistance en attente.</div>}</section>
+    <section className="sav-section sav-infos"><h4>🔵 Informations N1 — Mathis ({n1Unread.length} non lue{n1Unread.length>1?"s":""})</h4>{n1.length?<div className="mathis-sav-admin-list">{n1.map(i=><Card key={i.id} i={i} selectable/>)}</div>:<p className="muted">Aucune information N1.</p>}</section>
+    {!!history.length&&<details className="mathis-sav-history"><summary>📚 Assistances N2 / N3 terminées ({history.length})</summary><div className="mathis-sav-admin-list">{history.map(i=><Card key={i.id} i={i} selectable/>)}</div></details>}
+    {!!deletable.length&&<div className="mathis-sav-history-tools"><label><input type="checkbox" checked={allHistorySelected} onChange={e=>setSelectedIds(e.target.checked?deletable.map(i=>i.id):[])}/> Tout sélectionner ({deletable.length})</label><span>{selectedIds.length} sélectionnée{selectedIds.length>1?"s":""}</span><button className="danger-btn" disabled={!selectedIds.length||deleting} onClick={deleteSelected}>🗑️ {deleting?"Suppression…":"Supprimer la sélection"}</button></div>}</>}
   </section>;
 }
-
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");
   const [settings,setSettings]=useState({});
@@ -3864,7 +3844,7 @@ function AssistanceCenter(){
     <div className="calendar-toolbar"><div><div className="eyebrow">ADMINISTRATEUR UNIQUEMENT</div><h2>🆘 Assistance & pilotage</h2><p className="muted">Tes outils de contrôle et l'assistance que tu mets à disposition des organisateurs.</p></div></div>
     <MathisAssistant videos={data.videos||[]} userRole="admin" supportPhone={settings.supportPhone||settings.phone||"07 56 83 21 85"}/>
     <MathisSavAdmin remoteDesktopUrl={settings.remoteDesktopUrl||""}/>
-    {/* V8.5.67 : raccourcis et réglages organisateur masqués de la vue Admin ; données conservées. */}
+    {/* V8.5.68 : raccourcis et réglages organisateur masqués de la vue Admin ; données conservées. */}
   </section>;
 }
 
@@ -4651,19 +4631,20 @@ function AdminBooths(){
   };
   return <section>
     <div className="calendar-toolbar">
-      <div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Nina, Lola et Gabin.</p></div>
+      <div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Lola, Nina et Gabin.</p></div>
       <button className="ghost" onClick={load}>↻ Actualiser</button>
     </div>
     {error&&<div className="notice error">{error}</div>}
     <div className="stats-grid">
-      {booths.map(b=><article className="stat-card" key={b.boothName} style={{textAlign:"left"}}>
+      {[...booths].sort((a,b)=>{const order={LOLA:0,NINA:1,GABIN:2};return (order[String(a.boothName||"").toUpperCase()]??99)-(order[String(b.boothName||"").toUpperCase()]??99)}).map(b=><article className="stat-card" key={b.boothName} style={{textAlign:"left"}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
           <strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong>
           <span>{b.online?"En ligne":"Hors ligne"}</span>
         </div>
         <div style={{marginTop:14,lineHeight:1.8}}>
           <div><b>Événement :</b> {b.eventName||"Aucun"}</div>
-          <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"}</div>
+          <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"} <span className="muted">— {b.lumaVersion?`v${String(b.lumaVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
+          <div>🤖 Agent LP28 : {b.online?"🟢 Connecté":"⚪ Hors ligne"} <span className="muted">— {b.agentVersion?`v${String(b.agentVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
           <div>☁️ Galerie : {b.syncStatus||"—"}</div>
           {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
           <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
@@ -5584,7 +5565,7 @@ function DocumentManager({event,onClose}){
   return (
     <div className="modal-backdrop">
       <div
-        className="share-modal"
+        className="share-modal client-documents-modal"
         style={{
           width:"min(760px,94vw)",
           maxHeight:"90vh",
@@ -6242,7 +6223,8 @@ function Dashboard({onLogout,user}) {
     return()=>{alive=false;clearInterval(t)};
   },[isAdmin]);
   const activeSavOps=opsSav.filter(i=>!["RESOLVED","CLOSED"].includes(i.status));
-  const latestInfoSav=opsSav.find(i=>i.level===1&&i.status==="RESOLVED"&&(Date.now()-new Date(i.createdAt).getTime())<24*60*60*1000);
+  const unreadInfoSav=opsSav.filter(i=>i.level===1&&i.status==="RESOLVED"&&!i.adminReadAt);
+  const latestInfoSav=unreadInfoSav[0];
   const boothOnlineCount=Math.min(3,opsBooths.filter(b=>b.online).length);
   const defaultEventActions=user?.role==="INTERVENANT"?["view","navigate","share","start","complete"]:user?.role==="VIEWER"?["view"]:[];
   const eventActions=Array.isArray(user?.permissions?.eventActions)?user.permissions.eventActions:defaultEventActions;
@@ -6749,7 +6731,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.67</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.72</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -6761,7 +6743,7 @@ function Dashboard({onLogout,user}) {
           <span className="nav-main-label">{m.icon} {m.label}</span>
           {m.id==="booths"&&isAdmin&&<span className={`booth-live-pill ${boothOnlineCount?"online":"offline"}`}>● LIVE {boothOnlineCount}/3</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length>0&&<span className="nav-assistance-triangle" title={`${activeSavOps.length} demande(s) d'assistance`}>⚠️</span>}
-          {m.id==="assistance"&&isAdmin&&activeSavOps.length===0&&latestInfoSav&&view!=="assistance"&&<span className="nav-assistance-info" title="Nouvelle information N1">ⓘ</span>}
+          {m.id==="assistance"&&isAdmin&&activeSavOps.length===0&&latestInfoSav&&view!=="assistance"&&<span className="nav-assistance-info" title={`${unreadInfoSav.length} information(s) N1 non lue(s)`}>ⓘ</span>}
         </button>)}
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
@@ -6777,7 +6759,7 @@ function Dashboard({onLogout,user}) {
         const i=activeSavOps[0]||latestInfoSav;const urgent=activeSavOps.length>0;
         const message=urgent
           ?`DEMANDE D'ASSISTANCE : ${i?.event?.name||"Événement"} — ${i?.booth||"Borne"}${i?.printer?` — ${i.printer}`:""}${i?.issue?` — ${i.issue}`:""}`
-          :`INFORMATION D'ÉVÉNEMENT : ${i?.event?.name||"Événement"} — ${i?.booth||"Borne"}${i?.issue?` — ${i.issue}`:""} — résolu par Mathis`;
+          :`INFORMATION D'ÉVÉNEMENT : ${i?.event?.name||"Événement"} — ${i?.booth||"Borne"}${i?.issue?` — ${i.issue}`:""} — résolu par notre technicien virtuel Mathis`;
         return <button type="button" className={`lp28-ops-banner ${urgent?"urgent":"info"}`} onClick={()=>navigate("assistance")}>
           <span className="lp28-ops-icon">{urgent?"⚠️":"ℹ️"}</span><span className="lp28-ops-marquee"><span>{message} &nbsp;&nbsp;&nbsp; • &nbsp;&nbsp;&nbsp; {message}</span></span><b>›</b>
         </button>;
