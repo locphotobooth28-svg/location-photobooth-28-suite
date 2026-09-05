@@ -889,3 +889,96 @@ html[data-lp28-theme="light"] body .memory-modal-actions button:not(.danger){
   .share-modal .copy-row .secondary-btn{width:100%}
   .share-modal .whatsapp-link{width:100%;text-align:center}
 }
+
+/* LP28 8.5.74 — harmonisation de la fiche événement + logo HD */
+.brand img{
+  width:58px;
+  height:58px;
+  object-fit:contain;
+  background:#070707;
+  border:1px solid #6d5620;
+  border-radius:14px;
+  padding:2px;
+  image-rendering:auto;
+}
+.login-logo,
+.portal-logo,
+.panel img{
+  image-rendering:auto;
+}
+
+/* Une seule identité visuelle pour les blocs de la fiche événement. */
+.event-modal form > h3{
+  margin:24px 0 10px;
+  font-size:18px;
+  line-height:1.25;
+  color:#f2d16d;
+}
+.event-modal form > .card,
+.event-modal .event-section-card,
+.event-modal .accordion-block{
+  background:#161618;
+  border:1px solid #4a4028;
+  border-radius:16px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);
+}
+.event-modal form > .card{
+  padding:16px;
+}
+.event-modal .accordion-block{
+  margin:12px 0;
+}
+.event-modal .accordion-block summary{
+  min-height:52px;
+  padding:14px 16px;
+  background:#161618;
+}
+.event-modal .accordion-block[open] summary{
+  background:#1a1a1d;
+}
+.event-modal .accordion-content{
+  background:#131315;
+  padding:16px;
+}
+.event-modal .form-grid{
+  align-items:end;
+}
+.event-modal label{
+  margin-top:8px;
+}
+.event-modal input,
+.event-modal select,
+.event-modal textarea{
+  min-height:46px;
+  border-radius:12px;
+}
+.event-modal textarea{min-height:110px;}
+.event-modal .choice-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.event-modal .choice-row button{
+  min-height:42px;
+  border-radius:11px;
+}
+.event-modal .event-payment-card{
+  margin-bottom:16px;
+  padding:16px;
+}
+.event-modal .event-payment-checks{
+  margin-top:14px;
+}
+.event-modal .event-payment-checks .status-check{
+  min-height:50px;
+  display:flex;
+  align-items:center;
+}
+
+@media(max-width:600px){
+  .brand img{width:54px;height:54px;}
+  .event-modal form > h3{font-size:17px;margin-top:20px;}
+  .event-modal form > .card,
+  .event-modal .event-section-card,
+  .event-modal .accordion-content{padding:13px;}
+}

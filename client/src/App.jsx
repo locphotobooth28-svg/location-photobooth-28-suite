@@ -161,7 +161,7 @@ function Login({ onLogin }) {
     onLogin(d.user||null);
   }
   return <div className="login-shell"><div className="login-card">
-    <img className="login-logo" src="/logo.jpg" alt="Location Photobooth 28"/>
+    <img className="login-logo" src="/logo-hd.png" alt="Location Photobooth 28"/>
     <div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{twoFactor?"🔐 Vérification 2FA":"Administration"}</h1>
     <p className="muted">{twoFactor?"Saisis le code à 6 chiffres de ton application Authenticator.":"Connecte-toi avec ton identifiant, e-mail ou téléphone."}</p>
     {error&&<div className="alert">{error}</div>}
@@ -187,7 +187,7 @@ function RegisterPage({token}){
     const d=await r.json().catch(()=>({}));if(!r.ok)return setError(d.message||"Inscription impossible.");setDone(true);
   }
   if(done)return <div className="login-shell"><div className="login-card"><div className="eyebrow">LP28 SUITE</div><h1>✅ Compte créé</h1><p>Ton accès LP28 est maintenant actif.</p><button className="primary" onClick={()=>location.href="/"}>Se connecter</button></div></div>;
-  return <div className="login-shell"><div className="login-card"><img className="login-logo" src="/logo.jpg"/><div className="eyebrow">INVITATION LP28 · 10 MINUTES</div><h1>👤 Créer mon compte</h1>{info&&<p className="muted">Invitation pour <strong>{[info.firstName,info.lastName].filter(Boolean).join(" ")||info.name||"Utilisateur LP28"}</strong></p>}{error&&<div className="alert">{error}</div>}{info&&<form onSubmit={submit}><label>Prénom *</label><input value={form.firstName} onChange={e=>setForm({...form,firstName:e.target.value})} required/><label>Nom *</label><input value={form.lastName} onChange={e=>setForm({...form,lastName:e.target.value})} required/><label>Identifiant choisi</label><input value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required minLength={3}/><label>E-mail</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><label>Téléphone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><label>Mot de passe *</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required minLength={8}/><p className="muted" style={{marginTop:4}}>Minimum 8 caractères avec 1 majuscule, 1 chiffre et 1 caractère spécial.</p><label>Confirmer le mot de passe</label><input type="password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} required/><button className="primary">Créer mon compte</button></form>}</div></div>;
+  return <div className="login-shell"><div className="login-card"><img className="login-logo" src="/logo-hd.png"/><div className="eyebrow">INVITATION LP28 · 10 MINUTES</div><h1>👤 Créer mon compte</h1>{info&&<p className="muted">Invitation pour <strong>{[info.firstName,info.lastName].filter(Boolean).join(" ")||info.name||"Utilisateur LP28"}</strong></p>}{error&&<div className="alert">{error}</div>}{info&&<form onSubmit={submit}><label>Prénom *</label><input value={form.firstName} onChange={e=>setForm({...form,firstName:e.target.value})} required/><label>Nom *</label><input value={form.lastName} onChange={e=>setForm({...form,lastName:e.target.value})} required/><label>Identifiant choisi</label><input value={form.username} onChange={e=>setForm({...form,username:e.target.value})} required minLength={3}/><label>E-mail</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><label>Téléphone</label><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><label>Mot de passe *</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} required minLength={8}/><p className="muted" style={{marginTop:4}}>Minimum 8 caractères avec 1 majuscule, 1 chiffre et 1 caractère spécial.</p><label>Confirmer le mot de passe</label><input type="password" value={form.confirm} onChange={e=>setForm({...form,confirm:e.target.value})} required/><button className="primary">Créer mon compte</button></form>}</div></div>;
 }
 
 function SettingsPage({user}){
@@ -1497,7 +1497,7 @@ Johan — Location Photobooth 28`;
         </div>
       </div>
 
-      <h3>Paiement et caution</h3><div className="form-grid">
+      <h3>💳 Paiement et caution</h3><div className="card event-section-card event-payment-card"><div className="form-grid">
 
   <div>
     <label>💰 Montant total de la prestation</label>
@@ -1561,10 +1561,11 @@ Johan — Location Photobooth 28`;
   </div>
 
 </div>
-      <div className="checks-grid">
+      <div className="checks-grid event-payment-checks">
         {[["depositPaid","Acompte reçu"],["balancePaid","Prestation réglée"],["cautionReceived","Caution reçue"],["cautionReturned","Caution rendue"]].map(([key,label])=>
           <label className={`status-check ${form.payments[key]?"checked":""}`} key={key}><input type="checkbox" checked={form.payments[key]} onChange={()=>togglePayment(key)}/><span>{form.payments[key]?"✓":"○"} {label}</span></label>
         )}
+      </div>
       </div>
 {event?.collaboratorActions?.length>0 && (
   <div className="card" style={{marginTop:16}}>
@@ -4015,7 +4016,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
     const maintenance=/maintenance temporaire|momentanément verrouillé/i.test(error);
     return <div className="portal-shell"><div className="portal-card">
       <img
-        src="/logo.jpg"
+        src="/logo-hd.png"
         alt="Location Photobooth 28"
         style={{
           display:"block",
@@ -4200,7 +4201,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
   }
 
   return <div className="portal-shell"><main className="portal-card">
-    <img className="portal-logo" src="/logo.jpg"/>
+    <img className="portal-logo" src="/logo-hd.png"/>
     <div className="eyebrow">LOCATION PHOTOBOOTH 28</div>
     <h1>{e.name}</h1>
     <p className="portal-date">
@@ -6731,7 +6732,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.73</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.74</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -6807,7 +6808,7 @@ function Dashboard({onLogout,user}) {
             <small className="muted">{weeklyDashboard.giftCount} prestation{weeklyDashboard.giftCount>1?"s":""} offerte{weeklyDashboard.giftCount>1?"s":""}</small>
           </article>          </>}
         </section>
-        <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo.jpg"/></section>
+        <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo-hd.png"/></section>
       </> : view==="events" ? <>
         <div className="event-tabs" style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
           <button
@@ -7604,7 +7605,7 @@ function ContractSignaturePage({token}){
         <main className="portal-card">
           <img
             className="portal-logo"
-            src="/logo.jpg"
+            src="/logo-hd.png"
             alt="Location Photobooth 28"
           />
 
@@ -7635,7 +7636,7 @@ function ContractSignaturePage({token}){
 
           <img
             className="portal-logo"
-            src="/logo.jpg"
+            src="/logo-hd.png"
             alt="Location Photobooth 28"
           />
 
@@ -7675,7 +7676,7 @@ function ContractSignaturePage({token}){
 
         <img
           className="portal-logo"
-          src="/logo.jpg"
+          src="/logo-hd.png"
           alt="Location Photobooth 28"
         />
 
