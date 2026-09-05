@@ -1,0 +1,16 @@
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'FrameSource') THEN
+    CREATE TYPE "FrameSource" AS ENUM ('NONE', 'CLIENT', 'LP28');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'FrameStatus') THEN
+    CREATE TYPE "FrameStatus" AS ENUM ('NOT_REQUIRED', 'TO_DO', 'IN_PROGRESS', 'DONE');
+  END IF;
+END $$;
+
+ALTER TABLE "Event"
+ADD COLUMN IF NOT EXISTS "pickupDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "frameSource" "FrameSource" NOT NULL DEFAULT 'NONE',
+ADD COLUMN IF NOT EXISTS "frameStatus" "FrameStatus" NOT NULL DEFAULT 'NOT_REQUIRED',
+ADD COLUMN IF NOT EXISTS "preparation" JSONB;

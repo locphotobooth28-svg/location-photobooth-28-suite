@@ -1,3 +1,8 @@
+## 8.5.74
+- Harmonisation visuelle de la fiche événement.
+- Carte Paiement et caution uniformisée.
+- Logo HD fourni par Johan intégré à LP28.
+
 # Changelog
 
 ## 8.3.0 — Galeries Admin

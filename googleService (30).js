@@ -518,6 +518,22 @@ async function uploadMemoryToDrive(req,event,file){
     webContentLink: uploaded.data.webContentLink || null
   };
 }
+async function getMemoryThumbnailLink(req,fileId){
+  const client = await auth(req,"drive");
+
+  if(!client){
+    throw new Error("Compte Google Drive non connecté.");
+  }
+
+  const drive = google.drive({version:"v3",auth:client});
+  const response = await drive.files.get({
+    fileId,
+    fields:"id,mimeType,thumbnailLink"
+  });
+
+  return response.data?.thumbnailLink || null;
+}
+
 async function getMemoryFromDrive(req,fileId){
   const client = await auth(req,"drive");
 
@@ -942,5 +958,6 @@ module.exports={
   uploadEventDocument,deleteEventDocument,updateEventDocumentMetadata,
   uploadMemoryToDrive,
   getMemoryFromDrive,
+  getMemoryThumbnailLink,
   deleteMemoryFromDrive
 };
