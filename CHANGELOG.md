@@ -1,5 +1,12 @@
 # LP28 Suite — Changelog
 
+## 8.5.77 — Nettoyage SAV, aperçu client et diagnostic photo Mathis
+- Suppression définitive d’une assistance terminée : suppression préalable de ses photos SAV dans Google Drive, puis nettoyage de la base. En cas d’échec Drive, l’assistance est conservée pour permettre de réessayer.
+- Ajout du bouton Admin « Voir en tant que… » à côté de Partager : aperçu Organisateur ou Invité dans un nouvel onglet, sans changer le compte Admin.
+- Ajout de « Analyser la dernière photo de la borne » dans Assistance. Mathis privilégie la dernière photo originale LumaBooth de l’événement, puis une photo SAV en secours.
+- Diagnostic IA : exposition/netteté et recommandations Nikon D7200 (ISO, vitesse, ouverture, focale, flash), avec niveau de confiance et formulation prudente sur le déclenchement du flash.
+- L’analyse IA nécessite OPENAI_API_KEY sur Render ; modèle configurable via OPENAI_VISION_MODEL.
+
 ## 8.5.76 — Correctif Prisma / stabilité Mathis SAV
 - Force la génération du client Prisma depuis `prisma/schema.prisma` avant chaque démarrage.
 - Empêche `/api/admin/mathis/incidents` de faire tomber le serveur si la relation `photos` n’est pas encore disponible dans un client Prisma en cache.

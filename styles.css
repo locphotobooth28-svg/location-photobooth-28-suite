@@ -1008,3 +1008,28 @@ html[data-lp28-theme="light"] .event-modal .event-section-card,
 html[data-lp28-theme="light"] .event-modal .accordion-block,
 html[data-lp28-theme="light"] .event-modal .accordion-block summary,
 html[data-lp28-theme="light"] .event-modal .accordion-content{background:#161618!important;color:#f4f4f5!important;}
+
+/* LP28 8.5.77 — aperçu portail + diagnostic photo Mathis */
+.preview-role-menu{position:relative;display:inline-block}
+.preview-role-menu>summary{list-style:none;cursor:pointer;border:1px solid #a88918;border-radius:10px;padding:9px 12px;font-weight:800;background:rgba(168,137,24,.12)}
+.preview-role-menu>summary::-webkit-details-marker{display:none}
+.preview-role-menu>div{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:190px;padding:7px;border:1px solid rgba(168,137,24,.35);border-radius:12px;background:#111827;box-shadow:0 14px 34px rgba(0,0,0,.25)}
+.preview-role-menu>div button{display:block;width:100%;margin:3px 0;text-align:left;color:#fff;background:#1f2937}
+
+.mathis-ai-consent-warning{margin:10px 0;padding:12px 14px;border:1px solid #d6a72b;border-radius:12px;background:rgba(214,167,43,.10)}
+.mathis-ai-consent-warning>b{display:block;margin-bottom:5px}
+.mathis-ai-consent-warning p{margin:5px 0 9px;line-height:1.4}
+.mathis-ai-consent-warning label{display:flex;align-items:flex-start;gap:8px;font-weight:700;cursor:pointer}
+.mathis-ai-consent-warning input[type="checkbox"]{margin-top:3px;flex:0 0 auto}
+.mathis-admin-link.disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+
+.mathis-photo-analysis{margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.25)}
+.mathis-photo-analysis>button{font-weight:900;border:1px solid #a88918;background:rgba(168,137,24,.12)}
+.mathis-analysis-result{margin-top:10px;padding:14px;border-radius:14px;border:1px solid rgba(168,137,24,.35);background:rgba(168,137,24,.08)}
+.mathis-analysis-result>small{display:block;margin-top:4px;opacity:.72}
+.mathis-settings-grid{display:grid;grid-template-columns:repeat(5,minmax(90px,1fr));gap:8px;margin:10px 0}
+.mathis-settings-grid span{padding:9px;border-radius:10px;background:rgba(127,127,127,.10)}
+.mathis-settings-grid b{display:block;font-size:11px;text-transform:uppercase;opacity:.68;margin-bottom:3px}
+@media(max-width:760px){.mathis-settings-grid{grid-template-columns:repeat(2,minmax(100px,1fr))}.preview-role-menu>div{right:0;left:auto}}
+html[data-lp28-theme="light"] .preview-role-menu>div{background:#fff;border-color:#d6c78d}
+html[data-lp28-theme="light"] .preview-role-menu>div button{background:#f6f3e8;color:#171717}
