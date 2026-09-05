@@ -1,3 +1,10 @@
+## 8.5.81 — Diagnostic photo manuel ChatGPT
+- Suppression de l’appel automatique à l’API OpenAI pour les photos SAV.
+- Récupération sécurisée de la dernière photo de la galerie client, avec repli sur la photo SAV.
+- Aperçu, ouverture et téléchargement de la photo depuis Assistance.
+- Génération dynamique et copie du message de diagnostic à coller dans ChatGPT.
+- Conservation du consentement avant récupération/transmission manuelle.
+
 
 ## 8.5.80 — Correctif saisie mobile SAV
 - Corrige la perte de focus du clavier Android lors de la saisie du prénom et du téléphone dans la demande N2.

@@ -4128,43 +4128,41 @@ app.delete("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
     res.json({ok:true,deleted:result.count,deletedPhotos:photos.length});
   }catch(err){console.error("Mathis bulk delete",err);res.status(500).json({ok:false,message:"Suppression impossible."});}
 });
-async function streamToBuffer(stream,maxBytes=15*1024*1024){
-  const chunks=[]; let total=0;
-  for await(const chunk of stream){const b=Buffer.from(chunk);total+=b.length;if(total>maxBytes)throw new Error("Photo trop volumineuse pour l'analyse.");chunks.push(b)}
-  return Buffer.concat(chunks);
+async function getMathisLatestPhoto(req,incident){
+  let media=await prisma.memoryMedia.findFirst({where:{eventId:incident.eventId,deletedAt:null,mediaType:"PHOTO",uploadedBy:"LUMABOOTH_ORIGINAL"},orderBy:{createdAt:"desc"}});
+  if(!media)media=await prisma.memoryMedia.findFirst({where:{eventId:incident.eventId,deletedAt:null,mediaType:"PHOTO"},orderBy:{createdAt:"desc"}});
+  if(media)return {source:"GALERIE",photoName:media.originalName||media.fileName,photoTime:media.createdAt,mimeType:media.mimeType||"image/jpeg",media};
+  const sav=await prisma.mathisIncidentPhoto.findFirst({where:{incidentId:incident.id},orderBy:{createdAt:"desc"}});
+  if(sav)return {source:"SAV",photoName:sav.fileName,photoTime:sav.createdAt,mimeType:sav.mimeType||"image/jpeg",sav};
+  return null;
 }
-function parseMathisAnalysis(text){
-  const cleaned=String(text||"").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/i,"");
-  return JSON.parse(cleaned);
-}
-app.post("/api/admin/mathis/incidents/:id/photo-analysis", adminOnly, async(req,res)=>{
+app.get("/api/admin/mathis/incidents/:id/latest-photo", adminOnly, async(req,res)=>{
   try{
-    if(req.body?.consentConfirmed!==true)return res.status(400).json({ok:false,message:"Confirmation de consentement requise avant l’analyse photo."});
-    if(!process.env.OPENAI_API_KEY)return res.status(503).json({ok:false,message:"Analyse photo IA non configurée : ajoute OPENAI_API_KEY dans les variables Render."});
-    const incident=await prisma.mathisIncident.findUnique({where:{id:req.params.id},include:{event:{select:{id:true,name:true}}}});
+    const incident=await prisma.mathisIncident.findUnique({where:{id:req.params.id}});
     if(!incident)return res.status(404).json({ok:false,message:"Assistance introuvable."});
-    let media=await prisma.memoryMedia.findFirst({where:{eventId:incident.eventId,deletedAt:null,mediaType:"PHOTO",uploadedBy:"LUMABOOTH_ORIGINAL"},orderBy:{createdAt:"desc"}});
-    if(!media)media=await prisma.memoryMedia.findFirst({where:{eventId:incident.eventId,deletedAt:null,mediaType:"PHOTO"},orderBy:{createdAt:"desc"}});
-    let buffer,mime,photoName,photoTime,source;
-    if(media){
-      mime=media.mimeType||"image/jpeg";photoName=media.originalName||media.fileName;photoTime=media.createdAt;source="GALERIE";
-      if(media.storageType==="DRIVE"&&media.driveFileId)buffer=await streamToBuffer(await googleService.getMemoryFromDrive(req,media.driveFileId));
-      else {const localPath=path.join(MEMORIES_DIR,media.fileName);if(fs.existsSync(localPath))buffer=fs.readFileSync(localPath)}
+    const photo=await getMathisLatestPhoto(req,incident);
+    if(!photo)return res.status(404).json({ok:false,message:"Aucune photo exploitable trouvée pour cet événement."});
+    const base=`/api/admin/mathis/incidents/${encodeURIComponent(incident.id)}/latest-photo/file`;
+    res.json({ok:true,photo:{source:photo.source,photoName:photo.photoName,photoTime:photo.photoTime,viewUrl:base,downloadUrl:`${base}?download=1`}});
+  }catch(err){console.error("Mathis latest photo",err);res.status(500).json({ok:false,message:"Impossible de récupérer la dernière photo."})}
+});
+app.get("/api/admin/mathis/incidents/:id/latest-photo/file", adminOnly, async(req,res)=>{
+  try{
+    const incident=await prisma.mathisIncident.findUnique({where:{id:req.params.id}});
+    if(!incident)return res.status(404).end();
+    const photo=await getMathisLatestPhoto(req,incident);
+    if(!photo)return res.status(404).end();
+    const safeName=String(photo.photoName||"photo.jpg").replace(/["\\\r\n]/g,"");
+    res.setHeader("Content-Type",photo.mimeType||"image/jpeg");
+    res.setHeader("Cache-Control","private, max-age=60");
+    res.setHeader("Content-Disposition",`${req.query.download==="1"?"attachment":"inline"}; filename="${safeName}"`);
+    if(photo.media){
+      if(photo.media.storageType==="DRIVE"&&photo.media.driveFileId){const stream=await googleService.getMemoryFromDrive(req,photo.media.driveFileId);stream.on("error",()=>{if(!res.headersSent)res.status(500).end()});return stream.pipe(res)}
+      const localPath=photo.media.storagePath||path.join(MEMORIES_DIR,photo.media.fileName);if(localPath&&fs.existsSync(localPath))return res.sendFile(localPath);
     }
-    if(!buffer){
-      const sav=await prisma.mathisIncidentPhoto.findFirst({where:{incidentId:incident.id},orderBy:{createdAt:"desc"}});
-      if(sav?.driveFileId){buffer=await streamToBuffer(await googleService.getMemoryFromDrive(req,sav.driveFileId));mime=sav.mimeType||"image/jpeg";photoName=sav.fileName;photoTime=sav.createdAt;source="SAV"}
-    }
-    if(!buffer)return res.status(404).json({ok:false,message:"Aucune photo exploitable trouvée pour cet événement."});
-    const prompt=`Tu es Mathis, technicien virtuel de Location Photobooth 28. Analyse cette photo issue d'une borne photobooth Nikon D7200. Borne: ${incident.booth||"non précisée"}. Incident: ${incident.issue||"qualité photo"}. Diagnostic déclaré: ${incident.diagnostic||incident.led||"non précisé"}. Donne un diagnostic photographique prudent et immédiatement exploitable. Distingue observation et recommandation. Ne prétends jamais qu'un flash est connecté à partir de l'image seule: dis seulement s'il semble probablement avoir déclenché. Réglages de référence LP28: Nikon D7200, vitesse typique 1/125 s, ouverture typique f/5.6, flash typique 1/8; la focale dépend du cadrage. Réponds UNIQUEMENT en JSON valide avec les clés observation, iso, shutter, aperture, focal, flash, advice, flashAssessment, confidence. Les valeurs de réglage sont des recommandations courtes en français. confidence vaut faible, moyenne ou élevée.`;
-    const ai=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{"Authorization":`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_VISION_MODEL||"gpt-5.6-luna",input:[{role:"user",content:[{type:"input_text",text:prompt},{type:"input_image",image_url:`data:${mime};base64,${buffer.toString("base64")}`}]}],max_output_tokens:700})});
-    const data=await ai.json().catch(()=>({}));
-    if(!ai.ok){console.error("Mathis photo AI",data);return res.status(502).json({ok:false,message:"Le service d'analyse photo n'a pas répondu correctement."})}
-    const text=data.output_text||data.output?.flatMap(o=>o.content||[]).map(c=>c.text||"").join("")||"";
-    let analysis;try{analysis=parseMathisAnalysis(text)}catch{console.error("Mathis analyse JSON invalide",text);return res.status(502).json({ok:false,message:"Analyse reçue mais format inexploitable. Réessaie."})}
-    analysis={...analysis,booth:incident.booth||null,photoName,photoTime,source};
-    res.json({ok:true,analysis});
-  }catch(err){console.error("Mathis photo analysis",err);res.status(500).json({ok:false,message:err?.message||"Analyse photo impossible."})}
+    if(photo.sav?.driveFileId){const stream=await googleService.getMemoryFromDrive(req,photo.sav.driveFileId);stream.on("error",()=>{if(!res.headersSent)res.status(500).end()});return stream.pipe(res)}
+    return res.status(404).end();
+  }catch(err){console.error("Mathis latest photo file",err);if(!res.headersSent)res.status(500).end()}
 });
 
 app.patch("/api/admin/mathis/incidents/:id/status", adminOnly, async(req,res)=>{
