@@ -468,6 +468,33 @@ async function ensureDrive(client,event){
   });
   return parent.id;
 }
+async function uploadMathisSavPhoto(req,event,incident,file,controlType="") {
+  const client=await auth(req,"drive");
+  if(!client) throw new Error("Compte Google Drive non connecté.");
+  const drive=google.drive({version:"v3",auth:client});
+  const rootId=await ensureRootFolder(client);
+  const children=await drive.files.list({
+    q:`'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields:"files(id,name)"
+  });
+  let sav=(children.data.files||[]).find(f=>String(f.name).toUpperCase()==="SAV");
+  if(!sav) sav=await createFolder(drive,"SAV",rootId);
+  const safeEvent=String(event.name||"Evenement").replace(/[\\/:*?"<>|]/g,"-").slice(0,100);
+  const date=event.eventDate?new Date(event.eventDate).toISOString().slice(0,10):"";
+  const eventFolderName=`${date}${date?" - ":""}${safeEvent}`;
+  const eventChildren=await drive.files.list({q:`'${sav.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,fields:"files(id,name)"});
+  let eventFolder=(eventChildren.data.files||[]).find(f=>f.name===eventFolderName);
+  if(!eventFolder) eventFolder=await createFolder(drive,eventFolderName,sav.id);
+  const ext=require("path").extname(file.originalname||file.filename||"")||".jpg";
+  const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+  const booth=String(incident.booth||"BORNE").replace(/[^a-z0-9_-]+/gi,"-").toUpperCase();
+  const kind=String(controlType||incident.issue||"controle").replace(/[^a-z0-9_-]+/gi,"-").slice(0,50);
+  const name=`${booth}_${kind}_${stamp}${ext.toLowerCase()}`;
+  const fs=require("fs");
+  const uploaded=await drive.files.create({requestBody:{name,parents:[eventFolder.id],appProperties:{lp28Sav:"true",lp28IncidentId:incident.id}},media:{mimeType:file.mimetype,body:fs.createReadStream(file.path)},fields:"id,name,mimeType,webViewLink,webContentLink"});
+  return {id:uploaded.data.id,name:uploaded.data.name,webViewLink:uploaded.data.webViewLink||null,webContentLink:uploaded.data.webContentLink||null};
+}
+
 async function uploadMemoryToDrive(req,event,file){
   const client = await auth(req,"drive");
 
@@ -940,7 +967,7 @@ module.exports={
   listCalendars,listDriveFolders,saveSettings,
   syncEvent,deleteCalendarEvent,listEventDocuments,
   uploadEventDocument,deleteEventDocument,updateEventDocumentMetadata,
-  uploadMemoryToDrive,
+  uploadMemoryToDrive,uploadMathisSavPhoto,
   getMemoryFromDrive,
   deleteMemoryFromDrive
 };

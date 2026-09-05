@@ -4046,6 +4046,9 @@ app.post("/api/guest/:token/mathis/incidents/:id/photos", mathisSavPhotoUpload.s
     if(!access?.event || !access.event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
     const incident=await prisma.mathisIncident.findFirst({where:{id:req.params.id,eventId:access.event.id}});
     if(!incident)return res.status(404).json({ok:false,message:"Assistance introuvable."});
+    if(!prisma.mathisIncidentPhoto?.create){
+      return res.status(503).json({ok:false,message:"Module photos SAV en cours de mise à jour. Réessayez dans quelques instants."});
+    }
     const uploaded=await googleService.uploadMathisSavPhoto(req,access.event,incident,f,String(req.body?.controlType||"controle").slice(0,100));
     const photo=await prisma.mathisIncidentPhoto.create({data:{incidentId:incident.id,eventId:access.event.id,fileName:uploaded.name||f.originalname,mimeType:f.mimetype,sizeBytes:f.size,driveFileId:uploaded.id,driveUrl:uploaded.webViewLink||uploaded.webContentLink||null,controlType:String(req.body?.controlType||"controle").slice(0,100),booth:incident.booth||null}});
     res.json({ok:true,photo});
@@ -4070,8 +4073,33 @@ app.get("/api/guest/:token/mathis/incidents/:id", async(req,res)=>{
   }catch(err){res.status(500).json({ok:false});}
 });
 app.get("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
-  const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}},photos:{orderBy:{createdAt:"asc"}}},orderBy:{createdAt:"desc"},take:100});
-  res.json({ok:true,incidents});
+  try{
+    // Charger d'abord les incidents sans la nouvelle relation afin de rester compatible
+    // avec une instance Render qui redémarrerait momentanément avec un client Prisma en cache.
+    const incidents=await prisma.mathisIncident.findMany({
+      include:{event:{select:{id:true,name:true,eventDate:true}}},
+      orderBy:{createdAt:"desc"},
+      take:100
+    });
+
+    const ids=incidents.map(i=>i.id);
+    let photosByIncident=new Map();
+    if(ids.length && prisma.mathisIncidentPhoto?.findMany){
+      const photos=await prisma.mathisIncidentPhoto.findMany({
+        where:{incidentId:{in:ids}},
+        orderBy:{createdAt:"asc"}
+      });
+      for(const photo of photos){
+        if(!photosByIncident.has(photo.incidentId))photosByIncident.set(photo.incidentId,[]);
+        photosByIncident.get(photo.incidentId).push(photo);
+      }
+    }
+
+    res.json({ok:true,incidents:incidents.map(i=>({...i,photos:photosByIncident.get(i.id)||[]}))});
+  }catch(err){
+    console.error("Mathis admin incidents",err);
+    res.status(500).json({ok:false,message:"Impossible de charger les assistances Mathis."});
+  }
 });
 app.patch("/api/admin/mathis/incidents/:id/read", adminOnly, async(req,res)=>{
   try{

@@ -1,3 +1,12 @@
+# LP28 Suite — Changelog
+
+## 8.5.76 — Correctif Prisma / stabilité Mathis SAV
+- Force la génération du client Prisma depuis `prisma/schema.prisma` avant chaque démarrage.
+- Empêche `/api/admin/mathis/incidents` de faire tomber le serveur si la relation `photos` n’est pas encore disponible dans un client Prisma en cache.
+- Chargement des photos SAV séparé et rétrocompatible.
+- L’upload photo renvoie une erreur JSON propre si le modèle Prisma SAV n’est momentanément pas disponible, sans faire planter le service.
+- Conserve les corrections de contraste et les photos SAV introduites en 8.5.75.
+
 ## 8.5.74
 - Harmonisation visuelle de la fiche événement.
 - Carte Paiement et caution uniformisée.

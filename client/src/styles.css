@@ -982,3 +982,29 @@ html[data-lp28-theme="light"] body .memory-modal-actions button:not(.danger){
   .event-modal .event-section-card,
   .event-modal .accordion-content{padding:13px;}
 }
+
+
+/* LP28 8.5.75 — contraste fiche événement + photos SAV Mathis */
+.event-modal form > .card,
+.event-modal .event-section-card,
+.event-modal .accordion-block,
+.event-modal .accordion-block summary,
+.event-modal .accordion-content{background:#161618!important;color:#f4f4f5!important;border-color:#4a4028!important;}
+.event-modal .accordion-content{background:#131315!important;}
+.event-modal .event-section-card label,
+.event-modal .event-section-card p,
+.event-modal .event-section-card span:not(.badge),
+.event-modal form > .card label,
+.event-modal form > .card p,
+.event-modal form > .card span:not(.badge){color:#f4f4f5!important;}
+.event-modal .event-section-card .muted,
+.event-modal form > .card .muted{color:#b8b8bd!important;}
+.mathis-sav-photos{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(212,175,55,.06)}
+.mathis-sav-photos>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.mathis-sav-photos a{display:flex;flex-direction:column;gap:2px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;text-decoration:none;background:var(--panel);color:inherit}
+.mathis-sav-photos a small{color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[data-lp28-theme="light"] .event-modal form > .card,
+html[data-lp28-theme="light"] .event-modal .event-section-card,
+html[data-lp28-theme="light"] .event-modal .accordion-block,
+html[data-lp28-theme="light"] .event-modal .accordion-block summary,
+html[data-lp28-theme="light"] .event-modal .accordion-content{background:#161618!important;color:#f4f4f5!important;}

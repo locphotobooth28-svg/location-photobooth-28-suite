@@ -1,6 +1,6 @@
 {
   "name": "location-photobooth-28-suite",
-  "version": "8.5.75",
+  "version": "8.5.76",
   "private": true,
   "description": "LP28 Suite V8.3 - Galeries Admin, QR Code et supervision Memories",
   "main": "server.js",
@@ -8,9 +8,10 @@
     "dev": "concurrently \"node server.js\" \"vite --config client/vite.config.js\"",
     "build": "vite build --config client/vite.config.js",
     "start": "node server.js",
-    "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy"
+    "postinstall": "prisma generate --schema=prisma/schema.prisma",
+    "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate deploy",
+    "prestart": "prisma generate --schema=prisma/schema.prisma"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

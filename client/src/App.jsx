@@ -3447,7 +3447,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
             diagnostic:issue==="printer"?"Impression rétablie":(reasonOverride||led?.status||"Résolu par Mathis"),
             led:led?`${led.label} → ${led.status}`:"",photosAvailable:led?.photos!==false,printsAvailable:true
           })
-        }).catch(()=>{});
+        }).then(r=>r.ok?r.json():null).then(d=>{if(d?.incident?.id&&supportPhoto)uploadSupportPhoto(d.incident.id,reasonOverride||symptomLabel()).catch(()=>{});}).catch(()=>{});
       }
       if("Notification" in window && Notification.permission==="granted"){
         new Notification("🤖 Incident Mathis résolu",{body:`${eventName?eventName+" — ":""}${boothInfo?.name||""} — ${reasonOverride||symptomLabel()}`,silent:true});
@@ -3489,6 +3489,14 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
     setPrinterAnswer("failed");setPrinterStage("result");
     if(isEventUser)playMathisAlert();
   }
+  async function uploadSupportPhoto(targetIncidentId,controlType="controle") {
+    if(!supportPhoto||!portalToken||!targetIncidentId)return true;
+    const fd=new FormData();fd.append("photo",supportPhoto);fd.append("controlType",controlType||"controle");
+    const r=await fetch(`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents/${encodeURIComponent(targetIncidentId)}/photos`,{method:"POST",body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.message||"La photo de contrôle n'a pas pu être transmise.");
+    return true;
+  }
   async function startRemoteSupport(){
     if(!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable)return;
     if(isEventUser&&portalToken){
@@ -3500,7 +3508,9 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
         })});
         const d=await r.json();
         if(!r.ok)throw new Error(d.message||"Transmission impossible");
-        setIncidentId(d.incident?.id||"");setSavStatus("requested");
+        const newIncidentId=d.incident?.id||"";setIncidentId(newIncidentId);
+        if(supportPhoto&&newIncidentId){try{await uploadSupportPhoto(newIncidentId,symptomLabel());}catch(photoErr){alert(`La demande N2 est bien transmise, mais la photo SAV n'a pas pu être envoyée : ${photoErr.message||"erreur inconnue"}`);}}
+        setSavStatus("requested");
       }catch(err){alert(err.message||"Impossible de transmettre la demande à Johan.");}
       finally{setIncidentSending(false);}
       return;
@@ -3780,7 +3790,7 @@ function MathisSavAdmin({remoteDesktopUrl=""}){
   const label=i=>i.level===1?"🟢 N1 — Résolu par notre technicien virtuel Mathis":({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 N3 — Déplacement",RESOLVED:"✅ N2 — Résolu",CLOSED:"✅ N3 — Terminé"}[i.status]||i.status);
   const Card=({i,selectable=false})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()} ${i.level===1?"sav-level1":""} ${i.level===1&&!i.adminReadAt?"sav-unread":""}`}>
     <div className="mathis-sav-admin-top"><div className="mathis-sav-admin-heading">{selectable&&<input className="mathis-sav-check" type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...new Set([...ids,i.id])]:ids.filter(id=>id!==i.id))}/>}<div><small>{label(i)} {i.level===1&&<span className={`sav-read-state ${i.adminReadAt?"read":"unread"}`}>{i.adminReadAt?"✓ LUE":"● NON LUE"}</span>}</small><h4>{i.event?.name||"Événement"}</h4></div></div><time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time></div>
-    <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>
+    <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>{Array.isArray(i.photos)&&i.photos.length>0&&<div className="mathis-sav-photos"><b>📷 Photos de contrôle SAV ({i.photos.length})</b><div>{i.photos.map((p,idx)=><a key={p.id||idx} href={p.driveUrl||"#"} target="_blank" rel="noreferrer">📸 {p.controlType||`Contrôle ${idx+1}`}<small>{p.fileName}</small></a>)}</div></div>}
     {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par notre technicien virtuel Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
     <div className="mathis-actions">{i.level===1&&!i.adminReadAt&&<button onClick={()=>markRead(i.id)}>✓ Marquer comme lu</button>}{i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>🟠 Prendre en charge le N2</button>}{i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Passage N3 — Je dois me déplacer</button></>}{i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}{(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir la prise en main distante</a>}</div>
   </article>;
@@ -6732,7 +6742,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.74</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.76</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;

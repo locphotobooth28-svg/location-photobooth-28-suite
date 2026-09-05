@@ -142,6 +142,7 @@ model Event {
   guestToken     String? @unique
 
   mathisIncidents MathisIncident[]
+  mathisIncidentPhotos MathisIncidentPhoto[]
 
   // Signature électronique du contrat
   contractToken         String?   @unique
@@ -464,9 +465,32 @@ model MathisIncident {
   updatedAt        DateTime @updatedAt
 
   event Event @relation(fields:[eventId], references:[id], onDelete:Cascade)
+  photos MathisIncidentPhoto[]
 
   @@index([eventId])
   @@index([status])
+  @@index([createdAt])
+}
+
+
+model MathisIncidentPhoto {
+  id          String   @id @default(uuid())
+  incidentId  String
+  eventId     String
+  fileName    String
+  mimeType    String?
+  sizeBytes   Int?
+  driveFileId String
+  driveUrl    String?
+  controlType String?
+  booth       String?
+  createdAt   DateTime @default(now())
+
+  incident MathisIncident @relation(fields:[incidentId], references:[id], onDelete:Cascade)
+  event    Event          @relation(fields:[eventId], references:[id], onDelete:Cascade)
+
+  @@index([incidentId])
+  @@index([eventId])
   @@index([createdAt])
 }
 
