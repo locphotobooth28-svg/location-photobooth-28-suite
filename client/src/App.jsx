@@ -3269,14 +3269,11 @@ const MATHIS_PRINTERS={
   unknown:{name:"Je ne sais pas",icon:"❓"}
 };
 const MATHIS_ISSUES=[
+  ["system","💻","Borne / Windows & LumaBooth","Écran, blocage, LumaBooth, périphérique"],
   ["printer","🖨️","Imprimante","Pas d'impression, papier, ruban, bourrage"],
-  ["flash","⚡","Flash Godox","Ne s'allume pas, ne déclenche pas, puissance"],
-  ["camera","📷","Appareil Nikon","Non détecté, autofocus, connexion USB"],
-  ["quality","🖼️","Qualité photo","Floue, sombre, claire, couleurs, cadrage"],
-  ["lumabooth","📸","LumaBooth","Blocage, relance, périphérique non détecté"],
-  ["internet","🌐","Internet / QR / Galerie","Wi-Fi, 4G, QR Code, synchronisation"],
-  ["windows","💻","Borne / Windows","Lenteur, USB, file d'impression, redémarrage"],
-  ["other","💬","Autre problème","Je ne trouve pas mon problème dans la liste"]
+  ["photo","📸","Appareil photo & éclairage","Nikon D7200, Godox, qualité photo"],
+  ["internet","🌐","Internet / QR / Galerie","4G, QR Code, synchronisation"],
+  ["other","💬","Autre problème","Décrire librement la panne"]
 ];
 
 
@@ -3324,6 +3321,10 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [contactAvailable,setContactAvailable]=useState(false);
   const [incidentId,setIncidentId]=useState("");
   const [incidentSending,setIncidentSending]=useState(false);
+  const [diagStage,setDiagStage]=useState("");
+  const [diagAnswer,setDiagAnswer]=useState("");
+  const [freeText,setFreeText]=useState("");
+  const [supportPhoto,setSupportPhoto]=useState(null);
   const isEventUser=userRole==="organizer"||userRole==="guest"||userRole==="organisateur"||userRole==="invite";
   const eventName=eventContext?.name||eventContext?.title||eventContext?.eventName||"";
   const boothInfo=MATHIS_BOOTHS[booth];
@@ -3355,14 +3356,18 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
   function reset(){
     setBooth("");setIssue("");setPrinter("");setStep("booth");
-    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);setIncidentId("");
+    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);setIncidentId("");setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);
   }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
-    setIssue(id);
+    setIssue(id);setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);
     if(id==="printer") setStep("printer");
     else setStep("diagnostic");
   }
+  function askPhoto(label="Photo utile au diagnostic"){
+    return <div className="mathis-photo-request"><b>📸 {label}</b><p>Mathis vous demande cette photo uniquement pour mieux comprendre la situation. Évitez de photographier des personnes ou des informations personnelles.</p><label className="mathis-admin-link">📷 Prendre / choisir une photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>setSupportPhoto(e.target.files?.[0]||null)}/></label>{supportPhoto&&<small>✅ {supportPhoto.name} prête à être transmise avec le diagnostic.</small>}</div>;
+  }
+  function goN2(reason){setDiagAnswer(reason||"Contrôle Johan nécessaire");setPrinterAnswer("failed");setPrinterStage("result");if(isEventUser)playMathisAlert();}
   function choosePrinter(id){
     setPrinter(id);setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setStep("diagnostic");
   }
@@ -3409,6 +3414,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   }
   function symptomLabel(){
     const labels={"not-printing":"Rien ne s'imprime","paper":"Papier / PAPER","ribbon":"Ruban / RIBBON","jam":"Bourrage papier","offline":"Hors ligne / non détectée","queue":"File d'impression bloquée","error":"Voyants / code LED","no-power":"Ne s'allume plus"};
+    if(issue!=="printer")return diagAnswer||issueInfo?.[2]||"Assistance";
     return labels[printerSymptom]||printerSymptom||"Non précisé";
   }
   function playMathisAlert(){
@@ -3678,15 +3684,41 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
   function diagnostic(){
     if(!boothInfo||!issueInfo)return null;
-    const trigger=boothInfo.trigger;
     if(issue==="printer") return PrinterDiagnostic();
-    if(issue==="flash") return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise le déclencheur {trigger}.</b><br/>On commence sans toucher aux réglages compliqués : le Godox MS300/MS300V est-il allumé et le bouton TEST déclenche-t-il un éclair ?</div><div className="mathis-actions"><button>⚡ Oui, TEST fonctionne</button><button>❌ TEST ne déclenche pas</button><button>⛔ Le flash ne s'allume pas</button></div></>;
-    if(issue==="quality") return <><div className="mathis-bubble mathis-bubble-bot">Je vais d'abord déterminer si le défaut vient de la prise de vue ou de l'impression.<br/><b>La photo est-elle déjà mauvaise à l'écran avant son impression ?</b></div><div className="mathis-actions"><button>🖥️ Oui, à l'écran aussi</button><button>🖨️ Non, seulement imprimée</button><button>👀 Je ne sais pas</button></div></>;
-    if(issue==="internet") return <><div className="mathis-bubble mathis-bubble-bot">La prestation photo et l'impression doivent rester prioritaires, même sans Internet.<br/><b>Quel est le symptôme sur {boothInfo.name} ?</b></div><div className="mathis-actions"><button>📶 Wi-Fi / 4G absent</button><button>🌐 Connecté mais pas Internet</button><button>🔳 QR Code ne fonctionne pas</button><button>☁️ Galerie non synchronisée</button></div></>;
-    if(issue==="lumabooth") return <><div className="mathis-bubble mathis-bubble-bot"><b>LumaBooth sur {boothInfo.name} :</b> que se passe-t-il ?</div><div className="mathis-actions"><button>🧊 LumaBooth est bloqué</button><button>📷 Nikon non détecté</button><button>🖨️ Imprimante non détectée</button><button>🔄 Je veux le relancer proprement</button></div></>;
-    if(issue==="camera") return <><div className="mathis-bubble mathis-bubble-bot">On contrôle d'abord le Nikon de {boothInfo.name} sans modifier les réglages.<br/><b>L'appareil est-il allumé et détecté par la borne ?</b></div><div className="mathis-actions"><button>✅ Oui</button><button>🔌 Non détecté</button><button>🔋 Il ne s'allume pas</button></div></>;
-    if(issue==="windows") return <><div className="mathis-bubble mathis-bubble-bot">Je vais rester léger pour ne pas ralentir {boothInfo.name}.<br/><b>Quel problème Windows rencontres-tu ?</b></div><div className="mathis-actions"><button>🐌 Borne lente</button><button>🔌 USB non reconnu</button><button>🖨️ Impression bloquée</button><button>🔄 Redémarrage nécessaire</button></div></>;
-    return <><div className="mathis-bubble mathis-bubble-bot">Décris-moi le problème rencontré sur <b>{boothInfo.name}</b>. Si je ne peux pas le résoudre de façon sûre, je passerai la main au support niveau 2.</div><textarea className="mathis-free-text" placeholder="Exemple : la photo se prend mais rien ne s'imprime…"/></>;
+    if(printerAnswer==="failed")return <><div className="mathis-bubble mathis-bubble-bot"><b>🟠 Votre technicien Mathis demande maintenant le contrôle de Johan à distance.</b><br/>{diagAnswer||issueInfo?.[2]}<br/><br/>Aucune autre manipulation technique n'est demandée au client.</div>{isEventUser&&savStatus==="diagnostic"&&<div className="mathis-contact-card"><b>☎️ Personne présente près de la borne</b><p>Indiquez les coordonnées de la personne actuellement devant la borne afin que Johan puisse la joindre pendant la téléassistance.</p><label>Prénom<input value={contactFirstName} onChange={e=>setContactFirstName(e.target.value)} placeholder="Votre prénom"/></label><label>Numéro de téléphone<input value={contactPhone} onChange={e=>setContactPhone(e.target.value)} inputMode="tel" placeholder="06 12 34 56 78"/></label><label className="mathis-check"><input type="checkbox" checked={contactAvailable} onChange={e=>setContactAvailable(e.target.checked)}/> Je confirme être disponible près de la borne pendant l'assistance.</label><button disabled={incidentSending||!contactFirstName.trim()||!contactPhone.trim()||!contactAvailable} onClick={startRemoteSupport}>{incidentSending?"⏳ Transmission…":"📨 Transmettre la demande à Johan"}</button></div>}{isEventUser&&<ClientSupportStatus/>}<div className="mathis-actions"><button onClick={reset}>🆕 Nouveau diagnostic</button></div></>;
+
+
+    if(issue==="system"){
+      if(!diagStage)return <><div className="mathis-bubble mathis-bubble-bot"><b>Que se passe-t-il sur {boothInfo.name} ?</b><br/>Je vais vous guider sans vous faire accéder à Windows. Si Windows apparaît de lui-même, ne modifiez rien.</div><div className="mathis-choice-grid">
+        <button onClick={()=>setDiagStage("screen")}><span>🖥️</span><b>Écran noir / borne ne démarre pas</b></button><button onClick={()=>setDiagStage("slow")}><span>🐌</span><b>Borne lente ou bloquée</b></button><button onClick={()=>setDiagStage("luma-start")}><span>📸</span><b>LumaBooth ne démarre pas</b></button><button onClick={()=>setDiagStage("luma-freeze")}><span>🧊</span><b>LumaBooth bloqué</b></button><button onClick={()=>setDiagStage("camera")}><span>📷</span><b>Appareil non détecté</b></button><button onClick={()=>setDiagStage("print")}><span>🖨️</span><b>LumaBooth n'imprime plus</b></button><button onClick={()=>setDiagStage("usb")}><span>🔌</span><b>Périphérique non détecté</b></button><button onClick={()=>setDiagStage("describe")}><span>✍️</span><b>Décrire mon problème</b></button>
+      </div></>;
+      if(diagStage==="describe")return <><div className="mathis-bubble mathis-bubble-bot"><b>Décrivez simplement ce que vous voyez.</b><br/>Si une image peut m'aider, je vous la demanderai ensuite.</div><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Exemple : LumaBooth a disparu et je vois le bureau Windows…"/><div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan</button></div></>;
+      if(diagStage==="screen")return <><div className="mathis-bubble mathis-bubble-bot"><b>Ne débranchez rien et n'ouvrez pas l'ordinateur.</b><br/>Touchez simplement l'écran : voyez-vous une réaction ou un message ? Si Windows est visible, ne cliquez sur rien.</div>{askPhoto("Photo de l'écran complet si Mathis en a besoin")}<div className="mathis-actions"><button onClick={()=>goN2("Écran noir / borne indisponible")}>🟠 Toujours noir / aucune réaction</button><button onClick={()=>setDiagStage("luma-start")}>🪟 Je vois Windows</button></div></>;
+      if(diagStage==="luma-start"||diagStage==="luma-freeze"||diagStage==="slow"||diagStage==="camera"||diagStage==="usb")return <><div className="mathis-bubble mathis-bubble-bot"><b>Merci. N'effectuez aucune manipulation dans Windows.</b><br/>{diagStage==="luma-start"?"Si le bureau Windows est affiché à la place de LumaBooth, Johan doit intervenir à distance.":diagStage==="luma-freeze"?"Si LumaBooth ne répond plus, ne forcez pas sa fermeture.":"Je vais transmettre ce constat à Johan pour un contrôle à distance."}</div>{askPhoto("Photo de ce que vous voyez à l'écran")}<div className="mathis-actions"><button onClick={()=>goN2("Borne / Windows / LumaBooth — "+diagStage)}>🟠 Demander l'aide de Johan</button></div></>;
+      if(diagStage==="print")return <><div className="mathis-bubble mathis-bubble-bot">Si les photos sont bien prises mais ne partent plus à l'impression, <b>ne touchez pas à Windows ni aux réglages LumaBooth.</b> Nous allons utiliser le diagnostic Imprimante.</div><div className="mathis-actions"><button onClick={()=>{setIssue("printer");setStep("printer")}}>🖨️ Ouvrir le diagnostic imprimante</button></div></>;
+    }
+
+    if(issue==="photo"){
+      if(!diagStage)return <><div className="mathis-bubble mathis-bubble-bot"><b>{boothInfo.name} utilise un Nikon D7200 · {boothInfo.trigger}.</b><br/>Quel défaut constatez-vous ? Les réglages ISO, vitesse, ouverture et puissance flash restent réservés à Johan.</div><div className="mathis-choice-grid"><button onClick={()=>setDiagStage("no-photo")}><span>📷</span><b>La photo ne se prend plus</b></button><button onClick={()=>setDiagStage("no-flash")}><span>⚡</span><b>Le flash ne déclenche plus</b></button><button onClick={()=>setDiagStage("dark")}><span>🌑</span><b>Photo sombre / claire</b></button><button onClick={()=>setDiagStage("blur")}><span>🫥</span><b>Photo floue / voilée</b></button><button onClick={()=>setDiagStage("color")}><span>🎨</span><b>Couleurs / cadrage anormaux</b></button><button onClick={()=>setDiagStage("describe")}><span>✍️</span><b>Décrire mon problème</b></button></div></>;
+      if(diagStage==="no-flash")return <><div className="mathis-bubble mathis-bubble-bot"><b>Vérification du déclencheur {boothInfo.trigger}</b><br/>{booth==="nina"?"Ouvrez la porte arrière de Nina et regardez le X2T au-dessus du Nikon. Vérifiez qu'il est bien enclenché et que son écran est allumé. S'il est éteint, utilisez uniquement le bouton marche/arrêt sur son côté droit. Ne touchez à aucun autre réglage.":booth==="lola"?"Vérifiez simplement que le X2T est allumé et correctement enclenché, sans modifier ses réglages.":"Gabin utilise un Godox AT-16 : ne modifiez aucun réglage du déclencheur."}</div><div className="mathis-actions"><button onClick={()=>setDiagStage("flash-test")}>✅ Déclencheur allumé et en place</button><button onClick={()=>goN2("Déclencheur Godox sans réaction")}>❌ Aucune réaction → Johan</button></div></>;
+      if(diagStage==="flash-test")return <><div className="mathis-bubble mathis-bubble-bot">Faites une photo test. Le flash est habituellement réglé à <b>1/8</b> et ce réglage fonctionne normalement : <b>ne le modifiez pas</b>.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Flash rétabli");notifyResolvedSilently()}}>✅ Le flash fonctionne</button><button onClick={()=>goN2("Flash toujours absent malgré déclencheur allumé")}>❌ Toujours pas de flash</button></div></>;
+      if(diagStage==="blur")return <><div className="mathis-bubble mathis-bubble-bot"><b>Avant de modifier quoi que ce soit :</b><br/>1. Une machine à fumée/brouillard fonctionne-t-elle près de la borne ? Le flash peut éclairer la fumée et créer un voile blanc.<br/>2. Regardez l'objectif : s'il porte une trace, passez uniquement un <b>chiffon doux, propre et sec</b>. Aucun produit, aucune eau.</div><div className="mathis-actions"><button onClick={()=>setDiagStage("smoke")}>🌫️ Oui, il y a de la fumée</button><button onClick={()=>setDiagStage("photo-analysis")}>📸 Non / problème toujours présent</button></div></>;
+      if(diagStage==="smoke")return <><div className="mathis-bubble mathis-bubble-bot">Demandez au DJ de couper momentanément la machine et attendez quelques minutes que le brouillard se dissipe, puis faites une photo test.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Voile lié à la fumée DJ");notifyResolvedSilently()}}>✅ La photo est redevenue normale</button><button onClick={()=>setDiagStage("photo-analysis")}>❌ Toujours pareil</button></div></>;
+      if(["dark","color","photo-analysis"].includes(diagStage))return <><div className="mathis-bubble mathis-bubble-bot"><b>Mathis va comparer la situation au rendu photo.</b><br/>La priorité est la dernière photo synchronisée dans la galerie LP28. Si elle n'est pas disponible, photographiez le tirage ou l'image affichée. Mathis peut aussi vous demander une <b>vue depuis la borne</b> : placez le téléphone près de l'objectif, dans la même direction que le Nikon, sans zoom ni flash, afin de voir l'éclairage et l'environnement devant la borne.</div>{askPhoto("Photo du résultat ou vue depuis la borne")}<div className="mathis-bubble mathis-bubble-bot">Johan pourra ensuite ajuster à distance, si nécessaire, <b>ISO · vitesse · ouverture</b>. La puissance flash de référence LP28 reste <b>1/8</b>.</div><div className="mathis-actions"><button onClick={()=>goN2("Analyse qualité photo Nikon D7200")}>📨 Transmettre l'analyse à Johan</button></div></>;
+      if(diagStage==="no-photo")return <><div className="mathis-bubble mathis-bubble-bot">Ne modifiez aucun réglage du Nikon. Si LumaBooth ne déclenche plus la prise de vue, Johan doit vérifier la connexion et les réglages à distance.</div>{askPhoto("Photo de l'écran de la borne si utile")}<div className="mathis-actions"><button onClick={()=>goN2("Nikon D7200 — prise de vue indisponible")}>🟠 Demander l'aide de Johan</button></div></>;
+      if(diagStage==="describe")return <><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Décrivez ce qui se passe avec la photo, le Nikon ou l'éclairage…"/>{askPhoto("Mathis peut utiliser une photo si elle aide au diagnostic")}<div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan</button></div></>;
+    }
+
+    if(issue==="internet"){
+      if(!diagStage)return <><div className="mathis-bubble mathis-bubble-bot"><b>Quel problème rencontrez-vous ?</b><br/>Une absence de réseau n'empêche pas la borne de prendre et d'imprimer les photos.</div><div className="mathis-choice-grid"><button onClick={()=>setDiagStage("4g")}><span>📶</span><b>Pas / peu de réseau 4G</b></button><button onClick={()=>setDiagStage("qr")}><span>🔳</span><b>QR Code en sous-brillance</b></button><button onClick={()=>setDiagStage("sync")}><span>🔄</span><b>Photos pas encore synchronisées</b></button><button onClick={()=>setDiagStage("describe")}><span>✍️</span><b>Décrire mon problème</b></button></div></>;
+      if(diagStage==="4g")return <><div className="mathis-bubble mathis-bubble-bot"><b>Vérifiez les voyants du routeur 4G.</b><br/>{booth==="nina"||booth==="gabin"?"Il se trouve de préférence sous la table, sous l'imprimante. S'il n'est pas là, il peut être accessible en ouvrant la porte de la borne.":"Repérez le routeur 4G de la borne et regardez uniquement ses voyants."}<br/><br/>Si le signal est faible, déplacez <b>uniquement le routeur et son câble d'alimentation</b> de 3 à 4 mètres vers un endroit plus dégagé, puis rebranchez uniquement le routeur. <b>Ne déplacez ni la borne ni l'imprimante.</b></div>{askPhoto("Photo des voyants du routeur si Mathis en a besoin")}<div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Réseau 4G rétabli");notifyResolvedSilently()}}>✅ Le réseau est revenu</button><button onClick={()=>setDiagStage("no-network")}>❌ Toujours aucun réseau</button></div></>;
+      if(diagStage==="no-network")return <><div className="mathis-bubble mathis-bubble-bot"><b>📸 Pas d'inquiétude : vos photos sont bien présentes et conservées.</b><br/>La borne et l'imprimante continuent de fonctionner normalement sans Internet. Certaines zones restent malheureusement mal couvertes par le réseau mobile et nous ne pouvons pas agir sur cette couverture.<br/><br/>Comme Johan l'indique aux organisateurs, Location Photobooth 28 s'occupera de la synchronisation dès que la connexion le permettra ou au retour du matériel à l'atelier. Aucune manipulation supplémentaire n'est nécessaire.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Zone blanche / fonctionnement hors ligne confirmé");notifyResolvedSilently()}}>✅ J'ai compris, continuer l'événement</button></div></>;
+      if(diagStage==="qr")return <><div className="mathis-bubble mathis-bubble-bot"><b>QR Code en sous-brillance = connexion Internet absente ou insuffisante.</b><br/>Réessayez dans environ <b>20 minutes</b>. Si le réseau reste indisponible, la borne et l'imprimante continuent normalement. Nous sommes navrés pour ce désagrément : certaines zones blanches existent encore.<br/><br/><b>Vos photos sont bien présentes.</b> LP28 gère la synchronisation.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("QR temporairement indisponible — réseau 4G");notifyResolvedSilently()}}>✅ J'ai compris</button><button onClick={()=>setDiagStage("4g")}>📶 Vérifier le routeur 4G</button></div></>;
+      if(diagStage==="sync")return <><div className="mathis-bubble mathis-bubble-bot"><b>Pas d'inquiétude : vos photos sont bien présentes.</b><br/>Une connexion faible peut simplement retarder leur apparition dans la galerie LP28. La gestion de la galerie et de la synchronisation est assurée par Location Photobooth 28. Vous n'avez rien à modifier.</div><div className="mathis-actions"><button onClick={()=>{setDiagAnswer("Synchronisation différée — photos conservées");notifyResolvedSilently()}}>✅ Continuer l'événement</button></div></>;
+      if(diagStage==="describe")return <><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Décrivez le problème Internet, QR ou galerie…"/><div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan si nécessaire</button></div></>;
+    }
+
+    return <><div className="mathis-bubble mathis-bubble-bot"><b>Décrivez-moi simplement la panne.</b><br/>Si une photo peut réellement aider, Mathis vous la demandera. Si je ne peux pas résoudre le problème de façon sûre, Johan prendra le relais.</div><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Décrivez ce que vous constatez…"/>{askPhoto("Photo facultative si elle aide à montrer la situation")}<div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan</button></div></>;
   }
 
   const directPhone=(supportPhone||"07 56 83 21 85").trim();
@@ -3758,10 +3790,10 @@ function MathisSavAdmin({remoteDesktopUrl=""}){
     <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>
     {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
     <div className="mathis-actions">
-      {i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>💻 Prendre en charge à distance</button>}
+      {i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>🟠 Prendre en charge le N2</button>}
       {i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Je dois me déplacer</button></>}
       {i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}
-      {(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Prise en main distante</a>}
+      {(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir la prise en main distante</a>}
     </div>
   </article>;
   return <section className="mathis-sav-admin">
@@ -6733,7 +6765,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.65</span></div></div>
+      <div className="brand"><img src="/logo.jpg"/><div><strong>LP28 Suite</strong><span>Version 8.5.66</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -6745,6 +6777,7 @@ function Dashboard({onLogout,user}) {
           <span className="nav-main-label">{m.icon} {m.label}</span>
           {m.id==="booths"&&isAdmin&&<span className={`booth-live-pill ${boothOnlineCount?"online":"offline"}`}>● LIVE {boothOnlineCount}/3</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length>0&&<span className="nav-assistance-triangle" title={`${activeSavOps.length} demande(s) d'assistance`}>⚠️</span>}
+          {m.id==="assistance"&&isAdmin&&activeSavOps.length===0&&latestInfoSav&&view!=="assistance"&&<span className="nav-assistance-info" title="Nouvelle information N1">ⓘ</span>}
         </button>)}
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
