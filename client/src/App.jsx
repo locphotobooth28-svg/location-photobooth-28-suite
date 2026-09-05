@@ -3430,6 +3430,18 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
         message:`${eventName?eventName+" · ":""}${boothInfo?.name||""} · ${printerInfo?.name||""} · ${symptomLabel()} · résolu`,
         createdAt:new Date().toISOString()
       }}));
+      // Un N1 résolu par Mathis doit aussi remonter dans l'historique Admin, sans alerte sonore.
+      if(portalToken && !incidentId && savStatus==="diagnostic"){
+        const led=ledInfo();
+        fetch(`/api/guest/${encodeURIComponent(portalToken)}/mathis/incidents/resolved`,{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            booth:boothInfo?.name||"",printer:printerInfo?.name||"",issue:symptomLabel(),
+            diagnostic:issue==="printer"?"Impression rétablie":(led?.status||"Résolu par Mathis"),
+            led:led?`${led.label} → ${led.status}`:"",photosAvailable:led?.photos!==false,printsAvailable:true
+          })
+        }).catch(()=>{});
+      }
       if("Notification" in window && Notification.permission==="granted"){
         new Notification("🤖 Incident Mathis résolu",{body:`${eventName?eventName+" — ":""}${boothInfo?.name||""} — ${symptomLabel()}`,silent:true});
       }
@@ -3714,33 +3726,55 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 }
 
 function MathisSavAdmin({remoteDesktopUrl=""}){
-  const [incidents,setIncidents]=useState([]),[loading,setLoading]=useState(true);
-  async function load(){try{const r=await fetch("/api/admin/mathis/incidents");if(r.ok){const d=await r.json();setIncidents(d.incidents||[])}}finally{setLoading(false)}}
+  const [incidents,setIncidents]=useState([]),[loading,setLoading]=useState(true),[selectedIds,setSelectedIds]=useState([]),[deleting,setDeleting]=useState(false);
+  async function load(){try{const r=await fetch("/api/admin/mathis/incidents");if(r.ok){const d=await r.json();const next=d.incidents||[];setIncidents(next);setSelectedIds(ids=>ids.filter(id=>next.some(i=>i.id===id)))} }finally{setLoading(false)}}
   useEffect(()=>{load();const t=setInterval(load,5000);return()=>clearInterval(t)},[]);
   async function setStatus(id,status){
     const r=await fetch(`/api/admin/mathis/incidents/${id}/status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
     if(!r.ok){const d=await r.json().catch(()=>({}));return alert(d.message||"Impossible de mettre à jour l'assistance.")}
     load();
   }
+  async function deleteSelected(){
+    if(!selectedIds.length)return;
+    if(!confirm(`Supprimer définitivement ${selectedIds.length} assistance(s) terminée(s) de l'historique ?`))return;
+    setDeleting(true);
+    try{
+      const r=await fetch("/api/admin/mathis/incidents",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:selectedIds})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Suppression impossible.");
+      setSelectedIds([]);await load();
+    }catch(err){alert(err.message||"Suppression impossible.");}
+    finally{setDeleting(false)}
+  }
   const active=incidents.filter(i=>!["RESOLVED","CLOSED"].includes(i.status));
-  const history=incidents.filter(i=>["RESOLVED","CLOSED"].includes(i.status)).slice(0,12);
-  const label=s=>({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 Déplacement",RESOLVED:"✅ Résolu",CLOSED:"✅ Terminé"}[s]||s);
-  const Card=({i})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()}`}>
-    <div className="mathis-sav-admin-top"><div><small>{label(i.status)}</small><h4>{i.event?.name||"Événement"}</h4></div><time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time></div>
+  const history=incidents.filter(i=>["RESOLVED","CLOSED"].includes(i.status));
+  const allHistorySelected=history.length>0&&history.every(i=>selectedIds.includes(i.id));
+  const label=i=>i.level===1?"🟢 N1 — Résolu par Mathis":({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 Déplacement",RESOLVED:"✅ Résolu",CLOSED:"✅ Terminé"}[i.status]||i.status);
+  const Card=({i,selectable=false})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()} ${i.level===1?"sav-level1":""}`}>
+    <div className="mathis-sav-admin-top">
+      <div className="mathis-sav-admin-heading">{selectable&&<input className="mathis-sav-check" type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...new Set([...ids,i.id])]:ids.filter(id=>id!==i.id))} aria-label={`Sélectionner ${i.event?.name||"assistance"}`}/>}<div><small>{label(i)}</small><h4>{i.event?.name||"Événement"}</h4></div></div>
+      <time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time>
+    </div>
     <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>
-    <div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>
+    {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
     <div className="mathis-actions">
       {i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>💻 Prendre en charge à distance</button>}
       {i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Je dois me déplacer</button></>}
       {i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}
-      {i.status==="REQUESTED"&&remoteDesktopUrl&&<a className="mathis-admin-link" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir prise en main</a>}
-      {i.status==="REMOTE"&&remoteDesktopUrl&&<a className="mathis-admin-link" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Prise en main distante</a>}
+      {(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Prise en main distante</a>}
     </div>
   </article>;
   return <section className="mathis-sav-admin">
     <div className="mathis-sav-admin-title"><div><div className="eyebrow">SAV MATHIS</div><h3>🛠️ Prises en charge en direct</h3><p className="muted">Les demandes N2 des organisateurs et invités apparaissent ici automatiquement.</p></div><button className="secondary-btn" onClick={load}>↻ Actualiser</button></div>
     {loading?<p className="muted">Chargement…</p>:active.length?<div className="mathis-sav-admin-list">{active.map(i=><Card key={i.id} i={i}/>)}</div>:<div className="mathis-sav-empty">✅ Aucune assistance en attente.</div>}
-    {!!history.length&&<details className="mathis-sav-history"><summary>📚 Dernières assistances terminées ({history.length})</summary><div className="mathis-sav-admin-list">{history.map(i=><Card key={i.id} i={i}/>)}</div></details>}
+    {!!history.length&&<details className="mathis-sav-history"><summary>📚 Dernières assistances terminées ({history.length})</summary>
+      <div className="mathis-sav-history-tools">
+        <label><input type="checkbox" checked={allHistorySelected} onChange={e=>setSelectedIds(e.target.checked?history.map(i=>i.id):[])}/> Tout sélectionner ({history.length})</label>
+        <span>{selectedIds.length} sélectionnée{selectedIds.length>1?"s":""}</span>
+        <button className="danger-btn" disabled={!selectedIds.length||deleting} onClick={deleteSelected}>🗑️ {deleting?"Suppression…":"Supprimer la sélection"}</button>
+      </div>
+      <div className="mathis-sav-admin-list">{history.map(i=><Card key={i.id} i={i} selectable/>)}</div>
+    </details>}
   </section>;
 }
 
@@ -6175,6 +6209,26 @@ function Dashboard({onLogout,user}) {
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
   const isAdmin=user?.role==="ADMIN";
+  const [opsSav,setOpsSav]=useState([]);
+  const [opsBooths,setOpsBooths]=useState([]);
+  useEffect(()=>{
+    if(!isAdmin)return;
+    let alive=true;
+    const refresh=async()=>{
+      try{
+        const [sav,booths]=await Promise.all([
+          fetch("/api/admin/mathis/incidents").then(r=>r.ok?r.json():({incidents:[]})),
+          fetch("/api/admin/booths").then(r=>r.ok?r.json():({booths:[]}))
+        ]);
+        if(alive){setOpsSav(sav.incidents||[]);setOpsBooths(booths.booths||[])}
+      }catch{}
+    };
+    refresh();const t=setInterval(refresh,5000);
+    return()=>{alive=false;clearInterval(t)};
+  },[isAdmin]);
+  const activeSavOps=opsSav.filter(i=>!["RESOLVED","CLOSED"].includes(i.status));
+  const latestInfoSav=opsSav.find(i=>i.level===1&&i.status==="RESOLVED"&&(Date.now()-new Date(i.createdAt).getTime())<24*60*60*1000);
+  const boothOnlineCount=Math.min(3,opsBooths.filter(b=>b.online).length);
   const defaultEventActions=user?.role==="INTERVENANT"?["view","navigate","share","start","complete"]:user?.role==="VIEWER"?["view"]:[];
   const eventActions=Array.isArray(user?.permissions?.eventActions)?user.permissions.eventActions:defaultEventActions;
   const canEventAction=id=>isAdmin||eventActions.includes(id);
@@ -6416,6 +6470,17 @@ function Dashboard({onLogout,user}) {
       });
   },[events,search,eventTab]);
 
+  const isDateInCurrentWeek=date=>{
+    if(!date)return false;
+    const d=new Date(`${date}T12:00:00`);if(Number.isNaN(d.getTime()))return false;
+    const now=new Date();const day=(now.getDay()+6)%7;
+    const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-day);
+    const end=new Date(start);end.setDate(end.getDate()+7);
+    return d>=start&&d<end;
+  };
+  const hasWeekUpcoming=eventTab==="upcoming"&&filtered.some(e=>isDateInCurrentWeek(e.date));
+  const firstLaterUpcomingIndex=eventTab==="upcoming"?filtered.findIndex(e=>!isDateInCurrentWeek(e.date)):-1;
+
   function eventBooths(event){
     const materials=event.materials||[];
     const booths=[];
@@ -6652,6 +6717,15 @@ function Dashboard({onLogout,user}) {
       }
     `}</style>
 
+    <style>{`
+      @keyframes lp28AssistBlink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.28;transform:scale(1.14)}}
+      @keyframes lp28TickerMove{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+      .sidebar .nav-item{display:flex;align-items:center;gap:8px}.sidebar .nav-main-label{min-width:0;flex:1;text-align:left}.booth-live-pill{margin-left:auto;white-space:nowrap;padding:3px 7px;border-radius:999;font-size:.68rem;font-weight:900;letter-spacing:.02em}.booth-live-pill.online{background:rgba(22,163,74,.14);color:#16a34a}.booth-live-pill.offline{background:rgba(220,38,38,.12);color:#dc2626}.nav-assistance-triangle{margin-left:auto;font-size:1.05rem;filter:drop-shadow(0 0 5px rgba(239,68,68,.75));animation:lp28AssistBlink .85s ease-in-out infinite}.nav-assistance-alert{position:relative}
+      .lp28-ops-banner{width:100%;height:42px;margin:0 0 16px;border-radius:12px;border:1px solid;display:flex;align-items:center;gap:10px;overflow:hidden;padding:0 12px;font-weight:900;cursor:pointer}.lp28-ops-banner.urgent{background:linear-gradient(90deg,#991b1b,#dc2626,#991b1b);border-color:#ef4444;color:#fff}.lp28-ops-banner.info{background:linear-gradient(90deg,#075985,#0284c7,#075985);border-color:#38bdf8;color:#fff}.lp28-ops-icon{font-size:1.2rem;flex:0 0 auto}.lp28-ops-banner.urgent .lp28-ops-icon{animation:lp28AssistBlink .85s ease-in-out infinite}.lp28-ops-marquee{overflow:hidden;white-space:nowrap;flex:1}.lp28-ops-marquee>span{display:inline-block;min-width:max-content;animation:lp28TickerMove 18s linear infinite}.lp28-ops-banner:hover .lp28-ops-marquee>span{animation-play-state:paused}
+      .event-list-section-title{grid-column:1/-1;padding:8px 12px;border-left:4px solid #d4ad2d;border-radius:8px;background:rgba(212,173,45,.10);font-size:.82rem;font-weight:950;letter-spacing:.045em;color:#8a6500}.event-list-section-title.upcoming{margin-top:4px;border-left-color:#3b82f6;background:rgba(59,130,246,.08);color:#2563eb}html[data-lp28-theme="dark"] .event-list-section-title{color:#f4d76b;background:rgba(212,173,45,.10)}html[data-lp28-theme="dark"] .event-list-section-title.upcoming{color:#93c5fd;background:rgba(59,130,246,.10)}
+      @media(max-width:760px){.booth-live-pill{font-size:.62rem;padding:2px 6px}.lp28-ops-banner{height:38px;border-radius:9px;font-size:.78rem}.event-list-section-title{font-size:.74rem}}
+    `}</style>
+
     <div className="lp28-mobile-topbar">
       <button type="button" className="lp28-mobile-menu-btn" aria-label="Ouvrir le menu" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(v=>!v)}><span className="menu-bars">☰</span><span className="menu-label">MENU</span></button>
       <div className="lp28-mobile-title"><strong>Bonjour {user?.firstName||user?.name?.split(" ")?.[0]||""} 👋</strong><span>LP28 Suite</span></div>
@@ -6667,7 +6741,11 @@ function Dashboard({onLogout,user}) {
           if(m.id==="settings")return true;
           const allowed=Array.isArray(user?.permissions?.allowedModules)?user.permissions.allowedModules:(user?.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
           return allowed.includes(m.id);
-        }).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""}`} onClick={()=>navigate(m.id)}>{m.icon} {m.label}</button>)}
+        }).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""} ${m.id==="assistance"&&activeSavOps.length?"nav-assistance-alert":""}`} onClick={()=>navigate(m.id)}>
+          <span className="nav-main-label">{m.icon} {m.label}</span>
+          {m.id==="booths"&&isAdmin&&<span className={`booth-live-pill ${boothOnlineCount?"online":"offline"}`}>● LIVE {boothOnlineCount}/3</span>}
+          {m.id==="assistance"&&isAdmin&&activeSavOps.length>0&&<span className="nav-assistance-triangle" title={`${activeSavOps.length} demande(s) d'assistance`}>⚠️</span>}
+        </button>)}
       </nav>
       <div className="sidebar-footer"><a href={SITE} target="_blank">www.locationphotobooth28.fr</a><button className="logout" onClick={onLogout}>Déconnexion</button></div>
     </aside>
@@ -6677,6 +6755,16 @@ function Dashboard({onLogout,user}) {
         <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{currentViewTitle}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         {isAdmin&&<button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>}
       </header>
+
+      {isAdmin&&(activeSavOps.length>0||latestInfoSav)&&(()=>{
+        const i=activeSavOps[0]||latestInfoSav;const urgent=activeSavOps.length>0;
+        const message=urgent
+          ?`DEMANDE D'ASSISTANCE : ${i?.event?.name||"Événement"} — ${i?.booth||"Borne"}${i?.printer?` — ${i.printer}`:""}${i?.issue?` — ${i.issue}`:""}`
+          :`INFORMATION D'ÉVÉNEMENT : ${i?.event?.name||"Événement"} — ${i?.booth||"Borne"}${i?.issue?` — ${i.issue}`:""} — résolu par Mathis`;
+        return <button type="button" className={`lp28-ops-banner ${urgent?"urgent":"info"}`} onClick={()=>navigate("assistance")}>
+          <span className="lp28-ops-icon">{urgent?"⚠️":"ℹ️"}</span><span className="lp28-ops-marquee"><span>{message} &nbsp;&nbsp;&nbsp; • &nbsp;&nbsp;&nbsp; {message}</span></span><b>›</b>
+        </button>;
+      })()}
 
       {view==="dashboard" ? <>
         <section className="stats-grid">
@@ -6743,7 +6831,8 @@ function Dashboard({onLogout,user}) {
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
-          {filtered.map(event=>{
+          {eventTab==="upcoming"&&hasWeekUpcoming&&<div className="event-list-section-title">📅 ÉVÉNEMENTS DE LA SEMAINE</div>}
+          {filtered.map((event,eventIndex)=>{
             const isGifted=!!event.preparation?.gifted;
             const giftedStyle=isGifted?{
               background:"linear-gradient(135deg,rgba(88,28,135,.34),rgba(76,29,149,.24))",
@@ -6755,7 +6844,9 @@ function Dashboard({onLogout,user}) {
               border:"1px solid rgba(245,158,11,.50)",
               boxShadow:"0 10px 28px rgba(120,72,18,.20)"
             }:{};
-            return <article className={`event-card ${event.archived?"archived":""}`} key={event.id} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
+            return <React.Fragment key={event.id}>
+            {eventTab==="upcoming"&&eventIndex===firstLaterUpcomingIndex&&<div className="event-list-section-title upcoming">📆 ÉVÉNEMENTS À VENIR</div>}
+            <article className={`event-card ${event.archived?"archived":""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -6848,7 +6939,7 @@ function Dashboard({onLogout,user}) {
                 {canEventAction("delete")&&<button className="danger-btn" onClick={()=>remove(event)}>🗑️ Supprimer</button>}
               </div>
             </div>
-          </article>;})}
+          </article></React.Fragment>;})}
         </div>
       </> : view==="planning" ? <>
         <FamilyPlanningAccountControls onChanged={()=>setPlanningRefresh(v=>v+1)}/><AdminPlanningCalendar events={events} refreshKey={planningRefresh} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={isAdmin?remove:undefined}/>

@@ -453,6 +453,7 @@ model MathisIncident {
   photosAvailable  Boolean  @default(true)
   printsAvailable  Boolean  @default(false)
   status           String   @default("REQUESTED")
+  level            Int      @default(2)
   adminNote        String?
   createdAt        DateTime @default(now())
   takenAt          DateTime?

@@ -4014,6 +4014,20 @@ app.post("/api/guest/:token/mathis/incidents", async (req,res)=>{
     res.json({ok:true,incident});
   }catch(err){console.error("Mathis create incident",err);res.status(500).json({ok:false,message:"Impossible de transmettre la demande."});}
 });
+app.post("/api/guest/:token/mathis/incidents/resolved", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event || !access.event.portalEnabled)return res.status(404).json({ok:false,message:"Portail indisponible."});
+    const incident=await prisma.mathisIncident.create({data:{
+      eventId:access.event.id,portalRole:access.role,level:1,
+      booth:String(req.body?.booth||"").slice(0,120),printer:String(req.body?.printer||"").slice(0,120),
+      issue:String(req.body?.issue||"").slice(0,160),diagnostic:String(req.body?.diagnostic||"Résolu par Mathis").slice(0,500),
+      led:String(req.body?.led||"").slice(0,180),contactFirstName:"Mathis",contactPhone:"",
+      photosAvailable:req.body?.photosAvailable!==false,printsAvailable:req.body?.printsAvailable!==false,status:"RESOLVED",resolvedAt:new Date()
+    }});
+    res.json({ok:true,incident});
+  }catch(err){console.error("Mathis resolved N1",err);res.status(500).json({ok:false,message:"Impossible d'enregistrer le compte rendu."});}
+});
 app.get("/api/guest/:token/mathis/incidents/active", async (req,res)=>{
   try{
     const access=await portalAccess(req.params.token);
@@ -4034,6 +4048,14 @@ app.get("/api/guest/:token/mathis/incidents/:id", async(req,res)=>{
 app.get("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
   const incidents=await prisma.mathisIncident.findMany({include:{event:{select:{id:true,name:true,eventDate:true}}},orderBy:{createdAt:"desc"},take:100});
   res.json({ok:true,incidents});
+});
+app.delete("/api/admin/mathis/incidents", adminOnly, async(req,res)=>{
+  try{
+    const ids=Array.isArray(req.body?.ids)?req.body.ids.map(String).filter(Boolean).slice(0,100):[];
+    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune assistance sélectionnée."});
+    const result=await prisma.mathisIncident.deleteMany({where:{id:{in:ids},status:{in:["RESOLVED","CLOSED"]}}});
+    res.json({ok:true,deleted:result.count});
+  }catch(err){console.error("Mathis bulk delete",err);res.status(500).json({ok:false,message:"Suppression impossible."});}
 });
 app.patch("/api/admin/mathis/incidents/:id/status", adminOnly, async(req,res)=>{
   const allowed=["REMOTE","LEVEL3","RESOLVED","CLOSED"];
