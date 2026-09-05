@@ -3326,6 +3326,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [diagAnswer,setDiagAnswer]=useState("");
   const [freeText,setFreeText]=useState("");
   const [supportPhoto,setSupportPhoto]=useState(null);
+  const [supportPhotoConsent,setSupportPhotoConsent]=useState(false);
   const isEventUser=userRole==="organizer"||userRole==="guest"||userRole==="organisateur"||userRole==="invite";
   const eventName=eventContext?.name||eventContext?.title||eventContext?.eventName||"";
   const boothInfo=MATHIS_BOOTHS[booth];
@@ -3357,16 +3358,16 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
 
   function reset(){
     setBooth("");setIssue("");setPrinter("");setStep("booth");
-    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);setIncidentId("");setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);
+    setPrinterStage("led-first");setPrinterSymptom("");setPrinterAnswer("");setLedCode("");setReportOpen(false);setSavStatus("diagnostic");setContactFirstName("");setContactPhone("");setContactAvailable(false);setIncidentId("");setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);setSupportPhotoConsent(false);
   }
   function chooseBooth(id){setBooth(id);setStep("issue")}
   function chooseIssue(id){
-    setIssue(id);setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);
+    setIssue(id);setDiagStage("");setDiagAnswer("");setFreeText("");setSupportPhoto(null);setSupportPhotoConsent(false);setSupportPhotoConsent(false);
     if(id==="printer") setStep("printer");
     else setStep("diagnostic");
   }
   function askPhoto(label="Photo utile au diagnostic"){
-    return <div className="mathis-photo-request"><b>📸 {label}</b><p>Mathis vous demande cette photo uniquement pour mieux comprendre la situation. Évitez de photographier des personnes ou des informations personnelles.</p><label className="mathis-admin-link">📷 Prendre / choisir une photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>setSupportPhoto(e.target.files?.[0]||null)}/></label>{supportPhoto&&<small>✅ {supportPhoto.name} prête à être transmise avec le diagnostic.</small>}</div>;
+    return <div className="mathis-photo-request"><b>📸 {label}</b><div className="mathis-ai-consent-warning"><b>⚠️ Analyse photo automatique</b><p>Cette photo peut être utilisée uniquement pour aider au diagnostic technique de cette assistance. Si une personne est visible, demandez-lui son accord avant de la photographier et de transmettre l’image pour analyse. La photo n’est pas publiée dans la galerie de l’événement.</p><label><input type="checkbox" checked={supportPhotoConsent} onChange={e=>{setSupportPhotoConsent(e.target.checked);if(!e.target.checked)setSupportPhoto(null)}}/> Je confirme avoir obtenu l’accord de la personne photographiée, si une personne est visible.</label></div><label className={`mathis-admin-link ${!supportPhotoConsent?"disabled":""}`} aria-disabled={!supportPhotoConsent}>📷 Prendre / choisir une photo<input type="file" accept="image/*" capture="environment" disabled={!supportPhotoConsent} style={{display:"none"}} onChange={e=>setSupportPhoto(e.target.files?.[0]||null)}/></label>{supportPhoto&&<small>✅ {supportPhoto.name} prête à être transmise avec le diagnostic.</small>}</div>;
   }
   function goN2(reason){setDiagAnswer(reason||"Contrôle Johan nécessaire");setPrinterAnswer("failed");setPrinterStage("result");if(isEventUser)playMathisAlert();}
   function choosePrinter(id){
@@ -3790,7 +3791,7 @@ function MathisSavAdmin({remoteDesktopUrl=""}){
   const label=i=>i.level===1?"🟢 N1 — Résolu par notre technicien virtuel Mathis":({REQUESTED:"📨 N2 demandé",REMOTE:"💻 Téléassistance en cours",LEVEL3:"🚗 N3 — Déplacement",RESOLVED:"✅ N2 — Résolu",CLOSED:"✅ N3 — Terminé"}[i.status]||i.status);
   const Card=({i,selectable=false})=><article className={`mathis-sav-admin-card sav-${String(i.status).toLowerCase()} ${i.level===1?"sav-level1":""} ${i.level===1&&!i.adminReadAt?"sav-unread":""}`}>
     <div className="mathis-sav-admin-top"><div className="mathis-sav-admin-heading">{selectable&&<input className="mathis-sav-check" type="checkbox" checked={selectedIds.includes(i.id)} onChange={e=>setSelectedIds(ids=>e.target.checked?[...new Set([...ids,i.id])]:ids.filter(id=>id!==i.id))}/>}<div><small>{label(i)} {i.level===1&&<span className={`sav-read-state ${i.adminReadAt?"read":"unread"}`}>{i.adminReadAt?"✓ LUE":"● NON LUE"}</span>}</small><h4>{i.event?.name||"Événement"}</h4></div></div><time>{new Date(i.createdAt).toLocaleString("fr-FR")}</time></div>
-    <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>{Array.isArray(i.photos)&&i.photos.length>0&&<div className="mathis-sav-photos"><b>📷 Photos de contrôle SAV ({i.photos.length})</b><div>{i.photos.map((p,idx)=><a key={p.id||idx} href={p.driveUrl||"#"} target="_blank" rel="noreferrer">📸 {p.controlType||`Contrôle ${idx+1}`}<small>{p.fileName}</small></a>)}</div></div>}
+    <div className="mathis-sav-admin-grid"><span><b>📸 Borne</b>{i.booth||"—"}</span><span><b>🖨️ Imprimante</b>{i.printer||"—"}</span><span><b>⚠️ Incident</b>{i.issue||"—"}</span><span><b>💡 Diagnostic</b>{i.led||i.diagnostic||"—"}</span></div>{Array.isArray(i.photos)&&i.photos.length>0&&<div className="mathis-sav-photos"><b>📷 Photos de contrôle SAV ({i.photos.length})</b><div>{i.photos.map((p,idx)=><a key={p.id||idx} href={p.driveUrl||"#"} target="_blank" rel="noreferrer">📸 {p.controlType||`Contrôle ${idx+1}`}<small>{p.fileName}</small></a>)}</div></div>}<MathisPhotoAnalysis incident={i}/>
     {i.level===1?<div className="mathis-sav-contact mathis-sav-info"><b>🤖 Résolu automatiquement par notre technicien virtuel Mathis</b><span>Information d'événement</span></div>:<div className="mathis-sav-contact"><b>👤 Interlocuteur : {i.contactFirstName}</b><a href={`tel:${String(i.contactPhone||"").replace(/[^+\d]/g,"")}`}>📞 {i.contactPhone}</a></div>}
     <div className="mathis-actions">{i.level===1&&!i.adminReadAt&&<button onClick={()=>markRead(i.id)}>✓ Marquer comme lu</button>}{i.status==="REQUESTED"&&<button onClick={()=>setStatus(i.id,"REMOTE")}>🟠 Prendre en charge le N2</button>}{i.status==="REMOTE"&&<><button onClick={()=>setStatus(i.id,"RESOLVED")}>✅ Résolu à distance</button><button onClick={()=>setStatus(i.id,"LEVEL3")}>🚗 Passage N3 — Je dois me déplacer</button></>}{i.status==="LEVEL3"&&<button onClick={()=>setStatus(i.id,"CLOSED")}>✅ Intervention terminée</button>}{(i.status==="REQUESTED"||i.status==="REMOTE")&&remoteDesktopUrl&&<a className="mathis-admin-link mathis-admin-remote-button" href={remoteDesktopUrl} target="_blank" rel="noreferrer">🖥️ Ouvrir la prise en main distante</a>}</div>
   </article>;
@@ -3801,6 +3802,12 @@ function MathisSavAdmin({remoteDesktopUrl=""}){
     {!!deletable.length&&<div className="mathis-sav-history-tools"><label><input type="checkbox" checked={allHistorySelected} onChange={e=>setSelectedIds(e.target.checked?deletable.map(i=>i.id):[])}/> Tout sélectionner ({deletable.length})</label><span>{selectedIds.length} sélectionnée{selectedIds.length>1?"s":""}</span><button className="danger-btn" disabled={!selectedIds.length||deleting} onClick={deleteSelected}>🗑️ {deleting?"Suppression…":"Supprimer la sélection"}</button></div>}</>}
   </section>;
 }
+function MathisPhotoAnalysis({incident}){
+  const [busy,setBusy]=useState(false); const [result,setResult]=useState(null); const [consent,setConsent]=useState(false);
+  async function analyze(){if(!consent)return;setBusy(true);setResult(null);try{const r=await fetch(`/api/admin/mathis/incidents/${incident.id}/photo-analysis`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({consentConfirmed:true})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Analyse impossible.");setResult(d.analysis)}catch(err){alert(err.message||"Analyse impossible.")}finally{setBusy(false)}}
+  return <div className="mathis-photo-analysis"><div className="mathis-ai-consent-warning"><b>⚠️ Analyse photo automatique</b><p>Avant d’envoyer une photo à l’outil d’analyse, vérifiez que toute personne visible a donné son accord. L’image est utilisée uniquement pour le diagnostic de cette assistance et n’est pas publiée dans la galerie.</p><label><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/> Je confirme avoir l’accord nécessaire pour cette analyse.</label></div><button onClick={analyze} disabled={busy||!consent}>🤖 {busy?"Analyse en cours…":"Analyser la dernière photo de la borne"}</button>{result&&<div className="mathis-analysis-result"><b>🤖 Diagnostic Mathis — {result.booth||incident.booth||"Borne"}</b><small>Photo analysée : {result.photoName||"dernière photo"}{result.photoTime?` · ${new Date(result.photoTime).toLocaleString("fr-FR")}`:""}</small><p>{result.observation}</p><div className="mathis-settings-grid"><span><b>ISO</b>{result.iso||"—"}</span><span><b>Vitesse</b>{result.shutter||"—"}</span><span><b>Ouverture</b>{result.aperture||"—"}</span><span><b>Focale</b>{result.focal||"—"}</span><span><b>Flash</b>{result.flash||"—"}</span></div>{result.advice&&<p><b>💡 Conseil :</b> {result.advice}</p>}{result.flashAssessment&&<p><b>⚡ Flash :</b> {result.flashAssessment}</p>}{result.confidence&&<small>Confiance : {result.confidence}</small>}</div>}</div>
+}
+
 function AssistanceCenter(){
   const [data,setData]=useState(null),[title,setTitle]=useState(""),[url,setUrl]=useState("");
   const [settings,setSettings]=useState({});
@@ -6210,6 +6217,15 @@ function Dashboard({onLogout,user}) {
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
+  async function previewPortal(event,role){
+    try{
+      const r=await fetch(`/api/events/${event.id}/share`); const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Aperçu indisponible.");
+      const url=role==="ORGANIZER"?d.organizerUrl:d.guestUrl;
+      if(!url)throw new Error("Lien de portail indisponible.");
+      window.open(url,"_blank","noopener,noreferrer");
+    }catch(err){alert(err.message||"Impossible d’ouvrir l’aperçu.");}
+  }
   const [documentEvent,setDocumentEvent]=useState(null);
   const [viewEvent,setViewEvent]=useState(null);
   const [search,setSearch]=useState("");
@@ -6742,7 +6758,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.76</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.78</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
@@ -6922,6 +6938,7 @@ function Dashboard({onLogout,user}) {
                 {canEventAction("navigate")&&event.address&&<button onClick={()=>window.open(`https://waze.com/ul?q=${encodeURIComponent(event.address)}&navigate=yes&utm_source=lp28-suite`,`_blank`,`noopener,noreferrer`)} style={{border:"1px solid #38bdf8",background:"rgba(14,116,144,.20)",color:"#bae6fd",fontWeight:900}}>🚗 Se rendre à l’événement</button>}
                 {canEventAction("google")&&<button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>}
                 {canEventAction("share")&&<button onClick={()=>setShareEvent(event)}>📱 Partager</button>}
+                {isAdmin&&<details className="preview-role-menu"><summary>👁️ Voir en tant que…</summary><div><button onClick={()=>previewPortal(event,"ORGANIZER")}>👤 Organisateur</button><button onClick={()=>previewPortal(event,"GUEST")}>👥 Invité</button></div></details>}
                 {canEventAction("contract")&&<button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>}
                 {canEventAction("documents")&&<button onClick={()=>setDocumentEvent(event)}>📁 Documents</button>}
                 {(isAdmin||canEventAction("contract"))&&(event.contractStatus==="SIGNED" ? (
