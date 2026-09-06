@@ -1,3 +1,12 @@
+# LP28 V8.5.85 — Photos Borne / pilotage Agent V2.7
+
+- Portail : séparation « Photos Borne » (LumaBooth / FotoShare, 30 jours) et « Photos partagées » (Drive, organisateur + invités).
+- Les médias LUMABOOTH_* historiques ne sont plus affichés dans le portail client.
+- Mes Bornes : Redémarrer / Éteindre avec confirmation.
+- Compteur flottant par borne : OFF par défaut, verrouillage et transparence 20–100 %.
+- API de contrôle Agent V2.7.
+- Détection automatique de l’événement LumaBooth conservée.
+
 # LP28 V8.5.84 — Correctif compteurs Widget V1.2
 
 - Le widget utilise désormais le compteur média remonté directement par l’imprimante connectée à chaque borne (`mediaRemaining / mediaCapacity`).

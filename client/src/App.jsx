@@ -1438,7 +1438,7 @@ Johan — Location Photobooth 28`;
             <label className="switch-line"><input type="checkbox" checked={form.guestUploadModerated!==false} onChange={e=>set("guestUploadModerated",e.target.checked)}/> Modération avant publication (optionnelle)</label>
             <div><label>Expiration</label><input type="date" value={form.portalExpiresAt||""} onChange={e=>set("portalExpiresAt",e.target.value)}/></div>
             <div><label>Mot de passe (facultatif)</label><input value={form.portalPassword||""} onChange={e=>set("portalPassword",e.target.value)}/></div>
-            <div className="wide"><label>Lien FotoShare (secours)</label><input placeholder="https://fotoshare.co/..." value={form.fotoshareUrl||""} onChange={e=>set("fotoshareUrl",e.target.value)}/></div>
+            <div className="wide"><label>Galerie Photos Borne — lien LumaBooth / FotoShare</label><input placeholder="https://fotoshare.co/..." value={form.fotoshareUrl||""} onChange={e=>set("fotoshareUrl",e.target.value)}/><small className="muted">Ce lien alimente le bouton « Photos Borne » du portail. Accès client prévu pendant 30 jours.</small></div>
           </>}
         </div></div>
       </details>
@@ -4459,31 +4459,17 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       </section>
     )}
 
-    {e.fotoshareUrl&&<a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos de la borne</a>}
+    <div className="portal-photo-actions">
+      {e.fotoshareUrl
+        ? <a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos Borne</a>
+        : <div className="portal-action disabled" aria-disabled="true">📸 Photos Borne — lien bientôt disponible</div>}
+      <a className="portal-action" href="#photos-partagees">❤️ Photos partagées</a>
+    </div>
+    {e.fotoshareUrl&&<p className="portal-note">La galerie Photos Borne est disponible pendant 30 jours après l’événement.</p>}
 
-    {organizer&&(
-      <section className="portal-section">
-        <div className="portal-document-card" style={{display:"flex",gap:16,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
-          <div>
-            <h3 style={{margin:"0 0 4px"}}>📸 Originaux visibles aux invités</h3>
-            <p className="muted" style={{margin:0}}>
-              Les originaux restent toujours visibles dans votre espace organisateur.
-            </p>
-          </div>
-          <button
-            type="button"
-            className={e.showOriginalsToGuests?"primary":"secondary-btn"}
-            onClick={toggleOriginalsVisibility}
-          >
-            {e.showOriginalsToGuests?"🟢 Affichés aux invités":"⚪ Masqués aux invités"}
-          </button>
-        </div>
-      </section>
-    )}
-
-    {(organizer||portalPermissions.guestGallery!==false)&&<section className="portal-section">
+    {(organizer||portalPermissions.guestGallery!==false)&&<section className="portal-section" id="photos-partagees">
       <div className="memories-heading">
-        <div><h2>📸 LP28 Memories</h2><p className="muted">{galleryMedia.length} souvenir{galleryMedia.length>1?"s":""}</p></div>
+        <div><h2>❤️ Photos partagées</h2><p className="muted">{galleryMedia.length} photo{galleryMedia.length>1?"s":""} ajoutée{galleryMedia.length>1?"s":""} par l’organisateur et les invités</p></div>
         {organizer&&galleryMedia.length>0&&<button className="memory-select-toggle" onClick={()=>{setSelectMode(v=>!v);setSelected([])}}>{selectMode?"Annuler":"☑ Sélectionner"}</button>}
       </div>
 
@@ -4534,7 +4520,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       </div>}
 
       {partyMedia.length>0&&<>
-        <h3 style={{marginTop:18}}>🎉 Tirages & invités <span className="muted">({partyMedia.length})</span></h3>
+        <h3 style={{marginTop:18}}>❤️ Organisateur & invités <span className="muted">({partyMedia.length})</span></h3>
         <div className="memories-grid">
           {partyMedia.map(m=><article key={m.id} className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`}>
           {selectMode&&organizer&&<button className="memory-select-check" onClick={()=>toggleSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
@@ -4555,24 +4541,6 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
         </article>)}
         </div>
       </>}
-
-      {originalsMedia.length>0&&<>
-        <h3 style={{marginTop:28}}>📸 Originaux <span className="muted">({originalsMedia.length})</span></h3>
-        <div className="memories-grid">
-          {originalsMedia.map(m=><article key={m.id} className={`memory-card ${m.status.toLowerCase()} ${selected.includes(m.id)?"selected":""}`}>
-          {selectMode&&organizer&&<button className="memory-select-check" onClick={()=>toggleSelected(m.id)}>{selected.includes(m.id)?"✓":""}</button>}
-
-          {m.mediaType==="VIDEO"
-            ? <video src={m.url} controls preload="metadata"/>
-            : <button className="memory-photo-button" onClick={()=>selectMode&&organizer?toggleSelected(m.id):setLightbox(m)}>
-                <img src={m.thumbnailUrl||m.url} loading="lazy" decoding="async"/>
-              </button>}
-
-          {organizer&&<div className="memory-status">{m.status==="VISIBLE"?"Visible":m.status==="HIDDEN"?"Masquée":"À valider"}</div>}
-          {organizer&&!selectMode&&<div className="memory-actions">
-            {m.status==="VISIBLE"&&<button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button>}
-            {m.status==="HIDDEN"&&<button onClick={()=>action(m.id,"show")}>↩️ Réafficher</button>}
-            {m.status==="PENDING"&&<><button onClick={()=>action(m.id,"approve")}>✅ Publier</button><button onClick={()=>action(m.id,"hide")}>👁️ Masquer</button></>}
             <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
           </div>}
         </article>)}
@@ -4635,67 +4603,48 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
 
 function AdminBooths(){
-  const [booths,setBooths]=useState([]),[error,setError]=useState("");
-  async function load(){
-    try{
-      const r=await fetch("/api/admin/booths");
-      const d=await r.json();
-      if(!r.ok)throw new Error(d.message||"Supervision indisponible.");
-      setBooths(d.booths||[]);setError("");
-    }catch(e){setError(e.message)}
-  }
+  const [booths,setBooths]=useState([]),[error,setError]=useState(""),[busy,setBusy]=useState("");
+  async function load(){try{const r=await fetch("/api/admin/booths");const d=await r.json();if(!r.ok)throw new Error(d.message||"Supervision indisponible.");setBooths(d.booths||[]);setError("")}catch(e){setError(e.message)}}
   useEffect(()=>{load();const t=setInterval(load,15000);return()=>clearInterval(t)},[]);
-  const ago=s=>{
-    if(s===null||typeof s==="undefined")return "Jamais";
-    if(s<60)return `il y a ${s} s`;
-    if(s<3600)return `il y a ${Math.floor(s/60)} min`;
-    return `il y a ${Math.floor(s/3600)} h`;
-  };
+  const ago=s=>s==null?"Jamais":s<60?`il y a ${s} s`:s<3600?`il y a ${Math.floor(s/60)} min`:`il y a ${Math.floor(s/3600)} h`;
+  async function sendCommand(boothName,command){
+    const label=command==="RESTART"?"redémarrer":"éteindre";
+    if(!window.confirm(`Confirmer : ${label} la borne ${boothName} ?`))return;
+    setBusy(`${boothName}:${command}`);
+    try{const r=await fetch(`/api/admin/booths/${encodeURIComponent(boothName)}/command`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Commande impossible.");alert(command==="RESTART"?"🔄 Redémarrage demandé.":"⏻ Extinction demandée.");await load()}catch(e){alert(e.message)}finally{setBusy("")}
+  }
+  async function updateDisplay(boothName,patch){
+    const current=booths.find(x=>x.boothName===boothName)?.display||{enabled:false,locked:false,opacity:80};
+    setBooths(list=>list.map(x=>x.boothName===boothName?{...x,display:{...current,...patch}}:x));
+    try{const r=await fetch(`/api/admin/booths/${encodeURIComponent(boothName)}/display`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...current,...patch})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Réglage impossible.");await load()}catch(e){alert(e.message);await load()}
+  }
   return <section>
-    <div className="calendar-toolbar">
-      <div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Lola, Nina et Gabin.</p></div>
-      <button className="ghost" onClick={load}>↻ Actualiser</button>
-    </div>
+    <div className="calendar-toolbar"><div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct et commandes de Lola, Nina et Gabin.</p></div><button className="ghost" onClick={load}>↻ Actualiser</button></div>
     {error&&<div className="notice error">{error}</div>}
     <div className="stats-grid">
       {[...booths].sort((a,b)=>{const order={LOLA:0,NINA:1,GABIN:2};return (order[String(a.boothName||"").toUpperCase()]??99)-(order[String(b.boothName||"").toUpperCase()]??99)}).map(b=><article className="stat-card" key={b.boothName} style={{textAlign:"left"}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
-          <strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong>
-          <span>{b.online?"En ligne":"Hors ligne"}</span>
-        </div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}><strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong><span>{b.online?"En ligne":"Hors ligne"}</span></div>
         <div style={{marginTop:14,lineHeight:1.8}}>
           <div><b>Événement :</b> {b.eventName||"Aucun"}</div>
           <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"} <span className="muted">— {b.lumaVersion?`v${String(b.lumaVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
           <div>🤖 Agent LP28 : {b.online?"🟢 Connecté":"⚪ Hors ligne"} <span className="muted">— {b.agentVersion?`v${String(b.agentVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
-          <div>☁️ Galerie : {b.syncStatus||"—"}</div>
-          {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
+          <div>📡 Supervision : {b.syncStatus||"—"}</div>
           <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
-          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&(()=>{
-            const isCitizen=String(b.printer.model||"").toUpperCase().includes("CITIZEN")||String(b.printer.model||"").toUpperCase().includes("CY-02");
-            const reportedCapacity=Number(b.printer.mediaCapacity);
-            const capacity=Number.isFinite(reportedCapacity)&&reportedCapacity>0?reportedCapacity:(isCitizen?700:null);
-            const reportedPct=Number(b.printer.mediaPercent);
-            const calculatedPct=capacity?Number(b.printer.mediaRemaining)*100/capacity:NaN;
-            const pct=Number.isFinite(reportedPct)&&reportedPct>0?reportedPct:calculatedPct;
-            const validPct=Number.isFinite(pct);
-            const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";
-            const barValue=validPct?Math.max(0,Math.min(100,pct)):0;
-            return <div style={{marginTop:8,marginBottom:8}}>
-              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining}{capacity?` / ${capacity}`:""}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
-              {validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}>
-                <div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/>
-              </div>}
-              <div className="muted" style={{fontSize:12,marginTop:4}}>
-                {b.printer.mediaFresh?"🟢 Lecture récente":"🟠 Dernière lecture connue"}
-                {b.printer.mediaAgeSeconds!==null&&typeof b.printer.mediaAgeSeconds!=="undefined"?` · ${ago(b.printer.mediaAgeSeconds)}`:""}
-              </div>
-            </div>;
-          })()}
+          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&<div><b>📄 Papier :</b> {b.printer.mediaRemaining}{b.printer.mediaCapacity?` / ${b.printer.mediaCapacity}`:""}</div>}
           {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
-          {b.printer?.printCount&&<div>🔢 Compteur : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
-          {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
-          {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
+          {b.printer?.printCount&&<div>🔢 Compteur imprimante : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
           <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
+        </div>
+        <div className="booth-control-panel">
+          <h3>🎛️ Commandes borne</h3>
+          <div className="booth-power-actions"><button disabled={!b.online||!!busy} onClick={()=>sendCommand(b.boothName,"RESTART")}>🔄 Redémarrer la borne</button><button className="danger" disabled={!b.online||!!busy} onClick={()=>sendCommand(b.boothName,"SHUTDOWN")}>⏻ Éteindre la borne</button></div>
+          <div className="booth-display-settings">
+            <label className="booth-switch-line"><span>🖨️ Afficher le compteur sur la borne</span><input type="checkbox" checked={Boolean(b.display?.enabled)} onChange={e=>updateDisplay(b.boothName,{enabled:e.target.checked})}/><b>{b.display?.enabled?"ON":"OFF"}</b></label>
+            <label className="booth-switch-line"><span>🔒 Verrouiller la position</span><input type="checkbox" checked={Boolean(b.display?.locked)} onChange={e=>updateDisplay(b.boothName,{locked:e.target.checked})}/><b>{b.display?.locked?"OUI":"NON"}</b></label>
+            <label className="booth-transparency"><span>✨ Transparence : {Number(b.display?.opacity??80)} %</span><input type="range" min="20" max="100" step="5" value={Number(b.display?.opacity??80)} onChange={e=>setBooths(list=>list.map(x=>x.boothName===b.boothName?{...x,display:{...(x.display||{}),opacity:Number(e.target.value)}}:x))} onMouseUp={e=>updateDisplay(b.boothName,{opacity:Number(e.currentTarget.value)})} onTouchEnd={e=>updateDisplay(b.boothName,{opacity:Number(e.currentTarget.value)})}/></label>
+            <p className="muted" style={{fontSize:12,margin:"8px 0 0"}}>OFF par défaut. Déverrouillé, le compteur noir/or peut être déplacé directement sur l’écran de la borne ; sa position est mémorisée localement.</p>
+          </div>
+          {b.lastCommand&&<div className="muted" style={{fontSize:12,marginTop:8}}>Dernière commande : {b.lastCommand.type==="RESTART"?"Redémarrage":"Extinction"} · {b.lastCommand.status||"PENDING"}</div>}
         </div>
       </article>)}
     </div>
@@ -6762,7 +6711,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.84</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.85</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;

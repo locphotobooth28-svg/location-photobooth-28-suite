@@ -1022,6 +1022,22 @@ function boothStatusKey(boothName){
   return `boothStatus:${safe}`;
 }
 
+
+function boothControlKey(boothName){
+  const safe=String(boothName||"").trim().toUpperCase().replace(/[^A-Z0-9_-]+/g,"_").slice(0,50);
+  return `boothControl:${safe}`;
+}
+function defaultBoothControl(){return {display:{enabled:false,locked:false,opacity:80},command:null};}
+async function readBoothControl(boothName){
+  const row=await prisma.appSetting.findUnique({where:{key:boothControlKey(boothName)}}).catch(()=>null);
+  if(!row)return defaultBoothControl();
+  try{const p=JSON.parse(row.value||"{}");return {display:{enabled:Boolean(p?.display?.enabled),locked:Boolean(p?.display?.locked),opacity:Math.max(20,Math.min(100,Number(p?.display?.opacity)||80))},command:p?.command||null};}catch{return defaultBoothControl()}
+}
+async function writeBoothControl(boothName,value){await prisma.appSetting.upsert({where:{key:boothControlKey(boothName)},update:{value:JSON.stringify(value)},create:{key:boothControlKey(boothName),value:JSON.stringify(value)}});}
+app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);res.json({ok:true,...control});});
+app.post("/api/booth-agent/control/ack",boothAgentOnly,async(req,res)=>{const boothName=String(req.body?.boothName||"").trim().toUpperCase();const commandId=String(req.body?.commandId||"").trim();const status=String(req.body?.status||"ACK").trim().slice(0,40);if(!["LOLA","NINA","GABIN"].includes(boothName)||!commandId)return res.status(400).json({ok:false,message:"Accusé invalide."});const control=await readBoothControl(boothName);if(control.command?.id===commandId){control.command={...control.command,status,ackAt:new Date().toISOString()};await writeBoothControl(boothName,control)}res.json({ok:true});});
+app.post("/api/admin/booths/:boothName/command",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();const command=String(req.body?.command||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});if(!["RESTART","SHUTDOWN"].includes(command))return res.status(400).json({ok:false,message:"Commande invalide."});const control=await readBoothControl(boothName);control.command={id:crypto.randomUUID(),type:command,status:"PENDING",createdAt:new Date().toISOString()};await writeBoothControl(boothName,control);res.json({ok:true,command:control.command});});
+app.post("/api/admin/booths/:boothName/display",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);control.display={enabled:Boolean(req.body?.enabled),locked:Boolean(req.body?.locked),opacity:Math.max(20,Math.min(100,Number(req.body?.opacity)||80))};await writeBoothControl(boothName,control);res.json({ok:true,display:control.display});});
 app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
   try{
     const boothName=String(req.body?.boothName||"").trim().slice(0,100);
@@ -1068,39 +1084,12 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
 
 app.get("/api/admin/booths",moduleViewOnly("booths"),async(req,res)=>{
   try{
-    const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}});
-    const now=Date.now();
-    const byName={};
-    for(const row of rows){
-      try{
-        const s=JSON.parse(row.value||"{}");
-        const ageMs=s.lastSeen ? now-new Date(s.lastSeen).getTime() : Number.MAX_SAFE_INTEGER;
-        s.online=ageMs<=60000;
-        s.ageSeconds=Math.max(0,Math.round(ageMs/1000));
-        if(s.printer){
-          const mediaTime=s.printer.mediaReadAt?new Date(s.printer.mediaReadAt).getTime():NaN;
-          if(Number.isFinite(mediaTime)){
-            const mediaAgeMs=Math.max(0,now-mediaTime);
-            s.printer.mediaAgeSeconds=Math.round(mediaAgeMs/1000);
-            s.printer.mediaFresh=mediaAgeMs<=180000;
-          }else{
-            s.printer.mediaAgeSeconds=null;
-            s.printer.mediaFresh=false;
-          }
-        }
-        byName[String(s.boothName||"").trim().toUpperCase()]=s;
-      }catch{}
-    }
-    const configured=["LOLA","NINA","GABIN"].map(name=>byName[name]||{
-      boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,
-      syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null
-    });
-    const extras=Object.values(byName).filter(s=>!["LOLA","NINA","GABIN"].includes(String(s.boothName||"").toUpperCase()));
-    res.json({ok:true,booths:[...configured,...extras]});
-  }catch(err){
-    console.error("ADMIN BOOTHS ERROR :",err);
-    res.status(500).json({ok:false,message:"Lecture des bornes impossible."});
-  }
+    const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}}); const now=Date.now(); const byName={};
+    for(const row of rows){try{const s=JSON.parse(row.value||"{}");const ageMs=s.lastSeen?now-new Date(s.lastSeen).getTime():Number.MAX_SAFE_INTEGER;s.online=ageMs<=60000;s.ageSeconds=Math.max(0,Math.round(ageMs/1000));if(s.printer){const mt=s.printer.mediaReadAt?new Date(s.printer.mediaReadAt).getTime():NaN;if(Number.isFinite(mt)){const ma=Math.max(0,now-mt);s.printer.mediaAgeSeconds=Math.round(ma/1000);s.printer.mediaFresh=ma<=180000}else{s.printer.mediaAgeSeconds=null;s.printer.mediaFresh=false}}byName[String(s.boothName||"").trim().toUpperCase()]=s}catch{}}
+    const names=["LOLA","NINA","GABIN"]; const controls=Object.fromEntries(await Promise.all(names.map(async name=>[name,await readBoothControl(name)])));
+    const configured=names.map(name=>{const s=byName[name]||{boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null};return {...s,display:controls[name].display,lastCommand:controls[name].command};});
+    const extras=Object.values(byName).filter(s=>!names.includes(String(s.boothName||"").toUpperCase())); res.json({ok:true,booths:[...configured,...extras]});
+  }catch(err){console.error("ADMIN BOOTHS ERROR :",err);res.status(500).json({ok:false,message:"Lecture des bornes impossible."});}
 });
 
 
@@ -4667,12 +4656,11 @@ app.get("/api/guest/:token/memories", async (req,res)=>{
       ? true
       : await getShowOriginalsToGuests(access.event.id);
 
+  // V8.5.85 : Photos Borne = LumaBooth/FotoShare ; ici uniquement organisateur + invités.
   const where={
     eventId:access.event.id,
     status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE",
-    ...(access.role!=="ORGANIZER"&&!showOriginalsToGuests
-      ? {uploadedBy:{not:"LUMABOOTH_ORIGINAL"}}
-      : {})
+    uploadedBy:{notIn:["LUMABOOTH_ORIGINAL","LUMABOOTH_PRINT","LUMABOOTH_ANIMATED"]}
   };
 
   const media=await prisma.memoryMedia.findMany({where,orderBy:{createdAt:"asc"}});
