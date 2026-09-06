@@ -4656,7 +4656,7 @@ app.get("/api/guest/:token/memories", async (req,res)=>{
       ? true
       : await getShowOriginalsToGuests(access.event.id);
 
-  // V8.5.85 : Photos Borne = LumaBooth/FotoShare ; ici uniquement organisateur + invités.
+  // V8.5.86 : Photos Borne = LumaBooth/FotoShare ; ici uniquement organisateur + invités.
   const where={
     eventId:access.event.id,
     status:access.role==="ORGANIZER"?{in:["VISIBLE","HIDDEN","PENDING"]}:"VISIBLE",

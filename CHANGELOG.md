@@ -1,4 +1,8 @@
-# LP28 V8.5.85 — Photos Borne / pilotage Agent V2.7
+# LP28 V8.5.86 — Photos Borne / pilotage Agent V2.7
+
+## Correctif V8.5.86
+- Correction du bloc JSX Galerie qui empêchait le build Render (balises fermantes dupliquées).
+- Aucun changement fonctionnel par rapport à V8.5.85.
 
 - Portail : séparation « Photos Borne » (LumaBooth / FotoShare, 30 jours) et « Photos partagées » (Drive, organisateur + invités).
 - Les médias LUMABOOTH_* historiques ne sont plus affichés dans le portail client.

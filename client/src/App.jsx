@@ -4541,11 +4541,6 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
         </article>)}
         </div>
       </>}
-            <button className="danger" onClick={()=>{setDeleteItem(m);setDeleteText("")}}>🗑️ Supprimer</button>
-          </div>}
-        </article>)}
-        </div>
-      </>}
 
       {!galleryMedia.length&&<p className="muted">Aucun souvenir ajouté pour le moment.</p>}
       {visibleCount<galleryMedia.length&&<button className="memory-load-more" onClick={()=>setVisibleCount(v=>v+80)}>Afficher 80 photos de plus</button>}
@@ -6711,7 +6706,7 @@ function Dashboard({onLogout,user}) {
     </div>
     <button type="button" className="lp28-mobile-backdrop" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} />
     <aside className={`sidebar ${mobileMenuOpen?"mobile-open":""}`}>
-      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.85</span></div></div>
+      <div className="brand"><img src="/logo-hd.png"/><div><strong>LP28 Suite</strong><span>Version 8.5.86</span></div></div>
       <nav>
         {navModules.filter(m=>{
           if(m.visible===false)return false;
