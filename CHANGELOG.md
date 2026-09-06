@@ -1,6 +1,6 @@
-# LP28 V8.5.86 — Photos Borne / pilotage Agent V2.7
+# LP28 V8.5.87 — Photos Borne / pilotage Agent V2.7
 
-## Correctif V8.5.86
+## Correctif V8.5.87
 - Correction du bloc JSX Galerie qui empêchait le build Render (balises fermantes dupliquées).
 - Aucun changement fonctionnel par rapport à V8.5.85.
 

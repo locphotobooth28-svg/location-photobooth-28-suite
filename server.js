@@ -929,13 +929,27 @@ app.get("/api/booth-agent/ping",boothAgentOnly,(req,res)=>{
   res.json({ok:true,service:"LP28 Booth Agent API",version:1});
 });
 
+function isDatabaseUnavailable(err){
+  return err?.code==="P1001" || err?.meta?.driverAdapterError?.cause?.kind==="DatabaseNotReachable";
+}
+function sendTemporaryDatabaseUnavailable(res,context,err){
+  console.error(`${context} - base de données temporairement indisponible :`,err?.code||err?.message||err);
+  return res.status(503).json({ok:false,temporary:true,retry:true,message:"Base de données temporairement indisponible. Nouvelle tentative automatique conseillée."});
+}
+
 app.get("/api/booth-agent/events",boothAgentOnly,async(req,res)=>{
-  const events=await prisma.event.findMany({
-    where:{archived:false},
-    orderBy:{eventDate:"asc"},
-    select:{id:true,name:true,eventDate:true,address:true,portalEnabled:true}
-  });
-  res.json({ok:true,events});
+  try{
+    const events=await prisma.event.findMany({
+      where:{archived:false},
+      orderBy:{eventDate:"asc"},
+      select:{id:true,name:true,eventDate:true,address:true,portalEnabled:true}
+    });
+    res.json({ok:true,events});
+  }catch(err){
+    if(isDatabaseUnavailable(err))return sendTemporaryDatabaseUnavailable(res,"BOOTH EVENTS",err);
+    console.error("BOOTH EVENTS ERROR :",err);
+    res.status(500).json({ok:false,message:"Lecture des événements impossible."});
+  }
 });
 
 app.post(
@@ -1077,6 +1091,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
     });
     res.json({ok:true,lastSeen:payload.lastSeen});
   }catch(err){
+    if(isDatabaseUnavailable(err))return sendTemporaryDatabaseUnavailable(res,"BOOTH HEARTBEAT",err);
     console.error("BOOTH HEARTBEAT ERROR :",err);
     res.status(500).json({ok:false,message:"Supervision borne impossible."});
   }
