@@ -24,10 +24,39 @@ function ensureDeleteButton(){
   button.style.marginLeft="8px";
   download.insertAdjacentElement("afterend",button);
 }
+function retryImage(img){
+  if(!img||img.tagName!=="IMG")return;
+  const src=img.getAttribute("src")||"";
+  if(!src.includes("/memories/"))return;
+  const attempts=Number(img.dataset.lp28Retry||0);
+  if(attempts>=3)return;
+  img.dataset.lp28Retry=String(attempts+1);
+  const delay=350+(attempts*650);
+  setTimeout(()=>{
+    if(!img.isConnected)return;
+    const current=img.getAttribute("src")||src;
+    const u=new URL(current,location.href);
+    u.searchParams.set("lp28retry",`${Date.now()}-${attempts+1}`);
+    img.src=u.pathname+u.search+u.hash;
+  },delay);
+}
+function prepareGalleryImages(root=document){
+  root.querySelectorAll?.("img[src*='/memories/']").forEach(img=>{
+    if(img.dataset.lp28RetryReady)return;
+    img.dataset.lp28RetryReady="1";
+    img.addEventListener("error",()=>retryImage(img));
+    if(img.complete&&img.naturalWidth===0)retryImage(img);
+  });
+}
 export function installZipDownloads(){
-  const observer=new MutationObserver(ensureDeleteButton);
+  const observer=new MutationObserver(mutations=>{
+    ensureDeleteButton();
+    for(const mutation of mutations){for(const node of mutation.addedNodes){if(node.nodeType===1){prepareGalleryImages(node);if(node.matches?.("img[src*='/memories/']"))prepareGalleryImages(node.parentElement||document);}}}
+  });
   observer.observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener("load",ensureDeleteButton);
+  window.addEventListener("load",()=>{ensureDeleteButton();prepareGalleryImages();});
+  prepareGalleryImages();
+  document.addEventListener("error",event=>{if(event.target?.tagName==="IMG")retryImage(event.target);},true);
   document.addEventListener("click",async event=>{
     const button=event.target.closest("button");
     if(!button)return;
