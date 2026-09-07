@@ -6,10 +6,12 @@ import "./styles.css";
 import { installZipDownloads } from "./zipDownloads";
 import { installGuestPermissionAdmin } from "./guestPermissionAdmin";
 import { installGuestPortalRights } from "./guestPortalRights";
+import { installContractFreshPdf } from "./contractFreshPdf";
 
 installZipDownloads();
 installGuestPermissionAdmin();
 installGuestPortalRights();
+installContractFreshPdf();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
