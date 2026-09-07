@@ -7,11 +7,13 @@ import { installZipDownloads } from "./zipDownloads";
 import { installGuestPermissionAdmin } from "./guestPermissionAdmin";
 import { installGuestPortalRights } from "./guestPortalRights";
 import { installContractFreshPdf } from "./contractFreshPdf";
+import { installAdminPermissionsUi } from "./adminPermissionsUi";
 
 installZipDownloads();
 installGuestPermissionAdmin();
 installGuestPortalRights();
 installContractFreshPdf();
+installAdminPermissionsUi();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
