@@ -30,7 +30,8 @@ googleService.uploadMemoryToDrive = async function patchedUploadMemoryToDrive(re
 googleService.getMemoryFromDrive = async function patchedGetMemoryFromDrive(req,fileId){
   const key=keyFromFileId(fileId);
   if(!key) return originalGet(req,fileId);
-  return redirectStream(r2.presignGet(key,900));
+  const wantsDownload=String(req?.query?.download||"")==="1";
+  return redirectStream(r2.presignGet(key,900,{download:wantsDownload}));
 };
 
 googleService.deleteMemoryFromDrive = async function patchedDeleteMemoryFromDrive(req,fileId){
