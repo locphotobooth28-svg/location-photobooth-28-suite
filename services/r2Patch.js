@@ -15,52 +15,45 @@ function keyFromFileId(fileId){
 function redirectStream(url){
   return {
     on(){ return this; },
-    pipe(res){
-      return res.redirect(302,url);
-    }
+    pipe(res){ return res.redirect(302,url); }
   };
 }
 
 googleService.uploadMemoryToDrive = async function patchedUploadMemoryToDrive(req,event,file){
-  if(!r2.configured()){
-    return originalUpload(req,event,file);
-  }
-
+  if(!r2.configured()) return originalUpload(req,event,file);
   const uploaded = await r2.uploadFile(event,file);
-  return {
-    id:uploaded.fileId,
-    webViewLink:null,
-    webContentLink:null
-  };
+  console.log(`LP28 R2 UPLOAD OK : ${uploaded.key}`);
+  return { id:uploaded.fileId, webViewLink:null, webContentLink:null };
 };
 
 googleService.getMemoryFromDrive = async function patchedGetMemoryFromDrive(req,fileId){
   const key=keyFromFileId(fileId);
-  if(!key){
-    return originalGet(req,fileId);
-  }
-
-  // server.js appelle ensuite stream.pipe(res). Pour R2, on transforme ce pipe
-  // en redirection vers une URL S3 signée : les octets ne passent plus par Render.
+  if(!key) return originalGet(req,fileId);
   return redirectStream(r2.presignGet(key,900));
 };
 
 googleService.deleteMemoryFromDrive = async function patchedDeleteMemoryFromDrive(req,fileId){
-  const key=keyFromFileId(fileId);
+  const raw=String(fileId||"");
+  const key=keyFromFileId(raw);
   if(!key){
+    console.log(`LP28 STORAGE DELETE : ancien média Drive ${raw.slice(0,24)}`);
     return originalDelete(req,fileId);
   }
-  await r2.deleteFile(key);
+  console.log(`LP28 R2 DELETE START : ${key}`);
+  try{
+    await r2.deleteFile(key);
+    console.log(`LP28 R2 DELETE OK : ${key}`);
+    return true;
+  }catch(err){
+    console.error(`LP28 R2 DELETE FAILED : ${key} : ${err?.message||err}`);
+    throw err;
+  }
 };
 
 googleService.getMemoryThumbnailLink = async function patchedGetMemoryThumbnailLink(req,fileId){
   const key=keyFromFileId(fileId);
-  if(key){
-    return r2.presignGet(key,900);
-  }
-  if(originalThumbnail){
-    return originalThumbnail(req,fileId);
-  }
+  if(key) return r2.presignGet(key,900);
+  if(originalThumbnail) return originalThumbnail(req,fileId);
   return null;
 };
 
