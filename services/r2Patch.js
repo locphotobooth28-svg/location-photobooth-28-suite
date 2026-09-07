@@ -1,5 +1,6 @@
 const r2 = require("./r2Service");
 const googleService = require("./googleService");
+const prisma = require("../lib/prisma");
 
 const originalUpload = googleService.uploadMemoryToDrive.bind(googleService);
 const originalGet = googleService.getMemoryFromDrive.bind(googleService);
@@ -56,6 +57,36 @@ googleService.getMemoryThumbnailLink = async function patchedGetMemoryThumbnailL
   if(originalThumbnail) return originalThumbnail(req,fileId);
   return null;
 };
+
+// Certaines routes historiques (notamment la suppression côté organisateur)
+// effacent directement la ligne Prisma sans passer par googleService.
+// On intercepte donc memoryMedia.delete : si le média pointe vers R2,
+// l'objet R2 est supprimé AVANT la ligne en base. En cas d'échec R2,
+// Prisma ne supprime rien, ce qui évite les objets orphelins invisibles.
+if(prisma?.memoryMedia && typeof prisma.memoryMedia.delete === "function"){
+  const originalMemoryMediaDelete = prisma.memoryMedia.delete.bind(prisma.memoryMedia);
+  prisma.memoryMedia.delete = async function patchedMemoryMediaDelete(args){
+    const id=args?.where?.id;
+    if(id && r2.configured()){
+      const media=await prisma.memoryMedia.findUnique({
+        where:{id},
+        select:{id:true,driveFileId:true}
+      }).catch(()=>null);
+      const key=keyFromFileId(media?.driveFileId);
+      if(key){
+        console.log(`LP28 R2 DELETE VIA PRISMA START : ${key}`);
+        try{
+          await r2.deleteFile(key);
+          console.log(`LP28 R2 DELETE VIA PRISMA OK : ${key}`);
+        }catch(err){
+          console.error(`LP28 R2 DELETE VIA PRISMA FAILED : ${key} : ${err?.message||err}`);
+          throw err;
+        }
+      }
+    }
+    return originalMemoryMediaDelete(args);
+  };
+}
 
 if(r2.configured()){
   console.log("LP28 R2 : stockage galerie Cloudflare R2 activé.");
