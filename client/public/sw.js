@@ -1,5 +1,5 @@
-const CACHE = "lp28-shell-v1";
-const SHELL = ["/", "/manifest.webmanifest", "/logo.jpg", "/icons/lp28-192.png", "/icons/lp28-512.png"];
+const CACHE = "lp28-shell-v2";
+const SHELL = ["/manifest.webmanifest", "/logo.jpg", "/icons/lp28-192.png", "/icons/lp28-512.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL).catch(()=>null)));
   self.skipWaiting();
@@ -13,11 +13,19 @@ self.addEventListener("fetch", event => {
   if(req.method !== "GET") return;
   const url = new URL(req.url);
   if(url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
-  if(req.mode === "navigate") {
-    event.respondWith(fetch(req).then(res=>{const copy=res.clone();caches.open(CACHE).then(c=>c.put("/",copy));return res;}).catch(()=>caches.match("/")));
+
+  // Toujours demander au réseau la page HTML et les bundles JS/CSS.
+  // Cela évite qu'une ancienne version de LP28 reste affichée après un déploiement.
+  if(req.mode === "navigate" || url.pathname.endsWith(".js") || url.pathname.endsWith(".css")) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
     return;
   }
-  event.respondWith(caches.match(req).then(cached => cached || fetch(req).then(res=>{if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy));}return res;})));
+
+  // Les ressources statiques stables (logo/icônes/manifest) peuvent rester en cache.
+  event.respondWith(caches.match(req).then(cached => cached || fetch(req).then(res=>{
+    if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
+    return res;
+  })));
 });
 
 self.addEventListener("push", event => {
