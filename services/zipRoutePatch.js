@@ -33,6 +33,27 @@ function install(){
     zip.pipe(res);
    }catch(err){console.error("LP28 ZIP route :",err);if(!res.headersSent)res.status(500).json({ok:false,message:"Création du ZIP impossible."});}
   });
+  app.post("/api/r2/portal-delete/:token",original.json({limit:"256kb"}),async(req,res)=>{
+   try{
+    const token=String(req.params.token||"");
+    const event=await prisma.event.findFirst({where:{organizerToken:token}});
+    if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});
+    const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];
+    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});
+    const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null}});
+    if(!media.length)return res.status(404).json({ok:false,message:"Photos introuvables."});
+    let deleted=0;
+    for(const item of media){
+     await prisma.memoryMedia.delete({where:{id:item.id}});
+     deleted++;
+    }
+    console.log(`LP28 R2 BULK DELETE OK : ${deleted} média(s) / ${event.id}`);
+    return res.json({ok:true,deleted});
+   }catch(err){
+    console.error("LP28 R2 bulk delete :",err);
+    if(!res.headersSent)return res.status(500).json({ok:false,message:"Suppression impossible."});
+   }
+  });
   return app;
  }
  Object.assign(wrappedExpress,original);wrappedExpress.__lp28ZipWrapped=true;require.cache[expressPath].exports=wrappedExpress;
