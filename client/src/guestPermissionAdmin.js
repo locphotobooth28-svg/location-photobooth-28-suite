@@ -5,8 +5,22 @@ function findSecurityPanel(){
   if(marker){let node=marker;for(let i=0;i<6&&node;i++,node=node.parentElement){const text=node.textContent||'';if(text.includes('Verrouiller les invités')&&text.includes('Verrouiller toute la galerie'))return node;}}
   return null;
 }
+function currentGalleryName(){
+  const h=[...document.querySelectorAll('h1,h2,h3')].map(x=>(x.textContent||'').trim()).filter(Boolean);
+  return h.find(x=>!x.includes('Sécurité de la galerie')&&!x.includes('Droits des invités')&&!x.includes('LumaBooth'))||'';
+}
 function makeButton(label,enabled,onClick){const b=document.createElement('button');b.type='button';b.textContent=`${enabled?'🟢':'🔴'} ${label} : ${enabled?'Autorisé':'Interdit'}`;b.style.marginRight='8px';b.style.marginTop='8px';b.addEventListener('click',onClick);return b;}
 async function api(url,options){const r=await fetch(url,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Opération impossible.');return d;}
+async function resolveCurrentGallery(){
+  const name=currentGalleryName();if(!name)return null;
+  const list=await api('/api/admin/galleries');
+  const gallery=(list.galleries||[]).find(g=>String(g.name||'').trim()===name);
+  if(!gallery)return null;
+  const detail=await api(`/api/admin/galleries/${encodeURIComponent(gallery.id)}`);
+  const event=detail.event||{};
+  const preparation=event.preparation&&typeof event.preparation==='object'?event.preparation:{};
+  return {eventId:event.id||gallery.id,preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
+}
 async function savePermission(state,changes){
   const preparation={...state.preparation,...changes};
   await api(`/api/events/${encodeURIComponent(state.eventId)}/preparation`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({preparation})});
@@ -25,18 +39,14 @@ function mountControls(){
     buttons.append(download,del);
   };render();
 }
-function captureGalleryResponse(url,response){
-  const match=String(url||'').match(/\/api\/admin\/galleries\/([^/?#]+)(?:[?#]|$)/i);if(!match||!response?.ok)return;
-  response.clone().json().then(data=>{
-    const event=data?.event;if(!event)return;
-    const preparation=event.preparation&&typeof event.preparation==='object'?event.preparation:{};
-    currentGalleryState={eventId:event.id||decodeURIComponent(match[1]),preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
-    setTimeout(mountControls,0);
-  }).catch(()=>{});
+async function ensureMounted(){
+  if(document.getElementById('lp28-guest-rights'))return;
+  if(!findSecurityPanel())return;
+  try{currentGalleryState=await resolveCurrentGallery();if(currentGalleryState)mountControls();}catch{}
 }
 export function installGuestPermissionAdmin(){
-  const originalFetch=window.fetch.bind(window);
-  window.fetch=async function(input,init){const response=await originalFetch(input,init);const url=typeof input==='string'?input:input?.url;captureGalleryResponse(url,response);return response;};
-  let scheduled=false;const run=()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;if(currentGalleryState&&!document.getElementById('lp28-guest-rights'))mountControls();},50);};
-  new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('load',run);setTimeout(run,0);
+  let scheduled=false;
+  const run=()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;ensureMounted();},80);};
+  new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});
+  window.addEventListener('load',run);window.addEventListener('popstate',run);document.addEventListener('click',()=>setTimeout(run,120));setTimeout(run,0);
 }
