@@ -6,34 +6,28 @@ function findSecurityPanel(){
   const fullLock=buttons.find(b=>(b.textContent||'').trim().includes('Verrouiller toute la galerie'));
   if(guestLock&&fullLock){
     let node=guestLock.parentElement;
-    for(let i=0;i<8&&node;i++,node=node.parentElement){
-      if(node.contains(fullLock))return node;
-    }
-  }
-  const marker=[...document.querySelectorAll('h1,h2,h3,h4,h5,h6,strong,b,div')].find(el=>(el.textContent||'').includes('Sécurité de la galerie'));
-  if(marker){
-    let node=marker;
-    for(let i=0;i<8&&node;i++,node=node.parentElement){
-      const text=node.textContent||'';
-      if(text.includes('Verrouiller les invités')&&text.includes('Verrouiller toute la galerie'))return node;
-    }
+    for(let i=0;i<8&&node;i++,node=node.parentElement){if(node.contains(fullLock))return node;}
   }
   return null;
 }
-function currentEventId(){
-  const input=[...document.querySelectorAll('input')].find(el=>String(el.value||'').includes('/api/lumabooth/event/'));
-  const match=String(input?.value||'').match(/\/api\/lumabooth\/event\/([^/?#]+)/i);
-  return match?decodeURIComponent(match[1]):null;
+function currentGalleryName(){
+  const luma=[...document.querySelectorAll('strong,h1,h2,h3,h4')].map(el=>(el.textContent||'').trim()).find(text=>/^LumaBooth\s*[—-]\s*/i.test(text));
+  if(luma)return luma.replace(/^.*?LumaBooth\s*[—-]\s*/i,'').trim();
+  const headings=[...document.querySelectorAll('h1,h2,h3')].map(el=>(el.textContent||'').trim()).filter(Boolean);
+  return headings.find(text=>text!=="Galeries"&&!text.includes('Sécurité de la galerie'))||'';
 }
 function makeButton(label,enabled,onClick){const b=document.createElement('button');b.type='button';b.textContent=`${enabled?'🟢':'🔴'} ${label} : ${enabled?'Autorisé':'Interdit'}`;b.style.marginRight='8px';b.style.marginTop='8px';b.addEventListener('click',onClick);return b;}
 async function api(url,options){const r=await fetch(url,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Opération impossible.');return d;}
 async function resolveCurrentGallery(){
-  const eventId=currentEventId();
-  if(!eventId)throw new Error('Identifiant de la galerie introuvable.');
-  const detail=await api(`/api/admin/galleries/${encodeURIComponent(eventId)}`);
+  const name=currentGalleryName();
+  if(!name)throw new Error('Nom de la galerie introuvable.');
+  const list=await api('/api/admin/galleries');
+  const gallery=(list.galleries||[]).find(g=>String(g.name||'').trim()===name);
+  if(!gallery)throw new Error(`Galerie « ${name} » introuvable.`);
+  const detail=await api(`/api/admin/galleries/${encodeURIComponent(gallery.id)}`);
   const event=detail.event||{};
   const preparation=event.preparation&&typeof event.preparation==='object'?event.preparation:{};
-  return {eventId:event.id||eventId,preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
+  return {eventId:event.id||gallery.id,preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
 }
 async function savePermission(state,changes){
   const preparation={...state.preparation,...changes};
@@ -44,7 +38,7 @@ function mountControls(){
   const panel=findSecurityPanel();if(!panel||!currentGalleryState)return;
   const old=document.getElementById('lp28-guest-rights');if(old)old.remove();
   const state=currentGalleryState;
-  const box=document.createElement('div');box.id='lp28-guest-rights';box.style.marginTop='14px';box.style.paddingTop='12px';box.style.borderTop='1px solid rgba(128,128,128,.25)';
+  const box=document.createElement('div');box.id='lp28-guest-rights';box.style.marginTop='14px';box.style.paddingTop='12px';box.style.borderTop='1px solid rgba(128,128,128,.25)';box.style.width='100%';
   box.innerHTML='<strong>🔐 Droits des invités</strong><div class="muted" style="margin-top:4px">Choisis ce que les invités peuvent faire dans la galerie de cet événement.</div><div id="lp28-guest-rights-buttons"></div>';
   panel.appendChild(box);const buttons=box.querySelector('#lp28-guest-rights-buttons');
   const render=()=>{buttons.innerHTML='';
@@ -56,9 +50,7 @@ function mountControls(){
 async function ensureMounted(){
   if(document.getElementById('lp28-guest-rights'))return;
   const panel=findSecurityPanel();if(!panel)return;
-  if(!currentGalleryState){
-    const loading=document.createElement('div');loading.id='lp28-guest-rights';loading.style.marginTop='14px';loading.style.paddingTop='12px';loading.style.borderTop='1px solid rgba(128,128,128,.25)';loading.innerHTML='<strong>🔐 Droits des invités</strong><div class="muted" style="margin-top:4px">Chargement…</div>';panel.appendChild(loading);
-  }
+  const loading=document.createElement('div');loading.id='lp28-guest-rights';loading.style.marginTop='14px';loading.style.paddingTop='12px';loading.style.borderTop='1px solid rgba(128,128,128,.25)';loading.style.width='100%';loading.innerHTML='<strong>🔐 Droits des invités</strong><div class="muted" style="margin-top:4px">Chargement…</div>';panel.appendChild(loading);
   try{currentGalleryState=await resolveCurrentGallery();mountControls();}catch(e){const box=document.getElementById('lp28-guest-rights');if(box)box.innerHTML=`<strong>🔐 Droits des invités</strong><div class="muted" style="margin-top:4px">⚠️ ${e.message}</div>`;}
 }
 export function installGuestPermissionAdmin(){let scheduled=false;const run=()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;ensureMounted();},80);};new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('load',run);document.addEventListener('click',()=>setTimeout(run,120));setTimeout(run,0);}
