@@ -5,104 +5,13 @@ function install(){
  if(original.__lp28ZipWrapped)return;
  function wrappedExpress(...args){
   const app=original(...args);
-  app.post("/api/r2/portal-zip-links/:token",original.json({limit:"256kb"}),async(req,res)=>{
-   try{
-    const token=String(req.params.token||"");
-    const event=await prisma.event.findFirst({where:{organizerToken:token}});
-    if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});
-    const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];
-    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});
-    const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null}});
-    const ordered=ids.map(id=>media.find(m=>m.id===id)).filter(Boolean);
-    if(!ordered.length)return res.status(404).json({ok:false,message:"Photos introuvables."});
-    const files=[];
-    for(const item of ordered){const key=r2.fromFileId(item.driveFileId);if(!key)return res.status(409).json({ok:false,message:"Une ancienne photo n'est pas encore disponible pour ce mode de téléchargement."});files.push({id:item.id,name:item.originalName||item.fileName||`${item.id}.jpg`,url:r2.presignGet(key,900)});}
-    const eventName=String(event.name||"evenement").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"evenement";
-    res.setHeader("Cache-Control","no-store");
-    return res.json({ok:true,filename:`LP28-${eventName}-photos.zip`,files});
-   }catch(err){console.error("LP28 ZIP links :",err);return res.status(500).json({ok:false,message:"Préparation du téléchargement impossible."});}
-  });
-  app.post("/api/r2/portal-delete/:token",original.json({limit:"256kb"}),async(req,res)=>{
-   try{
-    const token=String(req.params.token||"");
-    const event=await prisma.event.findFirst({where:{organizerToken:token}});
-    if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});
-    const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];
-    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});
-    const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null}});
-    if(!media.length)return res.status(404).json({ok:false,message:"Photos introuvables."});
-    let deleted=0;for(const item of media){await prisma.memoryMedia.delete({where:{id:item.id}});deleted++;}
-    console.log(`LP28 R2 BULK DELETE OK : ${deleted} média(s) / ${event.id}`);
-    return res.json({ok:true,deleted});
-   }catch(err){console.error("LP28 R2 bulk delete :",err);if(!res.headersSent)return res.status(500).json({ok:false,message:"Suppression impossible."});}
-  });
-  app.get("/api/r2/admin-guest-permissions/:eventId",async(req,res)=>{
-   try{
-    if(!req.session?.userId)return res.status(401).json({ok:false,message:"Connexion administrateur requise."});
-    const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{role:true,active:true}});
-    if(!user?.active||user.role!=="ADMIN")return res.status(403).json({ok:false,message:"Droits administrateur requis."});
-    const event=await prisma.event.findUnique({where:{id:String(req.params.eventId||"")},select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});
-    if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
-    res.setHeader("Cache-Control","no-store");
-    return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});
-   }catch(err){console.error("LP28 admin guest permissions GET :",err);return res.status(500).json({ok:false,message:"Réglages invités indisponibles."});}
-  });
-  app.post("/api/r2/admin-guest-permissions/:eventId",original.json({limit:"32kb"}),async(req,res)=>{
-   try{
-    if(!req.session?.userId)return res.status(401).json({ok:false,message:"Connexion administrateur requise."});
-    const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{role:true,active:true}});
-    if(!user?.active||user.role!=="ADMIN")return res.status(403).json({ok:false,message:"Droits administrateur requis."});
-    const changes={};
-    if(typeof req.body?.guestDownloadEnabled==="boolean")changes.guestDownloadEnabled=req.body.guestDownloadEnabled;
-    if(typeof req.body?.guestDeleteEnabled==="boolean")changes.guestDeleteEnabled=req.body.guestDeleteEnabled;
-    if(!Object.keys(changes).length)return res.status(400).json({ok:false,message:"Aucun réglage valide à enregistrer."});
-    const event=await prisma.event.update({where:{id:String(req.params.eventId||"")},data:changes,select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});
-    res.setHeader("Cache-Control","no-store");
-    return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});
-   }catch(err){console.error("LP28 admin guest permissions POST :",err);if(err?.code==="P2025")return res.status(404).json({ok:false,message:"Événement introuvable."});return res.status(500).json({ok:false,message:"Enregistrement des réglages impossible."});}
-  });
-  app.get("/api/r2/guest-permissions/:token",async(req,res)=>{
-   try{
-    const token=String(req.params.token||"");
-    const event=await prisma.event.findFirst({where:{guestToken:token},select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});
-    if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});
-    res.setHeader("Cache-Control","no-store");
-    return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});
-   }catch(err){console.error("LP28 guest permissions :",err);return res.status(500).json({ok:false,message:"Permissions invité indisponibles."});}
-  });
-  app.post("/api/r2/guest-zip-links/:token",original.json({limit:"256kb"}),async(req,res)=>{
-   try{
-    const token=String(req.params.token||"");
-    const event=await prisma.event.findFirst({where:{guestToken:token}});
-    if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});
-    if(!event.guestDownloadEnabled)return res.status(403).json({ok:false,message:"Le téléchargement n'est pas autorisé pour les invités."});
-    const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];
-    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});
-    const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null,status:"VISIBLE"}});
-    const ordered=ids.map(id=>media.find(m=>m.id===id)).filter(Boolean);
-    if(!ordered.length)return res.status(404).json({ok:false,message:"Photos introuvables."});
-    const files=[];
-    for(const item of ordered){const key=r2.fromFileId(item.driveFileId);if(!key)return res.status(409).json({ok:false,message:"Une ancienne photo n'est pas encore disponible pour ce mode de téléchargement."});files.push({id:item.id,name:item.originalName||item.fileName||`${item.id}.jpg`,url:r2.presignGet(key,900)});}
-    const eventName=String(event.name||"evenement").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"evenement";
-    res.setHeader("Cache-Control","no-store");
-    return res.json({ok:true,filename:`LP28-${eventName}-photos.zip`,files});
-   }catch(err){console.error("LP28 guest ZIP links :",err);return res.status(500).json({ok:false,message:"Préparation du téléchargement impossible."});}
-  });
-  app.post("/api/r2/guest-delete/:token",original.json({limit:"256kb"}),async(req,res)=>{
-   try{
-    const token=String(req.params.token||"");
-    const event=await prisma.event.findFirst({where:{guestToken:token}});
-    if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});
-    if(!event.guestDeleteEnabled)return res.status(403).json({ok:false,message:"La suppression n'est pas autorisée pour les invités."});
-    const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];
-    if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});
-    const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null,status:"VISIBLE"}});
-    if(!media.length)return res.status(404).json({ok:false,message:"Photos introuvables."});
-    let deleted=0;for(const item of media){await prisma.memoryMedia.delete({where:{id:item.id}});deleted++;}
-    console.log(`LP28 R2 GUEST DELETE OK : ${deleted} média(s) / ${event.id}`);
-    return res.json({ok:true,deleted});
-   }catch(err){console.error("LP28 R2 guest delete :",err);if(!res.headersSent)return res.status(500).json({ok:false,message:"Suppression impossible."});}
-  });
+  app.get("/api/r2/organizer-guest-rights/:token",async(req,res)=>{try{const event=await prisma.event.findFirst({where:{organizerToken:String(req.params.token||"")},select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});res.setHeader("Cache-Control","no-store");return res.json({ok:true,guestDownloadEnabled:!!event.guestDownloadEnabled,guestDeleteEnabled:!!event.guestDeleteEnabled});}catch(err){console.error("LP28 organizer guest rights GET :",err);return res.status(500).json({ok:false,message:"Réglages invités indisponibles."});}});
+  app.post("/api/r2/organizer-guest-rights/:token",original.json({limit:"32kb"}),async(req,res)=>{try{const event=await prisma.event.findFirst({where:{organizerToken:String(req.params.token||"")},select:{id:true}});if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});const data={};if(typeof req.body?.guestDownloadEnabled==="boolean")data.guestDownloadEnabled=req.body.guestDownloadEnabled;if(typeof req.body?.guestDeleteEnabled==="boolean")data.guestDeleteEnabled=req.body.guestDeleteEnabled;if(!Object.keys(data).length)return res.status(400).json({ok:false,message:"Aucun réglage valide."});const updated=await prisma.event.update({where:{id:event.id},data,select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});res.setHeader("Cache-Control","no-store");return res.json({ok:true,guestDownloadEnabled:!!updated.guestDownloadEnabled,guestDeleteEnabled:!!updated.guestDeleteEnabled});}catch(err){console.error("LP28 organizer guest rights POST :",err);return res.status(500).json({ok:false,message:"Enregistrement impossible."});}});
+  app.post("/api/r2/portal-zip-links/:token",original.json({limit:"256kb"}),async(req,res)=>{try{const token=String(req.params.token||"");const event=await prisma.event.findFirst({where:{organizerToken:token}});if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null}});const ordered=ids.map(id=>media.find(m=>m.id===id)).filter(Boolean);if(!ordered.length)return res.status(404).json({ok:false,message:"Photos introuvables."});const files=[];for(const item of ordered){const key=r2.fromFileId(item.driveFileId);if(!key)return res.status(409).json({ok:false,message:"Une ancienne photo n'est pas encore disponible pour ce mode de téléchargement."});files.push({id:item.id,name:item.originalName||item.fileName||`${item.id}.jpg`,url:r2.presignGet(key,900)});}const eventName=String(event.name||"evenement").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"evenement";res.setHeader("Cache-Control","no-store");return res.json({ok:true,filename:`LP28-${eventName}-photos.zip`,files});}catch(err){console.error("LP28 ZIP links :",err);return res.status(500).json({ok:false,message:"Préparation du téléchargement impossible."});}});
+  app.post("/api/r2/portal-delete/:token",original.json({limit:"256kb"}),async(req,res)=>{try{const token=String(req.params.token||"");const event=await prisma.event.findFirst({where:{organizerToken:token}});if(!event)return res.status(403).json({ok:false,message:"Accès organisateur requis."});const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null}});if(!media.length)return res.status(404).json({ok:false,message:"Photos introuvables."});let deleted=0;for(const item of media){await prisma.memoryMedia.delete({where:{id:item.id}});deleted++;}return res.json({ok:true,deleted});}catch(err){console.error("LP28 R2 bulk delete :",err);return res.status(500).json({ok:false,message:"Suppression impossible."});}});
+  app.get("/api/r2/guest-permissions/:token",async(req,res)=>{try{const event=await prisma.event.findFirst({where:{guestToken:String(req.params.token||"")},select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});res.setHeader("Cache-Control","no-store");return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});}catch(err){console.error("LP28 guest permissions :",err);return res.status(500).json({ok:false,message:"Permissions invité indisponibles."});}});
+  app.post("/api/r2/guest-zip-links/:token",original.json({limit:"256kb"}),async(req,res)=>{try{const event=await prisma.event.findFirst({where:{guestToken:String(req.params.token||"")}});if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});if(!event.guestDownloadEnabled)return res.status(403).json({ok:false,message:"Le téléchargement n'est pas autorisé pour les invités."});const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null,status:"VISIBLE"}});const ordered=ids.map(id=>media.find(m=>m.id===id)).filter(Boolean);if(!ordered.length)return res.status(404).json({ok:false,message:"Photos introuvables."});const files=[];for(const item of ordered){const key=r2.fromFileId(item.driveFileId);if(!key)return res.status(409).json({ok:false,message:"Une ancienne photo n'est pas encore disponible pour ce mode de téléchargement."});files.push({id:item.id,name:item.originalName||item.fileName||`${item.id}.jpg`,url:r2.presignGet(key,900)});}const eventName=String(event.name||"evenement").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"evenement";res.setHeader("Cache-Control","no-store");return res.json({ok:true,filename:`LP28-${eventName}-photos.zip`,files});}catch(err){console.error("LP28 guest ZIP links :",err);return res.status(500).json({ok:false,message:"Préparation du téléchargement impossible."});}});
+  app.post("/api/r2/guest-delete/:token",original.json({limit:"256kb"}),async(req,res)=>{try{const event=await prisma.event.findFirst({where:{guestToken:String(req.params.token||"")}});if(!event)return res.status(403).json({ok:false,message:"Accès invité requis."});if(!event.guestDeleteEnabled)return res.status(403).json({ok:false,message:"La suppression n'est pas autorisée pour les invités."});const ids=Array.isArray(req.body?.ids)?[...new Set(req.body.ids.map(String))].slice(0,500):[];if(!ids.length)return res.status(400).json({ok:false,message:"Aucune photo sélectionnée."});const media=await prisma.memoryMedia.findMany({where:{id:{in:ids},eventId:event.id,deletedAt:null,status:"VISIBLE"}});if(!media.length)return res.status(404).json({ok:false,message:"Photos introuvables."});let deleted=0;for(const item of media){await prisma.memoryMedia.delete({where:{id:item.id}});deleted++;}return res.json({ok:true,deleted});}catch(err){console.error("LP28 R2 guest delete :",err);return res.status(500).json({ok:false,message:"Suppression impossible."});}});
   return app;
  }
  Object.assign(wrappedExpress,original);wrappedExpress.__lp28ZipWrapped=true;require.cache[expressPath].exports=wrappedExpress;
