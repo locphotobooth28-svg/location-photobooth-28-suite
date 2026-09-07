@@ -10,20 +10,19 @@ function findSecurityPanel(){
   }
   return null;
 }
-function currentGalleryName(){
-  const luma=[...document.querySelectorAll('strong,h1,h2,h3,h4')].map(el=>(el.textContent||'').trim()).find(text=>/^LumaBooth\s*[—-]\s*/i.test(text));
-  if(luma)return luma.replace(/^.*?LumaBooth\s*[—-]\s*/i,'').trim();
-  const headings=[...document.querySelectorAll('h1,h2,h3')].map(el=>(el.textContent||'').trim()).filter(Boolean);
-  return headings.find(text=>text!=="Galeries"&&!text.includes('Sécurité de la galerie'))||'';
+function currentOrganizerToken(){
+  const input=[...document.querySelectorAll('input')].find(el=>String(el.value||'').includes('/api/lumabooth/event/'));
+  const match=String(input?.value||'').match(/\/api\/lumabooth\/event\/([^/?#]+)/i);
+  return match?decodeURIComponent(match[1]):'';
 }
 function makeButton(label,enabled,onClick){const b=document.createElement('button');b.type='button';b.textContent=`${enabled?'🟢':'🔴'} ${label} : ${enabled?'Autorisé':'Interdit'}`;b.style.marginRight='8px';b.style.marginTop='8px';b.addEventListener('click',onClick);return b;}
 async function api(url,options){const r=await fetch(url,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Opération impossible.');return d;}
 async function resolveCurrentGallery(){
-  const name=currentGalleryName();
-  if(!name)throw new Error('Nom de la galerie introuvable.');
+  const organizerToken=currentOrganizerToken();
+  if(!organizerToken)throw new Error('Jeton organisateur introuvable.');
   const list=await api('/api/admin/galleries');
-  const gallery=(list.galleries||[]).find(g=>String(g.name||'').trim()===name);
-  if(!gallery)throw new Error(`Galerie « ${name} » introuvable.`);
+  const gallery=(list.galleries||[]).find(g=>String(g.organizerToken||'')===organizerToken);
+  if(!gallery)throw new Error('Galerie liée à ce portail introuvable.');
   const detail=await api(`/api/admin/galleries/${encodeURIComponent(gallery.id)}`);
   const event=detail.event||{};
   const preparation=event.preparation&&typeof event.preparation==='object'?event.preparation:{};
