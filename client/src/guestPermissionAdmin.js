@@ -5,21 +5,19 @@ function findSecurityPanel(){
   if(marker){let node=marker;for(let i=0;i<6&&node;i++,node=node.parentElement){const text=node.textContent||'';if(text.includes('Verrouiller les invités')&&text.includes('Verrouiller toute la galerie'))return node;}}
   return null;
 }
-function currentGalleryName(){
-  const h=[...document.querySelectorAll('h1,h2,h3')].map(x=>(x.textContent||'').trim()).filter(Boolean);
-  return h.find(x=>!x.includes('Sécurité de la galerie')&&!x.includes('Droits des invités')&&!x.includes('LumaBooth'))||'';
+function currentEventId(){
+  const input=[...document.querySelectorAll('input')].find(el=>String(el.value||'').includes('/api/lumabooth/event/'));
+  const match=String(input?.value||'').match(/\/api\/lumabooth\/event\/([^/?#]+)/i);
+  return match?decodeURIComponent(match[1]):null;
 }
 function makeButton(label,enabled,onClick){const b=document.createElement('button');b.type='button';b.textContent=`${enabled?'🟢':'🔴'} ${label} : ${enabled?'Autorisé':'Interdit'}`;b.style.marginRight='8px';b.style.marginTop='8px';b.addEventListener('click',onClick);return b;}
 async function api(url,options){const r=await fetch(url,options);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Opération impossible.');return d;}
 async function resolveCurrentGallery(){
-  const name=currentGalleryName();if(!name)return null;
-  const list=await api('/api/admin/galleries');
-  const gallery=(list.galleries||[]).find(g=>String(g.name||'').trim()===name);
-  if(!gallery)return null;
-  const detail=await api(`/api/admin/galleries/${encodeURIComponent(gallery.id)}`);
+  const eventId=currentEventId();if(!eventId)return null;
+  const detail=await api(`/api/admin/galleries/${encodeURIComponent(eventId)}`);
   const event=detail.event||{};
   const preparation=event.preparation&&typeof event.preparation==='object'?event.preparation:{};
-  return {eventId:event.id||gallery.id,preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
+  return {eventId:event.id||eventId,preparation,download:preparation.guestDownloadEnabled!==false,delete:preparation.guestDeleteEnabled===true};
 }
 async function savePermission(state,changes){
   const preparation={...state.preparation,...changes};
@@ -42,11 +40,6 @@ function mountControls(){
 async function ensureMounted(){
   if(document.getElementById('lp28-guest-rights'))return;
   if(!findSecurityPanel())return;
-  try{currentGalleryState=await resolveCurrentGallery();if(currentGalleryState)mountControls();}catch{}
+  try{currentGalleryState=await resolveCurrentGallery();if(currentGalleryState)mountControls();}catch(e){console.warn('LP28 droits invités :',e.message);}
 }
-export function installGuestPermissionAdmin(){
-  let scheduled=false;
-  const run=()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;ensureMounted();},80);};
-  new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener('load',run);window.addEventListener('popstate',run);document.addEventListener('click',()=>setTimeout(run,120));setTimeout(run,0);
-}
+export function installGuestPermissionAdmin(){let scheduled=false;const run=()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;ensureMounted();},80);};new MutationObserver(run).observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('load',run);document.addEventListener('click',()=>setTimeout(run,120));setTimeout(run,0);}
