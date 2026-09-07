@@ -121,6 +121,8 @@ model Event {
   guestUploadEnabled   Boolean       @default(false)
   guestVideoEnabled    Boolean       @default(false)
   guestUploadModerated Boolean       @default(false)
+  guestDownloadEnabled Boolean       @default(true)
+  guestDeleteEnabled   Boolean       @default(false)
   portalExpiresAt      DateTime?
   portalPassword       String?
   fotoshareUrl         String?
@@ -455,7 +457,7 @@ model MathisIncident {
   printsAvailable  Boolean  @default(false)
   status           String   @default("REQUESTED")
   level            Int      @default(2)
-  adminNote         String?
+  adminNote        String?
   createdAt        DateTime @default(now())
   takenAt          DateTime?
   level3At         DateTime?
