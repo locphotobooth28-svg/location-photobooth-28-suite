@@ -5,9 +5,11 @@ import App from "./App";
 import "./styles.css";
 import { installZipDownloads } from "./zipDownloads";
 import { installGuestPermissionAdmin } from "./guestPermissionAdmin";
+import { installGuestPortalRights } from "./guestPortalRights";
 
 installZipDownloads();
 installGuestPermissionAdmin();
+installGuestPortalRights();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
