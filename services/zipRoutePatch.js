@@ -36,6 +36,31 @@ function install(){
     return res.json({ok:true,deleted});
    }catch(err){console.error("LP28 R2 bulk delete :",err);if(!res.headersSent)return res.status(500).json({ok:false,message:"Suppression impossible."});}
   });
+  app.get("/api/r2/admin-guest-permissions/:eventId",async(req,res)=>{
+   try{
+    if(!req.session?.userId)return res.status(401).json({ok:false,message:"Connexion administrateur requise."});
+    const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{role:true,active:true}});
+    if(!user?.active||user.role!=="ADMIN")return res.status(403).json({ok:false,message:"Droits administrateur requis."});
+    const event=await prisma.event.findUnique({where:{id:String(req.params.eventId||"")},select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});
+    if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});
+   }catch(err){console.error("LP28 admin guest permissions GET :",err);return res.status(500).json({ok:false,message:"Réglages invités indisponibles."});}
+  });
+  app.post("/api/r2/admin-guest-permissions/:eventId",original.json({limit:"32kb"}),async(req,res)=>{
+   try{
+    if(!req.session?.userId)return res.status(401).json({ok:false,message:"Connexion administrateur requise."});
+    const user=await prisma.user.findUnique({where:{id:req.session.userId},select:{role:true,active:true}});
+    if(!user?.active||user.role!=="ADMIN")return res.status(403).json({ok:false,message:"Droits administrateur requis."});
+    const changes={};
+    if(typeof req.body?.guestDownloadEnabled==="boolean")changes.guestDownloadEnabled=req.body.guestDownloadEnabled;
+    if(typeof req.body?.guestDeleteEnabled==="boolean")changes.guestDeleteEnabled=req.body.guestDeleteEnabled;
+    if(!Object.keys(changes).length)return res.status(400).json({ok:false,message:"Aucun réglage valide à enregistrer."});
+    const event=await prisma.event.update({where:{id:String(req.params.eventId||"")},data:changes,select:{guestDownloadEnabled:true,guestDeleteEnabled:true}});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({ok:true,download:!!event.guestDownloadEnabled,delete:!!event.guestDeleteEnabled});
+   }catch(err){console.error("LP28 admin guest permissions POST :",err);if(err?.code==="P2025")return res.status(404).json({ok:false,message:"Événement introuvable."});return res.status(500).json({ok:false,message:"Enregistrement des réglages impossible."});}
+  });
   app.get("/api/r2/guest-permissions/:token",async(req,res)=>{
    try{
     const token=String(req.params.token||"");
