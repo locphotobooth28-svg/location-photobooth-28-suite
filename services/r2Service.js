@@ -128,7 +128,12 @@ async function getStream(key){
   return Readable.fromWeb(response.body);
 }
 
-function presignGet(key,expires=900){
+function originalNameFromKey(key){
+  const base=String(key||"").split("/").pop()||"photo";
+  return base.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{16}-/i,"")||"photo";
+}
+
+function presignGet(key,expires=900,options={}){
   const c=cfg();
   const endpoint=new URL(c.endpoint);
   const now=amzDate();
@@ -142,6 +147,10 @@ function presignGet(key,expires=900){
   params.set("X-Amz-Date",now);
   params.set("X-Amz-Expires",String(Math.max(60,Math.min(Number(expires)||900,3600))));
   params.set("X-Amz-SignedHeaders","host");
+  if(options?.download){
+    const fileName=safeName(options.fileName||originalNameFromKey(key));
+    params.set("response-content-disposition",`attachment; filename=\"${fileName}\"`);
+  }
   const cq=canonicalQuery(params);
   const canonicalHeaders=`host:${endpoint.host}\n`;
   const canonicalRequest=["GET",canonicalUri(key),cq,canonicalHeaders,"host","UNSIGNED-PAYLOAD"].join("\n");
