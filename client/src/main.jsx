@@ -8,12 +8,14 @@ import { installGuestPermissionAdmin } from "./guestPermissionAdmin";
 import { installGuestPortalRights } from "./guestPortalRights";
 import { installContractFreshPdf } from "./contractFreshPdf";
 import { installAdminPermissionsUi } from "./adminPermissionsUi";
+import { installCollaboratorAccessPolish } from "./collaboratorAccessPolish";
 
 installZipDownloads();
 installGuestPermissionAdmin();
 installGuestPortalRights();
 installContractFreshPdf();
 installAdminPermissionsUi();
+installCollaboratorAccessPolish();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
