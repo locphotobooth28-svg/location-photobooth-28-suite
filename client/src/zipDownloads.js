@@ -37,7 +37,7 @@ export function installZipDownloads(){
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
       const ids=selectedIds();
       if(!ids.length){alert("Sélectionne au moins une photo.");return;}
-      if(!confirm(`Supprimer définitivement ${ids.length} photo${ids.length>1?"s":""} ?\n\nCette suppression effacera aussi les fichiers dans Cloudflare R2.`))return;
+      if(!confirm(`Supprimer définitivement ${ids.length} photo${ids.length>1?"s":""} ?\n\nCette action est irréversible.`))return;
       const oldText=button.textContent;button.disabled=true;button.textContent=`🗑️ Suppression (${ids.length})…`;
       try{
         const response=await fetch(`/api/r2/portal-delete/${encodeURIComponent(token)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids})});
