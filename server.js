@@ -1084,11 +1084,37 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       }:null,
       lastSeen:new Date().toISOString()
     };
+    // Notification uniquement lors d'une vraie transition hors ligne -> en ligne.
+    // Une borne est consideree hors ligne apres 60 s sans heartbeat, comme dans /api/admin/booths.
+    const previousRow=await prisma.appSetting.findUnique({where:{key:boothStatusKey(boothName)}}).catch(()=>null);
+    let wasOnline=false;
+    if(previousRow?.value){
+      try{
+        const previous=JSON.parse(previousRow.value||"{}");
+        const previousSeen=previous?.lastSeen?new Date(previous.lastSeen).getTime():NaN;
+        wasOnline=Number.isFinite(previousSeen) && (Date.now()-previousSeen)<=60000;
+      }catch{}
+    }
+
     await prisma.appSetting.upsert({
       where:{key:boothStatusKey(boothName)},
       update:{value:JSON.stringify(payload)},
       create:{key:boothStatusKey(boothName),value:JSON.stringify(payload)}
     });
+
+    if(!wasOnline){
+      const eventPart=payload.eventName?`\nÉvénement : ${payload.eventName}`:"";
+      const agentPart=payload.agentVersion?`\nAgent : V${String(payload.agentVersion).replace(/^v/i,"")}`:"";
+      await addNotification({
+        title:`🟢 Borne ${String(boothName).toUpperCase()} connectée`,
+        message:`${String(boothName).toUpperCase()} vient de se connecter à LP28.${eventPart}${agentPart}`,
+        type:"SUCCESS",
+        source:"BOOTH_CONNECTED",
+        audience:"ADMIN",
+        eventId:payload.eventId||null
+      }).catch(err=>console.error("Notification connexion borne :",err));
+    }
+
     res.json({ok:true,lastSeen:payload.lastSeen});
   }catch(err){
     if(isDatabaseUnavailable(err))return sendTemporaryDatabaseUnavailable(res,"BOOTH HEARTBEAT",err);
