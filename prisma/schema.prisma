@@ -511,19 +511,6 @@ model AppNotification {
 model AppNotificationRead {
   id String @id @default(uuid())
   notificationId String
-
-model NativePushToken {
-  id          String   @id @default(uuid())
-  userId      String
-  token       String   @unique
-  deviceLabel String?
-  platform    String   @default("ANDROID")
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([userId])
-}
   userId String
   readAt DateTime @default(now())
   dismissedAt DateTime?
@@ -565,3 +552,17 @@ model PushDelivery {
   @@index([userId])
   @@index([createdAt])
 }
+
+model NativePushToken {
+  id          String   @id @default(uuid())
+  userId      String
+  token       String   @unique
+  deviceLabel String?
+  platform    String   @default("ANDROID")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
