@@ -8,6 +8,8 @@ let webpush=null;
 try{webpush=require("web-push");}catch{console.warn("web-push non installé : notifications Push désactivées.");}
 const QRCode = require("qrcode");
 const fs = require("fs");
+let firebaseAdmin=null;
+try{firebaseAdmin=require("firebase-admin");}catch{console.warn("firebase-admin non installé : Push Android natif désactivé.");}
 const multer = require("multer");
 const prisma = require("./lib/prisma");
 const googleService = require("./services/googleService");
@@ -168,7 +170,8 @@ function notificationWhere(user){
 }
 async function addNotification(d){
   const notification=await prisma.appNotification.create({data:{title:String(d.title||"Notification").slice(0,140),message:String(d.message||"").slice(0,1200),type:["INFO","SUCCESS","WARNING","URGENT"].includes(d.type)?d.type:"INFO",source:d.source||"SYSTEM",audience:d.audience||"ADMIN",targetUserId:d.targetUserId||null,eventId:d.eventId||null,startsAt:d.startsAt?new Date(d.startsAt):new Date(),expiresAt:d.expiresAt?new Date(d.expiresAt):null}});
-  sendPushForNotification(notification).catch(err=>console.error("Push notification :",err.message));
+  sendPushForNotification(notification).catch(err=>console.error("Push Web notification :",err.message));
+  sendNativePushForNotification(notification).catch(err=>console.error("Push Android FCM :",err.message));
   return notification;
 }
 
@@ -236,6 +239,66 @@ async function sendPushForNotification(n){
     }
   }));
 }
+const FIREBASE_SERVICE_ACCOUNT_FILE=String(process.env.FIREBASE_SERVICE_ACCOUNT_FILE||"/etc/secrets/firebase-service-account.json").trim();
+let firebaseMessaging=null;
+function nativePushConfigured(){
+  if(firebaseMessaging)return true;
+  if(!firebaseAdmin)return false;
+  try{
+    if(!firebaseAdmin.apps.length){
+      if(!fs.existsSync(FIREBASE_SERVICE_ACCOUNT_FILE)){
+        console.warn("Firebase Admin : fichier secret introuvable :",FIREBASE_SERVICE_ACCOUNT_FILE);
+        return false;
+      }
+      const serviceAccount=JSON.parse(fs.readFileSync(FIREBASE_SERVICE_ACCOUNT_FILE,"utf8"));
+      firebaseAdmin.initializeApp({credential:firebaseAdmin.credential.cert(serviceAccount)});
+    }
+    firebaseMessaging=firebaseAdmin.messaging();
+    console.log("Firebase Admin FCM : configuré.");
+    return true;
+  }catch(err){
+    console.error("Configuration Firebase Admin :",err.message);
+    return false;
+  }
+}
+async function sendNativePushForNotification(n){
+  if(!nativePushConfigured())return;
+  const userIds=await notificationRecipientUserIds(n);
+  if(!userIds.length)return;
+  const rows=await prisma.nativePushToken.findMany({where:{active:true,userId:{in:userIds}}});
+  if(!rows.length)return;
+  const unique=[];
+  const byToken=new Map();
+  for(const row of rows){if(!byToken.has(row.token)){byToken.set(row.token,row);unique.push(row.token);}}
+  for(let i=0;i<unique.length;i+=500){
+    const tokens=unique.slice(i,i+500);
+    const result=await firebaseMessaging.sendEachForMulticast({
+      tokens,
+      notification:{title:String(n.title||"LP28"),body:String(n.message||"")},
+      data:{
+        notificationId:String(n.id||""),
+        eventId:String(n.eventId||""),
+        source:String(n.source||"SYSTEM"),
+        type:String(n.type||"INFO")
+      },
+      android:{
+        priority:"high",
+        notification:{channelId:"lp28_native_push",sound:"default",clickAction:"LP28_NOTIFICATION_OPEN"}
+      }
+    });
+    await Promise.allSettled(result.responses.map(async(resp,idx)=>{
+      if(resp.success)return;
+      const token=tokens[idx];
+      const code=String(resp.error?.code||"");
+      console.warn("FCM échec :",code,resp.error?.message||"");
+      if(code==="messaging/registration-token-not-registered"||code==="messaging/invalid-registration-token"){
+        await prisma.nativePushToken.updateMany({where:{token},data:{active:false}}).catch(()=>{});
+      }
+    }));
+    console.log(`FCM LP28 : ${result.successCount}/${tokens.length} notification(s) envoyée(s).`);
+  }
+}
+
 function allowedModulesForUser(u){
   if(u?.role==="ADMIN")return null;
   const p=permissionsObject(u);
@@ -1505,6 +1568,41 @@ app.post("/api/admin/notifications",adminOnly,async(req,res)=>{
  const audience=["ADMIN","ALL","INTERVENANTS","VIEWERS","USER"].includes(b.audience)?b.audience:"ADMIN";if(audience==="USER"&&!b.targetUserId)return res.status(400).json({ok:false,message:"Choisis un utilisateur."});
  res.json({ok:true,notification:await addNotification({...b,audience,targetUserId:audience==="USER"?b.targetUserId:null,source:"MANUAL"})});
 });
+app.post("/api/push/native/register",userOnly,async(req,res)=>{
+  try{
+    const token=String(req.body?.token||"").trim();
+    const deviceLabel=String(req.body?.deviceLabel||"Android LP28").trim().slice(0,120)||null;
+    if(!token || token.length<20)return res.status(400).json({ok:false,message:"Token FCM invalide."});
+    let user=req.currentUser||null;
+    if(!user && req.session?.userId)user=await prisma.user.findUnique({where:{id:req.session.userId}}).catch(()=>null);
+    if(!user && req.session?.admin===true)user=await prisma.user.findFirst({where:{active:true,role:"ADMIN"},orderBy:{createdAt:"asc"}}).catch(()=>null);
+    if(!user)return res.status(401).json({ok:false,message:"Utilisateur introuvable."});
+    const row=await prisma.nativePushToken.upsert({
+      where:{token},
+      create:{userId:user.id,token,deviceLabel,platform:"ANDROID",active:true},
+      update:{userId:user.id,deviceLabel,platform:"ANDROID",active:true}
+    });
+    return res.json({ok:true,id:row.id,active:row.active});
+  }catch(err){
+    console.error("Enregistrement token FCM :",err);
+    return res.status(500).json({ok:false,message:err.message||"Erreur FCM."});
+  }
+});
+app.post("/api/push/native/unregister",userOnly,async(req,res)=>{
+  try{
+    const token=String(req.body?.token||"").trim();
+    if(token)await prisma.nativePushToken.updateMany({where:{token},data:{active:false}});
+    return res.json({ok:true});
+  }catch(err){return res.status(500).json({ok:false,message:err.message||"Erreur FCM."});}
+});
+app.get("/api/push/native/status",userOnly,async(req,res)=>{
+  try{
+    const userId=req.currentUser?.id||req.session?.userId||null;
+    const count=userId?await prisma.nativePushToken.count({where:{userId,active:true}}):0;
+    return res.json({ok:true,configured:nativePushConfigured(),activeDevices:count});
+  }catch(err){return res.status(500).json({ok:false,message:err.message||"Erreur FCM."});}
+});
+
 app.get("/api/push/status",userOnly,async(req,res)=>{
   const user=req.currentUser||await sessionUser(req);
   const count=await prisma.pushSubscription.count({where:{userId:user.id,active:true}}).catch(()=>0);

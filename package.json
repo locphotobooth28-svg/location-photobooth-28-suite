@@ -1,6 +1,6 @@
 {
   "name": "location-photobooth-28-suite",
-  "version": "8.5.89",
+  "version": "8.5.90",
   "private": true,
   "description": "LP28 Suite V8.3 - Galeries Admin, QR Code et supervision Memories",
   "main": "server.js",
@@ -27,7 +27,8 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "firebase-admin": "^13.5.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
