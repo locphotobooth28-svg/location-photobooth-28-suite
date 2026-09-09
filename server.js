@@ -274,13 +274,14 @@ async function sendNativePushForNotification(n){
     const tokens=unique.slice(i,i+500);
     const result=await firebaseMessaging.sendEachForMulticast({
       tokens,
-      notification:{title:String(n.title||"LP28"),body:String(n.message||"")},
       data:{
-        notificationId:String(n.id||""),
-        eventId:String(n.eventId||""),
-        source:String(n.source||"SYSTEM"),
-        type:String(n.type||"INFO")
-      },
+  title:String(n.title||"LP28"),
+  message:String(n.message||""),
+  notificationId:String(n.id||""),
+  eventId:String(n.eventId||""),
+  source:String(n.source||"SYSTEM"),
+  type:String(n.type||"INFO")
+},
       android:{
         priority:"high",
         notification:{channelId:"lp28_native_push",sound:"default",clickAction:"LP28_NOTIFICATION_OPEN"}
