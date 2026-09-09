@@ -1,3 +1,11 @@
+# LP28 V8.5.89 — Notification connexion borne + API Widget notifications
+
+- Fiabilise la détection de reconnexion des bornes à partir du heartbeat LP28 Agent.
+- Crée une notification ADMIN persistante + Push lors d'une reconnexion après 45 s ou plus sans heartbeat.
+- Ajoute un journal serveur explicite `BOOTH CONNECTED NOTIFICATION OK/ERROR` pour diagnostiquer Render.
+- Étend `/api/widget/summary` avec `notificationCount` et les 5 dernières `notifications`.
+- Aucune modification de LP28 Agent V2.7.17, ni de la lecture Citizen/DNP.
+
 # LP28 V8.5.87 — Photos Borne / pilotage Agent V2.7
 
 ## Correctif V8.5.87

@@ -1084,17 +1084,21 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       }:null,
       lastSeen:new Date().toISOString()
     };
-    // Notification uniquement lors d'une vraie transition hors ligne -> en ligne.
-    // Une borne est consideree hors ligne apres 60 s sans heartbeat, comme dans /api/admin/booths.
+    // V8.5.89 : transition de connexion explicite et journalisee.
+    // Une coupure de heartbeat >= 45 s est consideree comme une vraie reconnexion.
+    // Ce seuil est volontairement inferieur au seuil d'affichage "hors ligne" (60 s)
+    // afin que toute borne vue hors ligne dans l'Admin declenche bien une notification au retour.
     const previousRow=await prisma.appSetting.findUnique({where:{key:boothStatusKey(boothName)}}).catch(()=>null);
-    let wasOnline=false;
+    let previousSeenMs=NaN;
     if(previousRow?.value){
       try{
         const previous=JSON.parse(previousRow.value||"{}");
-        const previousSeen=previous?.lastSeen?new Date(previous.lastSeen).getTime():NaN;
-        wasOnline=Number.isFinite(previousSeen) && (Date.now()-previousSeen)<=60000;
+        previousSeenMs=previous?.lastSeen?new Date(previous.lastSeen).getTime():NaN;
       }catch{}
     }
+    const nowMs=Date.now();
+    const gapMs=Number.isFinite(previousSeenMs)?Math.max(0,nowMs-previousSeenMs):null;
+    const isConnectionTransition=!Number.isFinite(previousSeenMs) || gapMs>=45000;
 
     await prisma.appSetting.upsert({
       where:{key:boothStatusKey(boothName)},
@@ -1102,17 +1106,22 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       create:{key:boothStatusKey(boothName),value:JSON.stringify(payload)}
     });
 
-    if(!wasOnline){
+    if(isConnectionTransition){
       const eventPart=payload.eventName?`\nÉvénement : ${payload.eventName}`:"";
       const agentPart=payload.agentVersion?`\nAgent : V${String(payload.agentVersion).replace(/^v/i,"")}`:"";
-      await addNotification({
-        title:`🟢 Borne ${String(boothName).toUpperCase()} connectée`,
-        message:`${String(boothName).toUpperCase()} vient de se connecter à LP28.${eventPart}${agentPart}`,
-        type:"SUCCESS",
-        source:"BOOTH_CONNECTED",
-        audience:"ADMIN",
-        eventId:payload.eventId||null
-      }).catch(err=>console.error("Notification connexion borne :",err));
+      try{
+        const n=await addNotification({
+          title:`🟢 Borne ${String(boothName).toUpperCase()} connectée`,
+          message:`${String(boothName).toUpperCase()} vient de se connecter à LP28.${eventPart}${agentPart}`,
+          type:"SUCCESS",
+          source:"BOOTH_CONNECTED",
+          audience:"ADMIN",
+          eventId:payload.eventId||null
+        });
+        console.log(`BOOTH CONNECTED NOTIFICATION OK : ${boothName} / ${n.id} / gap=${gapMs===null?"first":Math.round(gapMs/1000)+"s"}`);
+      }catch(err){
+        console.error("BOOTH CONNECTED NOTIFICATION ERROR :",err);
+      }
     }
 
     res.json({ok:true,lastSeen:payload.lastSeen});
@@ -1151,7 +1160,8 @@ app.get("/api/widget/summary", userOnly, async(req,res)=>{
         byName[String(s.boothName||"").trim().toUpperCase()]=s;
       }catch{}
     }
-    const [events,incidents,n1Count]=await Promise.all([
+    const widgetUser=req.currentUser||await sessionUser(req);
+    const [events,incidents,n1Count,widgetNotifications]=await Promise.all([
       prisma.event.findMany({
         where:{archived:false,status:"IN_PROGRESS"},
         orderBy:{eventDate:"asc"},
@@ -1166,6 +1176,12 @@ app.get("/api/widget/summary", userOnly, async(req,res)=>{
       }),
       prisma.mathisIncident.count({
         where:{level:1,event:{archived:false,status:"IN_PROGRESS"}}
+      }),
+      prisma.appNotification.findMany({
+        where:notificationWhere(widgetUser),
+        include:{reads:{where:{userId:widgetUser.id}}},
+        orderBy:{createdAt:"desc"},
+        take:100
       })
     ]);
     const eventById=new Map(events.map(e=>[e.id,e]));
@@ -1195,7 +1211,11 @@ app.get("/api/widget/summary", userOnly, async(req,res)=>{
       events:events.map(e=>({id:e.id,name:e.name,eventDate:e.eventDate,address:e.address||null})),
       n1Count,
       alerts:incidents.map(i=>({id:i.id,level:i.level,status:i.status,booth:i.booth||null,issue:i.issue||null,createdAt:i.createdAt,event:i.event||null})),
-      alertCount:incidents.length
+      alertCount:incidents.length,
+      notificationCount:widgetNotifications.filter(n=>!n.reads?.length).length,
+      notifications:widgetNotifications.slice(0,5).map(n=>({
+        id:n.id,title:n.title,message:n.message,type:n.type,source:n.source,eventId:n.eventId,createdAt:n.createdAt,read:Boolean(n.reads?.length)
+      }))
     });
   }catch(err){
     console.error("WIDGET SUMMARY ERROR",err);
