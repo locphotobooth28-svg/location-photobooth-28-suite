@@ -1,4 +1,4 @@
-
+﻿
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const SITE = "https://www.locationphotobooth28.fr";
@@ -6442,16 +6442,119 @@ function Dashboard({onLogout,user}) {
       });
   },[events,search,eventTab]);
 
-  const isDateInCurrentWeek=date=>{
-    if(!date)return false;
-    const d=new Date(`${date}T12:00:00`);if(Number.isNaN(d.getTime()))return false;
-    const now=new Date();const day=(now.getDay()+6)%7;
-    const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-day);
-    const end=new Date(start);end.setDate(end.getDate()+7);
-    return d>=start&&d<end;
+  const [weekClock,setWeekClock]=useState(()=>new Date());
+
+  useEffect(()=>{
+    const timer=window.setInterval(()=>setWeekClock(new Date()),60*60*1000);
+    return()=>window.clearInterval(timer);
+  },[]);
+
+  const lp28Months=[
+    "JANVIER","FÉVRIER","MARS","AVRIL","MAI","JUIN",
+    "JUILLET","AOÛT","SEPTEMBRE","OCTOBRE","NOVEMBRE","DÉCEMBRE"
+  ];
+
+  const startOfLp28Week=value=>{
+    const d=new Date(value);
+    d.setHours(12,0,0,0);
+    const day=(d.getDay()+6)%7;
+    d.setDate(d.getDate()-day);
+    return d;
   };
-  const hasWeekUpcoming=eventTab==="upcoming"&&filtered.some(e=>isDateInCurrentWeek(e.date));
-  const firstLaterUpcomingIndex=eventTab==="upcoming"?filtered.findIndex(e=>!isDateInCurrentWeek(e.date)):-1;
+
+  const addLp28Days=(value,days)=>{
+    const d=new Date(value);
+    d.setDate(d.getDate()+days);
+    return d;
+  };
+
+  const parseLp28EventDate=date=>{
+    if(!date)return null;
+    const d=new Date(`${date}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatLp28ShortDate=date=>{
+    return `${date.getDate()} ${lp28Months[date.getMonth()]}`;
+  };
+
+  const formatLp28WeekRange=(start,end)=>{
+    if(
+      start.getMonth()===end.getMonth() &&
+      start.getFullYear()===end.getFullYear()
+    ){
+      return `${start.getDate()} → ${end.getDate()} ${lp28Months[start.getMonth()]}`;
+    }
+    return `${formatLp28ShortDate(start)} → ${formatLp28ShortDate(end)}`;
+  };
+
+  const lp28WeekStart=startOfLp28Week(weekClock);
+
+  const lp28WeekSections=[
+    {
+      id:"week-current",
+      className:"week-current",
+      start:lp28WeekStart,
+      end:addLp28Days(lp28WeekStart,7),
+      label:`📅 ÉVÉNEMENTS DE LA SEMAINE — ${formatLp28WeekRange(
+        lp28WeekStart,
+        addLp28Days(lp28WeekStart,6)
+      )}`
+    },
+    {
+      id:"week-1",
+      className:"week-1",
+      start:addLp28Days(lp28WeekStart,7),
+      end:addLp28Days(lp28WeekStart,14),
+      label:`📅 SEMAINE +1 — ${formatLp28WeekRange(
+        addLp28Days(lp28WeekStart,7),
+        addLp28Days(lp28WeekStart,13)
+      )}`
+    },
+    {
+      id:"week-2",
+      className:"week-2",
+      start:addLp28Days(lp28WeekStart,14),
+      end:addLp28Days(lp28WeekStart,21),
+      label:`📅 SEMAINE +2 — ${formatLp28WeekRange(
+        addLp28Days(lp28WeekStart,14),
+        addLp28Days(lp28WeekStart,20)
+      )}`
+    },
+    {
+      id:"week-3",
+      className:"week-3",
+      start:addLp28Days(lp28WeekStart,21),
+      end:addLp28Days(lp28WeekStart,28),
+      label:`📅 SEMAINE +3 — ${formatLp28WeekRange(
+        addLp28Days(lp28WeekStart,21),
+        addLp28Days(lp28WeekStart,27)
+      )}`
+    },
+    {
+      id:"later",
+      className:"week-later",
+      start:addLp28Days(lp28WeekStart,28),
+      end:null,
+      label:`📁 ÉVÉNEMENTS À VENIR — À PARTIR DU ${formatLp28ShortDate(
+        addLp28Days(lp28WeekStart,28)
+      )}`
+    }
+  ];
+
+  const getUpcomingWeekSection=date=>{
+    const d=parseLp28EventDate(date);
+    if(!d)return lp28WeekSections[4];
+    if(d<lp28WeekStart)return lp28WeekSections[0];
+
+    return (
+      lp28WeekSections.find(section=>
+        section.end
+          ? d>=section.start && d<section.end
+          : d>=section.start
+      ) || lp28WeekSections[4]
+    );
+  };
 
   function eventBooths(event){
     const materials=event.materials||[];
@@ -6695,7 +6798,19 @@ function Dashboard({onLogout,user}) {
       @keyframes lp28UrgentBarBlink{0%,100%{background:linear-gradient(90deg,#7f1d1d,#dc2626,#7f1d1d);border-color:#ef4444;box-shadow:0 0 0 rgba(239,68,68,0)}50%{background:linear-gradient(90deg,#ef4444,#fecaca,#ef4444);border-color:#dc2626;color:#7f1d1d;box-shadow:0 0 18px rgba(239,68,68,.72)}}
       .sidebar .nav-item{display:flex;align-items:center;gap:8px}.sidebar .nav-main-label{min-width:0;flex:1;text-align:left}.booth-live-pill{margin-left:auto;white-space:nowrap;padding:3px 7px;border-radius:999;font-size:.68rem;font-weight:900;letter-spacing:.02em}.booth-live-pill.online{background:rgba(22,163,74,.14);color:#16a34a}.booth-live-pill.offline{background:rgba(220,38,38,.12);color:#dc2626}.nav-assistance-triangle{margin-left:auto;font-size:1.05rem;filter:drop-shadow(0 0 5px rgba(239,68,68,.75));animation:lp28AssistBlink .85s ease-in-out infinite}.nav-assistance-alert{position:relative}
       .lp28-ops-banner{width:100%;height:42px;margin:0 0 16px;border-radius:12px;border:1px solid;display:flex;align-items:center;gap:10px;overflow:hidden;padding:0 12px;font-weight:900;cursor:pointer}.lp28-ops-banner.urgent{background:linear-gradient(90deg,#991b1b,#dc2626,#991b1b);border-color:#ef4444;color:#fff;animation:lp28UrgentBarBlink 1s ease-in-out infinite}.lp28-ops-banner.info{background:linear-gradient(90deg,#075985,#0284c7,#075985);border-color:#38bdf8;color:#fff}.lp28-ops-icon{font-size:1.2rem;flex:0 0 auto}.lp28-ops-banner.urgent .lp28-ops-icon{animation:lp28AssistBlink .85s ease-in-out infinite}.lp28-ops-marquee{overflow:hidden;white-space:nowrap;flex:1}.lp28-ops-marquee>span{display:inline-block;min-width:max-content;animation:lp28TickerMove 18s linear infinite}.lp28-ops-banner:hover .lp28-ops-marquee>span{animation-play-state:paused}
-      .event-list-section-title{grid-column:1/-1;padding:8px 12px;border-left:4px solid #d4ad2d;border-radius:8px;background:rgba(212,173,45,.10);font-size:.82rem;font-weight:950;letter-spacing:.045em;color:#8a6500}.event-list-section-title.upcoming{margin-top:4px;border-left-color:#3b82f6;background:rgba(59,130,246,.08);color:#2563eb}html[data-lp28-theme="dark"] .event-list-section-title{color:#f4d76b;background:rgba(212,173,45,.10)}html[data-lp28-theme="dark"] .event-list-section-title.upcoming{color:#93c5fd;background:rgba(59,130,246,.10)}
+      .event-list-section-title{grid-column:1/-1;padding:9px 12px;border-left:5px solid var(--week-accent,#94a3b8);border-radius:8px;background:var(--week-bg,rgba(148,163,184,.10));font-size:.82rem;font-weight:950;letter-spacing:.045em;color:var(--week-text,#475569);margin-top:4px}
+.event-list-section-title.week-current,.event-week-card.week-current{--week-accent:#22c55e;--week-bg:rgba(34,197,94,.10);--week-text:#15803d}
+.event-list-section-title.week-1,.event-week-card.week-1{--week-accent:#3b82f6;--week-bg:rgba(59,130,246,.09);--week-text:#2563eb}
+.event-list-section-title.week-2,.event-week-card.week-2{--week-accent:#a855f7;--week-bg:rgba(168,85,247,.09);--week-text:#7e22ce}
+.event-list-section-title.week-3,.event-week-card.week-3{--week-accent:#f59e0b;--week-bg:rgba(245,158,11,.10);--week-text:#b45309}
+.event-list-section-title.week-later,.event-week-card.week-later{--week-accent:#94a3b8;--week-bg:rgba(148,163,184,.10);--week-text:#475569}
+.event-week-card{position:relative}
+.event-week-card::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--week-accent,#94a3b8);pointer-events:none}
+html[data-lp28-theme="dark"] .event-list-section-title.week-current{--week-text:#86efac}
+html[data-lp28-theme="dark"] .event-list-section-title.week-1{--week-text:#93c5fd}
+html[data-lp28-theme="dark"] .event-list-section-title.week-2{--week-text:#d8b4fe}
+html[data-lp28-theme="dark"] .event-list-section-title.week-3{--week-text:#fcd34d}
+html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#cbd5e1}
       @media(max-width:760px){.booth-live-pill{font-size:.62rem;padding:2px 6px}.lp28-ops-banner{height:38px;border-radius:9px;font-size:.78rem}.event-list-section-title{font-size:.74rem}}
     `}</style>
 
@@ -6805,8 +6920,20 @@ function Dashboard({onLogout,user}) {
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
-          {eventTab==="upcoming"&&hasWeekUpcoming&&<div className="event-list-section-title">📅 ÉVÉNEMENTS DE LA SEMAINE</div>}
           {filtered.map((event,eventIndex)=>{
+            const weekSection=eventTab==="upcoming"
+              ?getUpcomingWeekSection(event.date)
+              :null;
+
+            const previousWeekSection=eventTab==="upcoming"&&eventIndex>0
+              ?getUpcomingWeekSection(filtered[eventIndex-1]?.date)
+              :null;
+
+            const showWeekHeader=!!weekSection&&(
+              !previousWeekSection||
+              previousWeekSection.id!==weekSection.id
+            );
+
             const isGifted=!!event.preparation?.gifted;
             const giftedStyle=isGifted?{
               background:"linear-gradient(135deg,rgba(88,28,135,.34),rgba(76,29,149,.24))",
@@ -6819,8 +6946,11 @@ function Dashboard({onLogout,user}) {
               boxShadow:"0 10px 28px rgba(120,72,18,.20)"
             }:{};
             return <React.Fragment key={event.id}>
-            {eventTab==="upcoming"&&eventIndex===firstLaterUpcomingIndex&&<div className="event-list-section-title upcoming">📆 ÉVÉNEMENTS À VENIR</div>}
-            <article className={`event-card ${event.archived?"archived":""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
+            {showWeekHeader&&
+              <div className={`event-list-section-title ${weekSection.className}`}>
+                {weekSection.label}
+              </div>
+            }            <article className={`event-card ${event.archived?"archived":""} ${weekSection?`event-week-card ${weekSection.className}`:""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
