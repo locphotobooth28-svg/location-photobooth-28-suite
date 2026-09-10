@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "concurrently \"node server-r2.js\" \"vite --config client/vite.config.js\"",
-    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && vite build --config client/vite.config.js",
+    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && node scripts/patch-event-weeks-share.js && vite build --config client/vite.config.js",
     "start": "node server-r2.js",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
