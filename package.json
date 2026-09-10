@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "concurrently \"node server-r2.js\" \"vite --config client/vite.config.js\"",
-    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && node scripts/patch-dashboard-persistence-fix.js && node scripts/patch-event-weeks-share.js && node scripts/patch-event-weeks-layout-fix.js && vite build --config client/vite.config.js",
+    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && node scripts/patch-dashboard-persistence-fix.js && node scripts/patch-event-weeks-share.js && node scripts/patch-event-weeks-layout-fix.js && node scripts/patch-organizer-share-message.js && vite build --config client/vite.config.js",
     "start": "node server-r2.js",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
@@ -24,9 +24,7 @@
     "multer": "^2.0.2",
     "pdf-lib": "^1.17.1",
     "pg": "^8.16.3",
-    "qrcode": "^1.5.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "qrcode": "^1.5.0",
     "web-push": "^3.6.7",
     "firebase-admin": "^13.5.0"
   },
