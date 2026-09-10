@@ -6969,7 +6969,7 @@ const getUpcomingWeekSection=date=>{
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
-          {eventTab==="upcoming"&&hasWeekUpcoming&&<div className="event-list-section-title">📅 ÉVÉNEMENTS DE LA SEMAINE</div>}
+         
           {filtered.map((event,eventIndex)=>{
             const weekSection=eventTab==="upcoming"
   ?getUpcomingWeekSection(event.date)
