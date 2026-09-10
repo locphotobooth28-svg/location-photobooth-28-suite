@@ -6,11 +6,11 @@
   "main": "server.js",
   "scripts": {
     "dev": "concurrently \"node server-r2.js\" \"vite --config client/vite.config.js\"",
-    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && node scripts/patch-dashboard-persistence-fix.js && node scripts/patch-event-weeks-share.js && node scripts/patch-event-weeks-layout-fix.js && node scripts/patch-organizer-share-message.js && vite build --config client/vite.config.js",
+    "build": "node scripts/patch-mathis-sav.js && node scripts/patch-dashboard-home.js && node scripts/patch-dashboard-drop-end.js && node scripts/patch-dashboard-persistence-fix.js && node scripts/patch-event-weeks-share.js && node scripts/patch-event-weeks-layout-fix.js && node scripts/patch-organizer-share-message.js && node scripts/patch-guest-poster.js && vite build --config client/vite.config.js",
     "start": "node server-r2.js",
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
-    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate": "prisma migrate deploy --schema=prisma/schema.prisma",
     "prestart": "prisma generate --schema=prisma/schema.prisma"
   },
   "dependencies": {
