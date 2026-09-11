@@ -4,9 +4,9 @@ const path = require("path");
 const appPath = path.join(process.cwd(), "client", "src", "App.jsx");
 let source = fs.readFileSync(appPath, "utf8");
 
-const SENTINEL = "LP28_BOOTH_USAGE_DASHBOARD_V3";
+const SENTINEL = "LP28_BOOTH_USAGE_DASHBOARD_V4";
 if (source.includes(SENTINEL)) {
-  console.log("[LP28] Présentation complète des bornes déjà injectée.");
+  console.log("[LP28] Présentation bornes V4 déjà injectée.");
   process.exit(0);
 }
 
@@ -58,34 +58,38 @@ source = source.replace(logicMarker, logic + logicMarker);
 const renderMarker = '        <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div>';
 if (!source.includes(renderMarker)) throw new Error("[LP28] Marqueur rendu dashboard introuvable.");
 
-const panel = `        {isAdmin&&<section className="panel lp28-booth-usage-v3" style={{margin:"18px 0",padding:0,overflow:"hidden",border:"1px solid rgba(214,185,79,.38)"}}>
+const panel = `        {isAdmin&&<section className="lp28-booth-usage-v4" style={{margin:"18px 0",padding:0,overflow:"hidden",border:"1px solid rgba(214,185,79,.38)",borderRadius:22,background:"linear-gradient(135deg,#1b1710,#101012)",width:"100%",display:"block"}}>
           <style>{\`
-            .lp28-booth-usage-v3 .booth-head{padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(148,163,184,.16)}
-            .lp28-booth-usage-v3 .booth-table{width:100%;border-collapse:collapse;table-layout:fixed}
-            .lp28-booth-usage-v3 .booth-table th{padding:11px 8px;font-size:11px;line-height:1.15;text-align:center;background:rgba(148,163,184,.06);white-space:normal}
-            .lp28-booth-usage-v3 .booth-table th:first-child,.lp28-booth-usage-v3 .booth-table th:nth-child(2),.lp28-booth-usage-v3 .booth-table th:nth-child(8),.lp28-booth-usage-v3 .booth-table th:nth-child(9){text-align:left}
-            .lp28-booth-usage-v3 .booth-table td{padding:13px 8px;border-top:1px solid rgba(148,163,184,.12);font-size:12px;vertical-align:middle;overflow:hidden}
-            .lp28-booth-usage-v3 .booth-name{font-size:15px;font-weight:950;white-space:nowrap}
-            .lp28-booth-usage-v3 .booth-type{font-weight:900;white-space:nowrap}
-            .lp28-booth-usage-v3 .booth-format{font-size:10px;margin-top:2px;white-space:nowrap}
-            .lp28-booth-usage-v3 .booth-status{display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap}
-            .lp28-booth-usage-v3 .booth-number{text-align:center;font-size:14px;font-weight:950}
-            .lp28-booth-usage-v3 .booth-total-badge{display:inline-block;min-width:34px;padding:6px 7px;border-radius:9px;font-size:15px;font-weight:950;text-align:center}
-            .lp28-booth-usage-v3 .booth-event-date{font-weight:900;white-space:nowrap;font-size:11px}
-            .lp28-booth-usage-v3 .booth-event-name{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-            .lp28-booth-usage-v3 .booth-footer{padding:11px 16px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(148,163,184,.12);font-size:11px}
+            .lp28-booth-usage-v4{box-sizing:border-box;}
+            .lp28-booth-usage-v4 .booth-head{width:100%;padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(148,163,184,.16);box-sizing:border-box}
+            .lp28-booth-usage-v4 .booth-table-wrap{width:100%;overflow:hidden}
+            .lp28-booth-usage-v4 .booth-table{width:100%;border-collapse:collapse;table-layout:fixed}
+            .lp28-booth-usage-v4 .booth-table th{padding:11px 8px;font-size:11px;line-height:1.15;text-align:center;background:rgba(148,163,184,.06);white-space:normal}
+            .lp28-booth-usage-v4 .booth-table th:first-child,.lp28-booth-usage-v4 .booth-table th:nth-child(2),.lp28-booth-usage-v4 .booth-table th:nth-child(8),.lp28-booth-usage-v4 .booth-table th:nth-child(9){text-align:left}
+            .lp28-booth-usage-v4 .booth-table td{padding:13px 8px;border-top:1px solid rgba(148,163,184,.12);font-size:12px;vertical-align:middle;overflow:hidden}
+            .lp28-booth-usage-v4 .booth-name{font-size:15px;font-weight:950;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-type{font-weight:900;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-format{font-size:10px;margin-top:2px;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-status{display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap;max-width:100%;box-sizing:border-box}
+            .lp28-booth-usage-v4 .booth-number{text-align:center;font-size:14px;font-weight:950}
+            .lp28-booth-usage-v4 .booth-total-badge{display:inline-block;min-width:34px;padding:6px 7px;border-radius:9px;font-size:15px;font-weight:950;text-align:center}
+            .lp28-booth-usage-v4 .booth-event-date{font-weight:900;white-space:nowrap;font-size:11px}
+            .lp28-booth-usage-v4 .booth-event-name{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .lp28-booth-usage-v4 .booth-footer{width:100%;padding:11px 16px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(148,163,184,.12);font-size:11px;box-sizing:border-box}
             @media(max-width:1180px){
-              .lp28-booth-usage-v3 .booth-table th{font-size:10px;padding:9px 5px}
-              .lp28-booth-usage-v3 .booth-table td{font-size:11px;padding:11px 5px}
-              .lp28-booth-usage-v3 .booth-name{font-size:13px}
-              .lp28-booth-usage-v3 .booth-status{font-size:10px;padding:4px 6px}
+              .lp28-booth-usage-v4 .booth-table th{font-size:9px;padding:8px 4px}
+              .lp28-booth-usage-v4 .booth-table td{font-size:10px;padding:10px 4px}
+              .lp28-booth-usage-v4 .booth-name{font-size:12px}
+              .lp28-booth-usage-v4 .booth-status{font-size:9px;padding:4px 5px}
+              .lp28-booth-usage-v4 .booth-event-date{font-size:10px}
+              .lp28-booth-usage-v4 .booth-event-name{font-size:9px}
             }
           \`}</style>
           <div className="booth-head">
             <div><div className="panel-kicker">SUIVI DU MATÉRIEL</div><h2 style={{margin:"4px 0"}}>📸 Utilisation des bornes</h2><p className="muted" style={{margin:0}}>Nombre de prestations réservées avec chaque borne.</p></div>
             <div style={{padding:"8px 12px",borderRadius:999,border:"1px solid rgba(96,165,250,.28)",background:"rgba(59,130,246,.08)",fontSize:11,fontWeight:800}}>Hors événements annulés / refusés</div>
           </div>
-          <div style={{width:"100%",overflow:"hidden"}}>
+          <div className="booth-table-wrap">
             <table className="booth-table">
               <colgroup><col style={{width:"9%"}}/><col style={{width:"10%"}}/><col style={{width:"11%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"7%"}}/><col style={{width:"18%"}}/><col style={{width:"18%"}}/></colgroup>
               <thead><tr><th>Borne</th><th>Type</th><th>Statut</th><th>Cette semaine</th><th>Ce mois-ci</th><th>Cette année</th><th>Total</th><th>Dernière utilisation</th><th>Prochain événement</th></tr></thead>
@@ -113,4 +117,4 @@ const panel = `        {isAdmin&&<section className="panel lp28-booth-usage-v3" 
 
 source = source.replace(renderMarker, panel + renderMarker);
 fs.writeFileSync(appPath, source, "utf8");
-console.log("[LP28] Présentation bornes V3 injectée sans défilement horizontal.");
+console.log("[LP28] Présentation bornes V4 injectée en pleine largeur.");
