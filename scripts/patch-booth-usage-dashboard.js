@@ -70,7 +70,7 @@ const panel = `        {isAdmin&&<section className="panel" style={{margin:"18px
                     <td style={{padding:"15px 16px"}}><strong>{row.type}</strong>{row.format&&<div className="muted" style={{fontSize:12,marginTop:2}}>{row.format}</div>}</td>
                     <td style={{padding:"15px 16px"}}><span style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 10px",borderRadius:999,background:online?"rgba(34,197,94,.14)":"rgba(148,163,184,.12)",color:online?"#4ade80":"#cbd5e1",fontWeight:900}}><span style={{width:9,height:9,borderRadius:"50%",background:online?"#22c55e":"#94a3b8"}}/>{online?"En ligne":"Disponible"}</span></td>
                     <td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.week}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.month}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.year}</td>
-                    <td style={{padding:"15px 16px",textAlign:"center"}}><strong style={{display:"inline-block",minWidth:48,padding:"7px 11px",borderRadius:10,background:`${row.color}22`,color:row.color,fontSize:17}}>{row.total}</strong></td>
+                    <td style={{padding:"15px 16px",textAlign:"center"}}><strong style={{display:"inline-block",minWidth:48,padding:"7px 11px",borderRadius:10,background:row.color+"22",color:row.color,fontSize:17}}>{row.total}</strong></td>
                     <td style={{padding:"15px 16px"}}><strong>{boothUsageDashboard.formatDate(row.last?.date)}</strong><div className="muted" style={{fontSize:12,marginTop:3,maxWidth:220,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{row.last?.name||"Aucune utilisation enregistrée"}</div></td>
                   </tr>;
                 })}
