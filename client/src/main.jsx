@@ -11,7 +11,17 @@ createRoot(document.getElementById("root")).render(
   </React.StrictMode>
 );
 
-startBoothUsageWidget();
+// Le Dashboard React est rendu de façon asynchrone : on démarre le widget
+// après le chargement de la page pour garantir que .stats-grid existe.
+window.addEventListener("load", () => {
+  startBoothUsageWidget();
+});
+
+// Secours pour les navigations internes SPA/PWA : si la page est déjà chargée,
+// on démarre aussi le widget quelques instants après le premier rendu React.
+window.setTimeout(() => {
+  startBoothUsageWidget();
+}, 1000);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
