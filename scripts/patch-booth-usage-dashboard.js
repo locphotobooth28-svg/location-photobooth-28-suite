@@ -4,9 +4,9 @@ const path = require("path");
 const appPath = path.join(process.cwd(), "client", "src", "App.jsx");
 let source = fs.readFileSync(appPath, "utf8");
 
-const SENTINEL = "LP28_BOOTH_USAGE_DASHBOARD_V2";
+const SENTINEL = "LP28_BOOTH_USAGE_DASHBOARD_V3";
 if (source.includes(SENTINEL)) {
-  console.log("[LP28] Suivi détaillé des bornes déjà injecté.");
+  console.log("[LP28] Présentation complète des bornes déjà injectée.");
   process.exit(0);
 }
 
@@ -23,12 +23,13 @@ const logic = `  /* ${SENTINEL} */
     const yearStart=new Date(now.getFullYear(),0,1,12,0,0,0);
     const yearEnd=new Date(now.getFullYear()+1,0,1,12,0,0,0);
     const rows={
-      LOLA:{id:"LOLA",label:"Lola",type:"Miroir",format:"1080 × 1920",week:0,month:0,year:0,total:0,color:"#c084fc",last:null},
-      NINA:{id:"NINA",label:"Nina",type:"Classique",format:"1920 × 1080",week:0,month:0,year:0,total:0,color:"#38bdf8",last:null},
-      GABIN:{id:"GABIN",label:"Gabin",type:"Classique",format:"",week:0,month:0,year:0,total:0,color:"#fb923c",last:null}
+      LOLA:{id:"LOLA",label:"Lola",icon:"🪞",type:"Miroir",format:"1080 × 1920",week:0,month:0,year:0,total:0,color:"#c084fc",last:null,next:null},
+      NINA:{id:"NINA",label:"Nina",icon:"📸",type:"Classique",format:"1920 × 1080",week:0,month:0,year:0,total:0,color:"#38bdf8",last:null,next:null},
+      GABIN:{id:"GABIN",label:"Gabin",icon:"✨",type:"Classique",format:"",week:0,month:0,year:0,total:0,color:"#fb923c",last:null,next:null}
     };
     (events||[]).forEach(event=>{
-      const booking=String(event?.bookingStatus||"").toUpperCase();if(booking==="CANCELLED"||booking==="DECLINED")return;
+      const booking=String(event?.bookingStatus||"").toUpperCase();
+      if(booking==="CANCELLED"||booking==="DECLINED")return;
       const match=String(event?.date||"").match(/^(\\d{4})-(\\d{2})-(\\d{2})/);if(!match)return;
       const date=new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),12,0,0,0);
       const materials=Array.isArray(event?.materials)?event.materials:[];const selected=[];
@@ -37,8 +38,12 @@ const logic = `  /* ${SENTINEL} */
       if(materials.includes("Borne Photobooth Gabin"))selected.push("GABIN");
       selected.forEach(id=>{
         const row=rows[id];row.total+=1;
-        if(date>=monday&&date<weekEnd)row.week+=1;if(date>=monthStart&&date<monthEnd)row.month+=1;if(date>=yearStart&&date<yearEnd)row.year+=1;
-        if(date<=now&&(!row.last||date>row.last.date))row.last={date,name:event.name||event.organizerName||"Événement"};
+        if(date>=monday&&date<weekEnd)row.week+=1;
+        if(date>=monthStart&&date<monthEnd)row.month+=1;
+        if(date>=yearStart&&date<yearEnd)row.year+=1;
+        const eventName=event.name||event.organizerName||"Événement";
+        if(date<=now&&(!row.last||date>row.last.date))row.last={date,name:eventName};
+        if(date>now&&(!row.next||date<row.next.date))row.next={date,name:eventName};
       });
     });
     const list=[rows.LOLA,rows.NINA,rows.GABIN];
@@ -53,34 +58,59 @@ source = source.replace(logicMarker, logic + logicMarker);
 const renderMarker = '        <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div>';
 if (!source.includes(renderMarker)) throw new Error("[LP28] Marqueur rendu dashboard introuvable.");
 
-const panel = `        {isAdmin&&<section className="panel" style={{margin:"18px 0",padding:0,overflow:"hidden",border:"1px solid rgba(214,185,79,.38)"}}>
-          <div style={{padding:"20px 22px 16px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap",borderBottom:"1px solid rgba(148,163,184,.16)"}}>
+const panel = `        {isAdmin&&<section className="panel lp28-booth-usage-v3" style={{margin:"18px 0",padding:0,overflow:"hidden",border:"1px solid rgba(214,185,79,.38)"}}>
+          <style>{\`
+            .lp28-booth-usage-v3 .booth-head{padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(148,163,184,.16)}
+            .lp28-booth-usage-v3 .booth-table{width:100%;border-collapse:collapse;table-layout:fixed}
+            .lp28-booth-usage-v3 .booth-table th{padding:11px 8px;font-size:11px;line-height:1.15;text-align:center;background:rgba(148,163,184,.06);white-space:normal}
+            .lp28-booth-usage-v3 .booth-table th:first-child,.lp28-booth-usage-v3 .booth-table th:nth-child(2),.lp28-booth-usage-v3 .booth-table th:nth-child(8),.lp28-booth-usage-v3 .booth-table th:nth-child(9){text-align:left}
+            .lp28-booth-usage-v3 .booth-table td{padding:13px 8px;border-top:1px solid rgba(148,163,184,.12);font-size:12px;vertical-align:middle;overflow:hidden}
+            .lp28-booth-usage-v3 .booth-name{font-size:15px;font-weight:950;white-space:nowrap}
+            .lp28-booth-usage-v3 .booth-type{font-weight:900;white-space:nowrap}
+            .lp28-booth-usage-v3 .booth-format{font-size:10px;margin-top:2px;white-space:nowrap}
+            .lp28-booth-usage-v3 .booth-status{display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap}
+            .lp28-booth-usage-v3 .booth-number{text-align:center;font-size:14px;font-weight:950}
+            .lp28-booth-usage-v3 .booth-total-badge{display:inline-block;min-width:34px;padding:6px 7px;border-radius:9px;font-size:15px;font-weight:950;text-align:center}
+            .lp28-booth-usage-v3 .booth-event-date{font-weight:900;white-space:nowrap;font-size:11px}
+            .lp28-booth-usage-v3 .booth-event-name{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .lp28-booth-usage-v3 .booth-footer{padding:11px 16px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(148,163,184,.12);font-size:11px}
+            @media(max-width:1180px){
+              .lp28-booth-usage-v3 .booth-table th{font-size:10px;padding:9px 5px}
+              .lp28-booth-usage-v3 .booth-table td{font-size:11px;padding:11px 5px}
+              .lp28-booth-usage-v3 .booth-name{font-size:13px}
+              .lp28-booth-usage-v3 .booth-status{font-size:10px;padding:4px 6px}
+            }
+          \`}</style>
+          <div className="booth-head">
             <div><div className="panel-kicker">SUIVI DU MATÉRIEL</div><h2 style={{margin:"4px 0"}}>📸 Utilisation des bornes</h2><p className="muted" style={{margin:0}}>Nombre de prestations réservées avec chaque borne.</p></div>
-            <div style={{padding:"8px 12px",borderRadius:999,border:"1px solid rgba(96,165,250,.28)",background:"rgba(59,130,246,.08)",fontSize:12,fontWeight:800}}>Hors événements annulés / refusés</div>
+            <div style={{padding:"8px 12px",borderRadius:999,border:"1px solid rgba(96,165,250,.28)",background:"rgba(59,130,246,.08)",fontSize:11,fontWeight:800}}>Hors événements annulés / refusés</div>
           </div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1040}}>
-              <thead><tr style={{background:"rgba(148,163,184,.06)"}}><th style={{padding:"13px 16px",textAlign:"left"}}>Borne</th><th style={{padding:"13px 16px",textAlign:"left"}}>Type</th><th style={{padding:"13px 16px",textAlign:"left"}}>Statut</th><th style={{padding:"13px 16px"}}>Cette semaine</th><th style={{padding:"13px 16px"}}>Ce mois-ci</th><th style={{padding:"13px 16px"}}>Cette année</th><th style={{padding:"13px 16px"}}>Total</th><th style={{padding:"13px 16px",textAlign:"left"}}>Dernière utilisation</th></tr></thead>
+          <div style={{width:"100%",overflow:"hidden"}}>
+            <table className="booth-table">
+              <colgroup><col style={{width:"9%"}}/><col style={{width:"10%"}}/><col style={{width:"11%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"7%"}}/><col style={{width:"18%"}}/><col style={{width:"18%"}}/></colgroup>
+              <thead><tr><th>Borne</th><th>Type</th><th>Statut</th><th>Cette semaine</th><th>Ce mois-ci</th><th>Cette année</th><th>Total</th><th>Dernière utilisation</th><th>Prochain événement</th></tr></thead>
               <tbody>
                 {boothUsageDashboard.list.map(row=>{
                   const live=opsBooths.find(b=>String(b?.booth||b?.name||"").toUpperCase().includes(row.id));
                   const online=!!live?.online;
-                  return <tr key={row.label} style={{borderTop:"1px solid rgba(148,163,184,.12)"}}>
-                    <td style={{padding:"15px 16px",fontWeight:950,color:row.color,fontSize:16}}>🖥️ {row.label}</td>
-                    <td style={{padding:"15px 16px"}}><strong>{row.type}</strong>{row.format&&<div className="muted" style={{fontSize:12,marginTop:2}}>{row.format}</div>}</td>
-                    <td style={{padding:"15px 16px"}}><span style={{display:"inline-flex",alignItems:"center",gap:7,padding:"6px 10px",borderRadius:999,background:online?"rgba(34,197,94,.14)":"rgba(148,163,184,.12)",color:online?"#4ade80":"#cbd5e1",fontWeight:900}}><span style={{width:9,height:9,borderRadius:"50%",background:online?"#22c55e":"#94a3b8"}}/>{online?"En ligne":"Disponible"}</span></td>
-                    <td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.week}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.month}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:900}}>{row.year}</td>
-                    <td style={{padding:"15px 16px",textAlign:"center"}}><strong style={{display:"inline-block",minWidth:48,padding:"7px 11px",borderRadius:10,background:row.color+"22",color:row.color,fontSize:17}}>{row.total}</strong></td>
-                    <td style={{padding:"15px 16px"}}><strong>{boothUsageDashboard.formatDate(row.last?.date)}</strong><div className="muted" style={{fontSize:12,marginTop:3,maxWidth:220,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{row.last?.name||"Aucune utilisation enregistrée"}</div></td>
+                  return <tr key={row.label}>
+                    <td><div className="booth-name" style={{color:row.color}}>{row.icon} {row.label}</div></td>
+                    <td><div className="booth-type">{row.type}</div>{row.format&&<div className="muted booth-format">{row.format}</div>}</td>
+                    <td><span className="booth-status" style={{background:online?"rgba(34,197,94,.14)":"rgba(148,163,184,.12)",color:online?"#4ade80":"#cbd5e1"}}><span style={{width:8,height:8,borderRadius:"50%",background:online?"#22c55e":"#94a3b8",flex:"0 0 auto"}}/>{online?"En ligne":"Disponible"}</span></td>
+                    <td className="booth-number">{row.week}</td><td className="booth-number">{row.month}</td><td className="booth-number">{row.year}</td>
+                    <td className="booth-number"><span className="booth-total-badge" style={{background:row.color+"22",color:row.color}}>{row.total}</span></td>
+                    <td><div className="booth-event-date">{boothUsageDashboard.formatDate(row.last?.date)}</div><div className="muted booth-event-name" title={row.last?.name||""}>{row.last?.name||"Aucune utilisation enregistrée"}</div></td>
+                    <td><div className="booth-event-date">{boothUsageDashboard.formatDate(row.next?.date)}</div><div className="muted booth-event-name" title={row.next?.name||""}>{row.next?.name||"Aucun événement prévu"}</div></td>
                   </tr>;
                 })}
-                <tr style={{borderTop:"1px solid rgba(214,185,79,.38)",background:"rgba(214,185,79,.07)"}}><td colSpan={3} style={{padding:"15px 16px",fontWeight:950,color:"#f4c542"}}>📊 Total utilisations</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:950}}>{boothUsageDashboard.total.week}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:950}}>{boothUsageDashboard.total.month}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:950}}>{boothUsageDashboard.total.year}</td><td style={{padding:"15px 16px",textAlign:"center",fontWeight:950,color:"#f4c542",fontSize:18}}>{boothUsageDashboard.total.total}</td><td style={{padding:"15px 16px"}}></td></tr>
+                <tr style={{background:"rgba(214,185,79,.07)"}}><td colSpan={3} style={{fontWeight:950,color:"#f4c542",fontSize:13}}>📊 Total utilisations</td><td className="booth-number">{boothUsageDashboard.total.week}</td><td className="booth-number">{boothUsageDashboard.total.month}</td><td className="booth-number">{boothUsageDashboard.total.year}</td><td className="booth-number" style={{color:"#f4c542",fontSize:16}}>{boothUsageDashboard.total.total}</td><td>—</td><td>—</td></tr>
               </tbody>
             </table>
           </div>
-          <div style={{padding:"13px 18px",display:"flex",gap:18,flexWrap:"wrap",borderTop:"1px solid rgba(148,163,184,.12)",fontSize:12}}><span><b style={{color:"#22c55e"}}>●</b> En ligne : agent LP28 connecté</span><span><b style={{color:"#94a3b8"}}>●</b> Disponible : borne hors ligne / prête</span><span className="muted">Les compteurs sont calculés automatiquement depuis les événements LP28.</span></div>
+          <div className="booth-footer"><span><b style={{color:"#22c55e"}}>●</b> En ligne : agent LP28 connecté</span><span><b style={{color:"#94a3b8"}}>●</b> Disponible : borne hors ligne / prête</span><span className="muted">Compteurs calculés automatiquement depuis les événements LP28.</span></div>
         </section>}
 `;
+
 source = source.replace(renderMarker, panel + renderMarker);
 fs.writeFileSync(appPath, source, "utf8");
-console.log("[LP28] Suivi détaillé utilisation des bornes injecté dans le Dashboard.");
+console.log("[LP28] Présentation bornes V3 injectée sans défilement horizontal.");
