@@ -65,67 +65,23 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = "lp28-booth-usage-styles";
   style.textContent = `
-    #lp28-booth-usage-panel{
-      margin:16px 0;
-      padding:0;
-      overflow:hidden;
-      border:1px solid rgba(214,185,79,.24);
-    }
-    #lp28-booth-usage-panel .booth-usage-head{
-      padding:18px 20px 14px;
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:14px;
-      flex-wrap:wrap;
-      border-bottom:1px solid rgba(148,163,184,.16);
-    }
-    #lp28-booth-usage-panel .booth-usage-head h2{margin:4px 0 4px;}
-    #lp28-booth-usage-panel .booth-usage-head p{margin:0;}
-    #lp28-booth-usage-panel .booth-usage-badge{
-      padding:7px 10px;
-      border-radius:999px;
-      border:1px solid rgba(96,165,250,.28);
-      background:rgba(59,130,246,.08);
-      font-size:12px;
-      font-weight:800;
-      color:#93c5fd;
-    }
-    #lp28-booth-usage-panel .booth-usage-table-wrap{overflow-x:auto;}
-    #lp28-booth-usage-panel table{width:100%;border-collapse:collapse;min-width:620px;}
-    #lp28-booth-usage-panel th{
-      padding:12px 16px;
-      background:rgba(148,163,184,.08);
-      font-size:12px;
-      text-transform:uppercase;
-      letter-spacing:.03em;
-      text-align:center;
-    }
-    #lp28-booth-usage-panel th:first-child{text-align:left;}
-    #lp28-booth-usage-panel td{
-      padding:14px 16px;
-      border-top:1px solid rgba(148,163,184,.12);
-      font-weight:800;
-      text-align:center;
-    }
-    #lp28-booth-usage-panel td:first-child{text-align:left;}
-    #lp28-booth-usage-panel .booth-name{font-weight:950;}
-    #lp28-booth-usage-panel .booth-total-row td{
-      border-top:1px solid rgba(214,185,79,.38);
-      background:rgba(214,185,79,.06);
-      font-weight:950;
-    }
-    #lp28-booth-usage-panel .booth-total-row td:last-child{color:#f4c542;}
-    html[data-lp28-theme="light"] #lp28-booth-usage-panel .booth-usage-badge{
-      color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe;
-    }
-    html[data-lp28-theme="light"] #lp28-booth-usage-panel th{background:#f7f5ef;}
-    @media(max-width:760px){
-      #lp28-booth-usage-panel .booth-usage-head{padding:14px;}
-      #lp28-booth-usage-panel th,#lp28-booth-usage-panel td{padding:11px 12px;}
-    }
+    #lp28-booth-usage-panel{margin:16px 0;padding:0;overflow:hidden;border:1px solid rgba(214,185,79,.24)}
+    #lp28-booth-usage-panel .booth-usage-head{padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(148,163,184,.16)}
+    #lp28-booth-usage-panel .booth-usage-head h2{margin:4px 0}
+    #lp28-booth-usage-panel .booth-usage-head p{margin:0}
+    #lp28-booth-usage-panel .booth-usage-badge{padding:7px 10px;border-radius:999px;border:1px solid rgba(96,165,250,.28);background:rgba(59,130,246,.08);font-size:12px;font-weight:800;color:#93c5fd}
+    #lp28-booth-usage-panel .booth-usage-table-wrap{overflow-x:auto}
+    #lp28-booth-usage-panel table{width:100%;border-collapse:collapse;min-width:620px}
+    #lp28-booth-usage-panel th{padding:12px 16px;background:rgba(148,163,184,.08);font-size:12px;text-transform:uppercase;letter-spacing:.03em;text-align:center}
+    #lp28-booth-usage-panel th:first-child{text-align:left}
+    #lp28-booth-usage-panel td{padding:14px 16px;border-top:1px solid rgba(148,163,184,.12);font-weight:800;text-align:center}
+    #lp28-booth-usage-panel td:first-child{text-align:left}
+    #lp28-booth-usage-panel .booth-name{font-weight:950}
+    #lp28-booth-usage-panel .booth-total-row td{border-top:1px solid rgba(214,185,79,.38);background:rgba(214,185,79,.06);font-weight:950}
+    html[data-lp28-theme="light"] #lp28-booth-usage-panel .booth-usage-badge{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe}
+    html[data-lp28-theme="light"] #lp28-booth-usage-panel th{background:#f7f5ef}
+    @media(max-width:760px){#lp28-booth-usage-panel .booth-usage-head{padding:14px}#lp28-booth-usage-panel th,#lp28-booth-usage-panel td{padding:11px 12px}}
   `;
-
   document.head.appendChild(style);
 }
 
@@ -145,14 +101,7 @@ function createPanel(rows) {
 
   const rowHtml = BOOTHS.map(booth => {
     const row = rows[booth.id];
-    return `
-      <tr>
-        <td class="booth-name" style="color:${booth.color}">🖥️ ${booth.label}</td>
-        <td>${row.week}</td>
-        <td>${row.month}</td>
-        <td>${row.year}</td>
-      </tr>
-    `;
+    return `<tr><td class="booth-name" style="color:${booth.color}">🖥️ ${booth.label}</td><td>${row.week}</td><td>${row.month}</td><td>${row.year}</td></tr>`;
   }).join("");
 
   panel.innerHTML = `
@@ -166,40 +115,17 @@ function createPanel(rows) {
     </div>
     <div class="booth-usage-table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Borne</th>
-            <th>Cette semaine</th>
-            <th>Ce mois-ci</th>
-            <th>Cette année</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowHtml}
-          <tr class="booth-total-row">
-            <td>Total utilisations</td>
-            <td>${totals.week}</td>
-            <td>${totals.month}</td>
-            <td>${totals.year}</td>
-          </tr>
-        </tbody>
+        <thead><tr><th>Borne</th><th>Cette semaine</th><th>Ce mois-ci</th><th>Cette année</th></tr></thead>
+        <tbody>${rowHtml}<tr class="booth-total-row"><td>Total utilisations</td><td>${totals.week}</td><td>${totals.month}</td><td>${totals.year}</td></tr></tbody>
       </table>
-    </div>
-  `;
+    </div>`;
 
   return panel;
 }
 
-async function loadAdminEvents() {
-  const sessionResponse = await fetch("/api/session", { credentials: "include" });
-  if (!sessionResponse.ok) return null;
-
-  const session = await sessionResponse.json().catch(() => ({}));
-  if (!session?.authenticated || session?.user?.role !== "ADMIN") return null;
-
+async function loadEvents() {
   const response = await fetch("/api/events", { credentials: "include" });
   if (!response.ok) return null;
-
   const data = await response.json().catch(() => ({}));
   return Array.isArray(data?.events) ? data.events : [];
 }
@@ -208,10 +134,9 @@ export function startBoothUsageWidget() {
   ensureStyles();
 
   let loading = false;
-  let lastRefresh = 0;
   let refreshTimer = null;
 
-  const refresh = async (force = false) => {
+  const refresh = async () => {
     const statsGrid = document.querySelector("main.content .stats-grid");
 
     if (!statsGrid) {
@@ -220,28 +145,17 @@ export function startBoothUsageWidget() {
     }
 
     if (loading) return;
-
-    const now = Date.now();
-    if (!force && now - lastRefresh < 10000 && document.getElementById("lp28-booth-usage-panel")) return;
-
     loading = true;
+
     try {
-      const events = await loadAdminEvents();
-      if (events === null) {
-        document.getElementById("lp28-booth-usage-panel")?.remove();
-        return;
-      }
+      const events = await loadEvents();
+      if (!events) return;
 
       const panel = createPanel(countUsage(events));
       const current = document.getElementById("lp28-booth-usage-panel");
 
-      if (current) {
-        current.replaceWith(panel);
-      } else {
-        statsGrid.insertAdjacentElement("afterend", panel);
-      }
-
-      lastRefresh = Date.now();
+      if (current) current.replaceWith(panel);
+      else statsGrid.insertAdjacentElement("afterend", panel);
     } catch (error) {
       console.warn("LP28 utilisation des bornes :", error);
     } finally {
@@ -250,8 +164,8 @@ export function startBoothUsageWidget() {
   };
 
   const scheduleRefresh = () => {
-    window.clearTimeout(refreshTimer);
-    refreshTimer = window.setTimeout(() => refresh(false), 80);
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 120);
   };
 
   const root = document.getElementById("root");
@@ -260,13 +174,13 @@ export function startBoothUsageWidget() {
     observer.observe(root, { childList: true, subtree: true });
   }
 
-  window.addEventListener("focus", () => refresh(true));
+  window.addEventListener("focus", refresh);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refresh(true);
+    if (!document.hidden) refresh();
   });
 
-  window.setTimeout(() => refresh(true), 150);
-  window.setTimeout(() => refresh(true), 800);
-  window.setTimeout(() => refresh(true), 2000);
-  window.setInterval(() => refresh(true), 60000);
+  setTimeout(refresh, 300);
+  setTimeout(refresh, 1200);
+  setTimeout(refresh, 3000);
+  setInterval(refresh, 60000);
 }
