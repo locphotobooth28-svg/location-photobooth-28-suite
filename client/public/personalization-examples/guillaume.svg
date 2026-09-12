@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity=".16"/></filter>
+    <pattern id="grain" width="80" height="80" patternUnits="userSpaceOnUse"><circle cx="12" cy="18" r="1" fill="#d9d1c9"/><circle cx="54" cy="42" r="1" fill="#d9d1c9"/><circle cx="29" cy="68" r="1" fill="#d9d1c9"/></pattern>
+  </defs>
+  <rect width="1200" height="800" fill="#f4f1ec"/>
+  <rect width="1200" height="800" fill="url(#grain)" opacity=".55"/>
+  <g fill="#7f947d" opacity=".95">
+    <ellipse cx="35" cy="75" rx="42" ry="78" transform="rotate(-22 35 75)"/>
+    <ellipse cx="98" cy="38" rx="40" ry="70" transform="rotate(20 98 38)"/>
+    <ellipse cx="1120" cy="48" rx="45" ry="78" transform="rotate(-22 1120 48)"/>
+    <ellipse cx="1170" cy="95" rx="40" ry="72" transform="rotate(28 1170 95)"/>
+    <ellipse cx="40" cy="725" rx="38" ry="68" transform="rotate(18 40 725)"/>
+    <ellipse cx="1150" cy="718" rx="38" ry="72" transform="rotate(-20 1150 718)"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="85" y="80" width="1030" height="555" rx="4" fill="#111"/>
+    <rect x="102" y="96" width="996" height="523" fill="none" stroke="#947972" stroke-width="8"/>
+  </g>
+  <text x="600" y="710" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="72" fill="#8b736b">40 ans Guillaume</text>
+  <text x="600" y="758" text-anchor="middle" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#8b5f56">Samedi 14 Novembre 2026</text>
+</svg>
