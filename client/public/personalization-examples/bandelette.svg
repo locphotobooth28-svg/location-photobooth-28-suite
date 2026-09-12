@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 1200">
+  <defs><linearGradient id="rose" x1="0" x2="1"><stop stop-color="#c08b8d"/><stop offset=".5" stop-color="#f4d8d9"/><stop offset="1" stop-color="#a96f73"/></linearGradient></defs>
+  <rect width="420" height="1200" fill="#eadcdd"/>
+  <g opacity=".75" stroke="url(#rose)" stroke-width="18">
+    <path d="M-40 125 L460 30"/><path d="M-70 520 L470 415"/><path d="M-60 905 L475 805"/><path d="M60 -40 L355 1240"/>
+  </g>
+  <g filter="url(#none)">
+    <rect x="38" y="40" width="344" height="245" rx="2" fill="#fff"/><rect x="52" y="54" width="316" height="217" fill="#050505"/>
+    <rect x="38" y="315" width="344" height="245" rx="2" fill="#fff"/><rect x="52" y="329" width="316" height="217" fill="#050505"/>
+    <rect x="38" y="590" width="344" height="245" rx="2" fill="#fff"/><rect x="52" y="604" width="316" height="217" fill="#050505"/>
+  </g>
+  <polygon points="210,890 330,960 330,1090 210,1160 90,1090 90,960" fill="#fff" fill-opacity=".92" stroke="#fff" stroke-width="8"/>
+  <text x="210" y="976" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" letter-spacing="3" fill="#c49394">JOYEUX ANNIVERSAIRE</text>
+  <text x="210" y="1035" text-anchor="middle" font-family="Arial, sans-serif" font-size="46" fill="#817477">CLARA</text>
+  <text x="210" y="1083" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" fill="#d44">♥</text>
+  <text x="210" y="1130" text-anchor="middle" font-family="Arial, sans-serif" font-size="46" fill="#817477">AMÉLIE</text>
+</svg>
