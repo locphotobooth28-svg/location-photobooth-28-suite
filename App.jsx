@@ -6494,16 +6494,128 @@ function Dashboard({onLogout,user}) {
       });
   },[events,search,eventTab]);
 
-  const isDateInCurrentWeek=date=>{
-    if(!date)return false;
-    const d=new Date(`${date}T12:00:00`);if(Number.isNaN(d.getTime()))return false;
-    const now=new Date();const day=(now.getDay()+6)%7;
-    const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-day);
-    const end=new Date(start);end.setDate(end.getDate()+7);
-    return d>=start&&d<end;
-  };
-  const hasWeekUpcoming=eventTab==="upcoming"&&filtered.some(e=>isDateInCurrentWeek(e.date));
-  const firstLaterUpcomingIndex=eventTab==="upcoming"?filtered.findIndex(e=>!isDateInCurrentWeek(e.date)):-1;
+  const [weekClock,setWeekClock]=useState(()=>new Date());
+
+useEffect(()=>{
+  const timer=window.setInterval(()=>setWeekClock(new Date()),60*60*1000);
+  return()=>window.clearInterval(timer);
+},[]);
+
+const lp28Months=[
+  "JANVIER","FÉVRIER","MARS","AVRIL","MAI","JUIN",
+  "JUILLET","AOÛT","SEPTEMBRE","OCTOBRE","NOVEMBRE","DÉCEMBRE"
+];
+
+const startOfLp28Week=value=>{
+  const d=new Date(value);
+  d.setHours(12,0,0,0);
+
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+
+  return d;
+};
+
+const addLp28Days=(value,days)=>{
+  const d=new Date(value);
+  d.setDate(d.getDate()+days);
+  return d;
+};
+
+const parseLp28EventDate=date=>{
+  if(!date)return null;
+
+  const d=new Date(`${date}T12:00:00`);
+
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatLp28ShortDate=date=>{
+  return `${date.getDate()} ${lp28Months[date.getMonth()]}`;
+};
+
+const formatLp28WeekRange=(start,end)=>{
+  if(
+    start.getMonth()===end.getMonth() &&
+    start.getFullYear()===end.getFullYear()
+  ){
+    return `${start.getDate()} → ${end.getDate()} ${lp28Months[start.getMonth()]}`;
+  }
+
+  return `${formatLp28ShortDate(start)} → ${formatLp28ShortDate(end)}`;
+};
+
+const lp28WeekStart=startOfLp28Week(weekClock);
+
+const lp28WeekSections=[
+  {
+    id:"week-current",
+    className:"week-current",
+    start:lp28WeekStart,
+    end:addLp28Days(lp28WeekStart,7),
+    label:`📅 ÉVÉNEMENTS DE LA SEMAINE — ${formatLp28WeekRange(
+      lp28WeekStart,
+      addLp28Days(lp28WeekStart,6)
+    )}`
+  },
+  {
+    id:"week-1",
+    className:"week-1",
+    start:addLp28Days(lp28WeekStart,7),
+    end:addLp28Days(lp28WeekStart,14),
+    label:`📅 SEMAINE +1 — ${formatLp28WeekRange(
+      addLp28Days(lp28WeekStart,7),
+      addLp28Days(lp28WeekStart,13)
+    )}`
+  },
+  {
+    id:"week-2",
+    className:"week-2",
+    start:addLp28Days(lp28WeekStart,14),
+    end:addLp28Days(lp28WeekStart,21),
+    label:`📅 SEMAINE +2 — ${formatLp28WeekRange(
+      addLp28Days(lp28WeekStart,14),
+      addLp28Days(lp28WeekStart,20)
+    )}`
+  },
+  {
+    id:"week-3",
+    className:"week-3",
+    start:addLp28Days(lp28WeekStart,21),
+    end:addLp28Days(lp28WeekStart,28),
+    label:`📅 SEMAINE +3 — ${formatLp28WeekRange(
+      addLp28Days(lp28WeekStart,21),
+      addLp28Days(lp28WeekStart,27)
+    )}`
+  },
+  {
+    id:"later",
+    className:"week-later",
+    start:addLp28Days(lp28WeekStart,28),
+    end:null,
+    label:`📁 ÉVÉNEMENTS À VENIR — À PARTIR DU ${formatLp28ShortDate(
+      addLp28Days(lp28WeekStart,28)
+    )}`
+  }
+];
+
+const getUpcomingWeekSection=date=>{
+  const d=parseLp28EventDate(date);
+
+  if(!d)return lp28WeekSections[4];
+
+  if(d<lp28WeekStart){
+    return lp28WeekSections[0];
+  }
+
+  return (
+    lp28WeekSections.find(section=>
+      section.end
+        ? d>=section.start && d<section.end
+        : d>=section.start
+    ) || lp28WeekSections[4]
+  );
+};
 
   function eventBooths(event){
     const materials=event.materials||[];
@@ -6857,8 +6969,20 @@ function Dashboard({onLogout,user}) {
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
-          {eventTab==="upcoming"&&hasWeekUpcoming&&<div className="event-list-section-title">📅 ÉVÉNEMENTS DE LA SEMAINE</div>}
+         
           {filtered.map((event,eventIndex)=>{
+            const weekSection=eventTab==="upcoming"
+  ?getUpcomingWeekSection(event.date)
+  :null;
+
+const previousWeekSection=eventTab==="upcoming"&&eventIndex>0
+  ?getUpcomingWeekSection(filtered[eventIndex-1]?.date)
+  :null;
+
+const showWeekHeader=!!weekSection&&(
+  !previousWeekSection||
+  previousWeekSection.id!==weekSection.id
+);
             const isGifted=!!event.preparation?.gifted;
             const giftedStyle=isGifted?{
               background:"linear-gradient(135deg,rgba(88,28,135,.34),rgba(76,29,149,.24))",
@@ -6871,7 +6995,11 @@ function Dashboard({onLogout,user}) {
               boxShadow:"0 10px 28px rgba(120,72,18,.20)"
             }:{};
             return <React.Fragment key={event.id}>
-            {eventTab==="upcoming"&&eventIndex===firstLaterUpcomingIndex&&<div className="event-list-section-title upcoming">📆 ÉVÉNEMENTS À VENIR</div>}
+            {showWeekHeader&&
+  <div className={`event-list-section-title ${weekSection.className}`}>
+    {weekSection.label}
+  </div>
+}
             <article className={`event-card ${event.archived?"archived":""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>
             <div className="event-date" style={{width:"100%",minWidth:0,boxSizing:"border-box",padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",gap:3,overflow:"hidden"}}><strong style={{fontSize:15,lineHeight:1.2,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long"}).replace(/^./,c=>c.toUpperCase()):"Date"}</strong><span style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap"}}>{event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"}):"Non renseignée"}</span></div>
             <div className="event-content">
