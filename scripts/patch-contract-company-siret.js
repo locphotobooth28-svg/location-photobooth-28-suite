@@ -24,6 +24,15 @@ if(!contract.includes(coordinatesOld)){
   process.exit(1);
 }
 contract=contract.replace(coordinatesOld,coordinatesNew);
+
+const venueOld='  drawText(`Lieu : ${event.address || "Non renseigné"}`);';
+const venueNew='  drawText(`Lieu événement : ${event.address || "Non renseigné"}`);';
+if(!contract.includes(venueOld)){
+  console.error('[contract-company-siret] venue label not found');
+  process.exit(1);
+}
+contract=contract.replace(venueOld,venueNew);
+
 fs.writeFileSync(contractFile,contract,'utf8');
 
 // ----- Empreinte du contrat -----
@@ -40,4 +49,4 @@ if(!server.includes(hashAnchor)){
 server=server.replace(hashAnchor,hashReplacement);
 fs.writeFileSync(serverFile,server,'utf8');
 
-console.log('[contract-company-siret] OK: bloc locataire pro clarifié + SIRET formaté + particulier inchangé');
+console.log('[contract-company-siret] OK: bloc locataire pro clarifié + SIRET formaté + Lieu événement + particulier inchangé');
