@@ -36,6 +36,8 @@ if(!app.includes('LP28_EVENT_FORM_TABS_V1')){
     let group="event";
     children.forEach((el,index)=>{
       if(el===tabBar){el.style.display="";return;}
+      const explicitTab=el.getAttribute("data-lp28-tab");
+      if(explicitTab){el.style.display=explicitTab===eventTab?"":"none";return;}
       const tag=el.tagName;
       if(tag==="H3") group=classify(el.textContent);
       else if(tag==="DETAILS"){
