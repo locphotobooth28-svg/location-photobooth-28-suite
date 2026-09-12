@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1200">
+  <defs><linearGradient id="gold" x1="0" x2="1"><stop stop-color="#b8892f"/><stop offset=".5" stop-color="#f3d27c"/><stop offset="1" stop-color="#b8892f"/></linearGradient></defs>
+  <rect width="800" height="1200" fill="#fbf4e9"/>
+  <g opacity=".95">
+    <circle cx="60" cy="115" r="58" fill="url(#gold)"/><circle cx="115" cy="70" r="46" fill="#ddd"/>
+    <circle cx="730" cy="85" r="55" fill="#d9d9d9"/><circle cx="755" cy="180" r="45" fill="url(#gold)"/>
+    <circle cx="55" cy="1060" r="70" fill="url(#gold)"/><circle cx="110" cy="1015" r="44" fill="#e5e5e5"/>
+    <circle cx="735" cy="1045" r="68" fill="url(#gold)"/><circle cx="680" cy="1005" r="48" fill="#e5e5e5"/>
+  </g>
+  <g stroke="url(#gold)" stroke-width="12" stroke-linecap="round" fill="none" opacity=".9">
+    <path d="M25 255 q35 -30 70 0 t70 0"/><path d="M645 245 q35 30 70 0 t70 0"/>
+    <path d="M20 905 q35 30 70 0 t70 0"/><path d="M650 900 q35 -30 70 0 t70 0"/>
+  </g>
+  <rect x="115" y="70" width="570" height="780" fill="#050505"/>
+  <text x="185" y="1015" font-family="Georgia, serif" font-size="112" fill="url(#gold)">18</text>
+  <text x="338" y="960" font-family="cursive" font-size="46" fill="#c79a43">Ans</text>
+  <text x="300" y="1030" font-family="cursive" font-size="74" fill="#c79a43">Birthday</text>
+  <text x="475" y="1088" text-anchor="middle" font-family="Georgia, serif" font-size="35" fill="#c79a43">Party</text>
+  <text x="475" y="1140" text-anchor="middle" font-family="Georgia, serif" font-size="32" fill="#b8892f">11/04/2026</text>
+</svg>
