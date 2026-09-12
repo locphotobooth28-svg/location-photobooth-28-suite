@@ -58,7 +58,7 @@ app=app.replace(selectEnd,`            <option value="CANCELLED">🔴 Annulée</
             required
           />
           <small className="muted">Le devis reste valable 15 jours à partir de cette date.</small>
-        </div>`);
+        </div>}`);
 
 fs.writeFileSync(appPath,app,"utf8");
 console.log("[quote-sent-date] OK : date affichée à côté du statut Devis envoyé");
