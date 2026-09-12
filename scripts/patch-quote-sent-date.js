@@ -14,7 +14,8 @@ const statusBlock=`          <select value={form.bookingStatus||"CONFIRMED"} onC
             <option value="OPTION">🟠 Option / en attente client</option>
             <option value="CONFIRMED">🟢 Réservation confirmée</option>
             <option value="DECLINED">⚪ Devis refusé / sans suite</option>
-            <option value="CANCELLED">🔴 Annulée</option>`;
+            <option value="CANCELLED">🔴 Annulée</option>
+            <option value="COMPLETED">🔵 Terminée</option>`;
 
 if(!app.includes(statusBlock))throw new Error("[quote-sent-date] bloc statut commercial introuvable");
 
@@ -35,14 +36,17 @@ const replacement=`          {/* ${marker} */}
             <option value="OPTION">🟠 Option / en attente client</option>
             <option value="CONFIRMED">🟢 Réservation confirmée</option>
             <option value="DECLINED">⚪ Devis refusé / sans suite</option>
-            <option value="CANCELLED">🔴 Annulée</option>`;
+            <option value="CANCELLED">🔴 Annulée</option>
+            <option value="COMPLETED">🔵 Terminée</option>`;
 app=app.replace(statusBlock,replacement);
 
 const selectEnd=`            <option value="CANCELLED">🔴 Annulée</option>
+            <option value="COMPLETED">🔵 Terminée</option>
           </select>
         </div>`;
 if(!app.includes(selectEnd))throw new Error("[quote-sent-date] fin du sélecteur statut introuvable");
 app=app.replace(selectEnd,`            <option value="CANCELLED">🔴 Annulée</option>
+            <option value="COMPLETED">🔵 Terminée</option>
           </select>
         </div>
         {form.bookingStatus==="QUOTE_SENT"&&<div>
