@@ -44,6 +44,9 @@ function LP28ThemeStyles(){
     .lp28-printer-blink{display:inline-block;animation:lp28PrinterBlink 1s steps(2,end) infinite;}
     .lp28-printer-warning{color:#d97706;font-weight:600;}
     .lp28-printer-error{color:#dc2626;font-weight:700;}
+    @keyframes lp28BoothGyro{0%,100%{transform:scale(1);filter:drop-shadow(0 0 2px rgba(239,68,68,.45))}50%{transform:scale(1.18);filter:drop-shadow(0 0 10px rgba(239,68,68,1))}}
+    .lp28-booth-gyro{display:inline-block;animation:lp28BoothGyro .8s ease-in-out infinite;transform-origin:center;}
+    .booth-live-pill.alert{background:rgba(127,29,29,.72)!important;color:#fecaca!important;border-color:#ef4444!important;box-shadow:0 0 14px rgba(239,68,68,.5)!important;}
 
     html[data-lp28-theme="light"],html[data-lp28-theme="light"] body,
     html[data-lp28-theme="light"] #root{background:#f5f3ee !important;color:#151515 !important;}
@@ -146,6 +149,29 @@ balance:"",
   customPrintCount:"",
 customPrintPrice:"",payments:{depositPaid:false,balancePaid:false,cautionReceived:false,cautionReturned:false}
 };
+
+function openLP28PosterStudio({guestUrl,qrDataUrl,eventName}){
+  if(!guestUrl)return alert("Le lien Invité n’est pas encore disponible.");
+  const qr=qrDataUrl||('https://api.qrserver.com/v1/create-qr-code/?size=900x900&data='+encodeURIComponent(guestUrl));
+  const safeName=String(eventName||'Votre événement').replace(/[<>&"']/g,'');
+  const templates=[
+    {id:'elegant',name:'Élégant',file:'/posters/lp28-elegant.svg',qx:26.7,qy:39.8,qw:46.6,ey:29.3,color:'#9a6c13'},
+    {id:'modern',name:'Moderne',file:'/posters/lp28-modern.svg',qx:26.4,qy:38.3,qw:47.1,ey:29.2,color:'#ffffff'},
+    {id:'phone',name:'Photo & smartphone',file:'/posters/lp28-phone.svg',qx:29.7,qy:42.8,qw:40.6,ey:29.3,color:'#111111'},
+    {id:'minimal',name:'Minimaliste',file:'/posters/lp28-minimal.svg',qx:28.0,qy:40.4,qw:44.1,ey:29.3,color:'#111111'},
+    {id:'fun',name:'Fun',file:'/posters/lp28-fun.svg',qx:26.6,qy:38.7,qw:46.9,ey:29.5,color:'#ffd52a'}
+  ];
+  const w=window.open('', '_blank');
+  if(!w)return alert("Autorisez les fenêtres pop-up pour ouvrir le générateur d’affiche.");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affiche invités - ${safeName}</title><style>
+  *{box-sizing:border-box}body{margin:0;background:#07111c;color:#f8fafc;font-family:Inter,Arial,sans-serif}.app{max-width:1550px;margin:auto;padding:20px}.head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:16px}.head h1{margin:0;font-size:32px}.head p{margin:5px 0 0;color:#b7c5d6}.lp28{font-weight:900;color:#e7c34d;letter-spacing:.8px}.notice{border:1px solid #185f91;background:#0b2b47;padding:11px 14px;border-radius:10px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(5,minmax(205px,1fr));gap:12px}.card{background:#101923;border:1px solid #34465a;border-radius:13px;padding:9px;cursor:pointer;transition:.18s}.card:hover{transform:translateY(-2px);border-color:#7693b3}.card.sel{border:2px solid #e7c34d;box-shadow:0 0 0 2px rgba(231,195,77,.12)}.card-head{display:flex;justify-content:space-between;align-items:center;padding:3px 2px 9px}.card-head b{display:block}.card-head small{color:#9fb0c2}.poster-preview{position:relative;aspect-ratio:794/1123;overflow:hidden;border-radius:8px;background:#fff}.poster-preview>img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.qrOverlay{position:absolute;background:white;padding:1.3%;border-radius:3%;object-fit:contain}.eventOverlay{position:absolute;left:8%;right:8%;text-align:center;font-family:Georgia,serif;font-weight:700;font-size:clamp(12px,1.7vw,23px);line-height:1.1;text-shadow:0 1px 1px rgba(255,255,255,.35)}.bottom{display:grid;grid-template-columns:1fr 1.25fr;gap:14px;margin-top:16px}.panel{background:#101923;border:1px solid #34465a;border-radius:13px;padding:16px}.panel h3{margin:0 0 10px}.panel input{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #46586d;background:#08111b;color:#fff}.actions{display:flex;gap:10px;flex-wrap:wrap}.actions button{padding:13px 17px;border-radius:9px;border:1px solid #566a81;background:#172433;color:#fff;font-weight:800;cursor:pointer}.actions .primary{background:#e7c34d;color:#111;border-color:#e7c34d}.printSheet{display:none}@media(max-width:1050px){.grid{grid-template-columns:repeat(2,minmax(210px,1fr))}.bottom{grid-template-columns:1fr}}@page{size:A4;margin:0}@media print{body>*{display:none!important}.printSheet{display:block!important;position:fixed;inset:0;width:210mm;height:297mm;overflow:hidden;background:white}.printSheet .bg{position:absolute;inset:0;width:210mm;height:297mm}.printSheet .qr{position:absolute;object-fit:contain;background:#fff;padding:1.4mm}.printSheet .ename{position:absolute;left:18mm;right:18mm;text-align:center;font-family:Georgia,serif;font-weight:700;font-size:7mm;line-height:1.05}.printSheet .custom{position:absolute;left:20mm;right:20mm;bottom:28mm;text-align:center;font-family:Georgia,serif;font-style:italic;font-size:5.5mm;font-weight:700}}
+  </style></head><body><div class="app"><div class="head"><div><h1>🎨 Affiche pour vos invités</h1><p>Choisissez votre modèle A4. Le QR Code Invité de cet événement est inséré automatiquement.</p></div><div class="lp28">📸 LOCATION PHOTOBOOTH 28</div></div><div class="notice">ℹ️ Le QR Code reste entièrement visible et lisible. Le nom Location Photobooth 28 ainsi que Facebook et Instagram restent intégrés sur chaque affiche.</div><div class="grid" id="grid"></div><div class="bottom"><div class="panel"><h3>✍️ Personnalisation facultative</h3><label>Petit message en bas de l’affiche</label><input id="custom" maxlength="60" placeholder="Ex. Merci d’être là ! ♡"><p style="color:#9fb0c2;margin-bottom:0">Le visuel LP28 et les réseaux sociaux ne peuvent pas être masqués.</p></div><div class="panel"><h3>📄 Votre affiche</h3><p style="color:#b7c5d6">Format A4 21 × 29,7 cm, prêt à imprimer. À placer près de la borne, à l’entrée ou sur les tables.</p><div class="actions"><button class="primary" onclick="doPrint()">⬇️ Télécharger / enregistrer en PDF</button><button onclick="doPrint()">🖨️ Imprimer directement</button></div></div></div></div><div class="printSheet" id="printSheet"><img class="bg" id="printBg"><img class="qr" id="printQr" src="${qr}"><div class="ename" id="printName">${safeName}</div><div class="custom" id="printCustom"></div></div><script>
+  const templates=${JSON.stringify(templates)};let selected=0;const eventName=${JSON.stringify(safeName)};const qr=${JSON.stringify(qr)};
+  function render(){document.getElementById('grid').innerHTML=templates.map(function(t,i){return '<div class="card '+(i===selected?'sel':'')+'" onclick="selected='+i+';render()"><div class="card-head"><div><b>Modèle '+(i+1)+'</b><small>'+t.name+'</small></div><span>'+(i===selected?'✅':'○')+'</span></div><div class="poster-preview"><img class="bg" src="'+t.file+'"><div class="eventOverlay" style="top:'+t.ey+'%;color:'+t.color+'">'+eventName+'</div><img class="qrOverlay" src="'+qr+'" style="left:'+t.qx+'%;top:'+t.qy+'%;width:'+t.qw+'%"></div></div>'}).join('')}
+  function doPrint(){const t=templates[selected],bg=document.getElementById('printBg'),q=document.getElementById('printQr'),n=document.getElementById('printName');bg.src=t.file;q.style.left=t.qx+'%';q.style.top=t.qy+'%';q.style.width=t.qw+'%';n.style.top=t.ey+'%';n.style.color=t.color;document.getElementById('printCustom').textContent=document.getElementById('custom').value.trim();setTimeout(function(){window.print()},250)}render();
+<\/script></body></html>`);
+  w.document.close();
+}
 
 function Login({ onLogin }) {
   const [login,setLogin]=useState("");
@@ -433,6 +459,18 @@ function SettingsPage({user}){
 function EventForm({event,onClose,onSaved}) {
   const [form,setForm]=useState(event ? JSON.parse(JSON.stringify(event)) : JSON.parse(JSON.stringify(EMPTY_EVENT)));
   const [busy,setBusy]=useState(false);
+  const [eventTab,setEventTab]=useState("event");
+  const [personalizationRenewMsg,setPersonalizationRenewMsg]=useState("");
+  async function renewPersonalizationLink(catalog){
+    if(!form?.id){setPersonalizationRenewMsg("Enregistre d’abord l’événement.");return;}
+    setPersonalizationRenewMsg("Renouvellement…");
+    try{
+      const r=await fetch("/api/events/"+encodeURIComponent(form.id)+"/personalization-renew/"+catalog,{method:"POST"});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Renouvellement impossible.");
+      setPersonalizationRenewMsg("✅ Nouveau jeton créé. Les anciens liens de ce catalogue sont invalidés.");
+    }catch(err){setPersonalizationRenewMsg("⚠️ "+(err.message||"Renouvellement impossible."));}
+  }
   const [googleStatus,setGoogleStatus]=useState(null);
   const [googleCalendars,setGoogleCalendars]=useState([]);
 const [addressSuggestions,setAddressSuggestions]=useState([]);
@@ -440,7 +478,7 @@ const [addressLoading,setAddressLoading]=useState(false);
 
 const [portalPermissions,setPortalPermissions]=useState(()=>{
   const saved=event?.preparation?.portalPermissions||{};
-  return {organizerContract:saved.organizerContract!==false,organizerDocuments:saved.organizerDocuments!==false,organizerShare:saved.organizerShare!==false,organizerMathis:saved.organizerMathis!==false,guestGallery:saved.guestGallery!==false,guestMathis:saved.guestMathis!==false};
+  return {organizerContract:saved.organizerContract!==false,organizerDocuments:saved.organizerDocuments!==false,organizerShare:saved.organizerShare!==false,organizerMathis:saved.organizerMathis!==false,guestGallery:saved.guestGallery!==false,guestMathis:saved.guestMathis!==false,personalizationAccess:saved.personalizationAccess===true,personalizationTemplatesBooth:saved.personalizationTemplatesBooth!==false,personalizationBoothWidget:saved.personalizationBoothWidget!==false};
 });
 
 const [collaboratorPermissions,setCollaboratorPermissions]=useState(()=>{
@@ -530,6 +568,34 @@ useEffect(()=>{
   },[]);
 
   const set=(key,val)=>setForm(f=>({...f,[key]:val}));
+  const [siretLoading,setSiretLoading]=useState(false);
+  const [siretError,setSiretError]=useState("");
+
+  async function lookupSiret(rawSiret){
+    const siret=String(rawSiret||"").replace(/\D/g,"");
+    if(siret.length!==14){setSiretError("Le SIRET doit contenir 14 chiffres.");return;}
+    setSiretLoading(true); setSiretError("");
+    try{
+      const r=await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siret)}&page=1&per_page=10`);
+      if(!r.ok) throw new Error("service indisponible");
+      const d=await r.json();
+      const results=Array.isArray(d.results)?d.results:[];
+      let company=null, establishment=null;
+      for(const item of results){
+        const matches=[item.siege,...(Array.isArray(item.matching_etablissements)?item.matching_etablissements:[])].filter(Boolean);
+        const found=matches.find(x=>String(x.siret||"").replace(/\D/g,"")===siret);
+        if(found){company=item; establishment=found; break;}
+      }
+      if(!company){setSiretError("Aucun établissement trouvé pour ce SIRET.");return;}
+      const legalName=company.nom_complet||company.nom_raison_sociale||company.nom_commercial||"";
+      const tradeName=establishment.nom_commercial||company.nom_commercial||legalName;
+      const address=establishment.adresse||company.siege?.adresse||"";
+      setForm(f=>({...f,preparation:{...(f.preparation||{}),clientSiret:siret,clientSiretVerified:true,clientLegalName:legalName,clientEstablishment:tradeName||legalName||f.preparation?.clientEstablishment||"",clientEstablishmentAddress:address,clientSiren:String(company.siren||siret.slice(0,9))}}));
+    }catch(err){
+      console.error("Recherche SIRET :",err);
+      setSiretError("Impossible de vérifier le SIRET pour le moment. Tu peux continuer à saisir les informations manuellement.");
+    }finally{setSiretLoading(false);}
+  }
 
   async function searchAddress(value){
   if(value.trim().length < 3){
@@ -978,10 +1044,104 @@ Johan — Location Photobooth 28`;
   }
 }
 
+
+  useEffect(()=>{
+    const formEl=document.querySelector(".event-modal form");
+    if(!formEl)return;
+    const children=[...formEl.children];
+    const tabBar=formEl.querySelector(".lp28-event-tabs");
+    const classify=(text)=>{
+      const t=String(text||"").toLowerCase();
+      if(t.includes("organisateur")||t.includes("client"))return "client";
+      if(t.includes("équipe")||t.includes("equipe")||t.includes("collaborateur"))return "team";
+      if(t.includes("frais")||t.includes("déplacement")||t.includes("deplacement")||t.includes("commercial")||t.includes("acompte")||t.includes("solde")||t.includes("tarif")||t.includes("paiement")||t.includes("payé")||t.includes("paye")||t.includes("caution")||t.includes("règlement")||t.includes("reglement"))return "finance";
+      if(t.includes("portail"))return "portal";
+      if(t.includes("préparation")||t.includes("preparation")||t.includes("check")||t.includes("chargé")||t.includes("charge")||t.includes("départ")||t.includes("depart")||t.includes("retour"))return "prep";
+      if(t.includes("matériel")||t.includes("materiel")||t.includes("impression")||t.includes("borne")||t.includes("jet")||t.includes("étincelle")||t.includes("etincelle")||t.includes("option"))return "material";
+      if(t.includes("google")||t.includes("agenda")||t.includes("cadre photo")||t.includes("notes")||t.includes("note")||t.includes("technique"))return "tech";
+      return "event";
+    };
+    let group="event";
+    children.forEach((el,index)=>{
+      if(el===tabBar){el.style.display="";return;}
+      const explicitTab=el.getAttribute("data-lp28-tab");
+      if(explicitTab){el.style.display=explicitTab===eventTab?"":"none";return;}
+      const tag=el.tagName;
+      if(tag==="H3") group=classify(el.textContent);
+      else if(tag==="DETAILS"){
+        const summary=el.querySelector(":scope > summary");
+        group=classify(summary?.textContent||el.textContent);
+      }
+      const txt=(el.textContent||"").trim();
+      const always=/enregistrer|annuler/i.test(txt) && el.querySelector("button");
+      if(always || index===children.length-1){el.style.display="";return;}
+      el.style.display=group===eventTab?"":"none";
+    });
+  },[eventTab]);
+
+
+  /* LP28_PREPARATION_CHECKLIST_V1 */
+  const lp28PrepState=(form.preparation&&typeof form.preparation==="object")?form.preparation:{};
+  const lp28SelectedMaterials=Array.isArray(form.materials)?form.materials:[];
+  const lp28Has=(...words)=>lp28SelectedMaterials.some(m=>words.some(w=>String(m||"").toLowerCase().includes(String(w).toLowerCase())));
+  const lp28Booths=lp28SelectedMaterials.filter(m=>/borne photobooth/i.test(String(m||"")));
+  const lp28HasPrint=lp28SelectedMaterials.some(m=>/forfait (100|200|300|400|700)|impressions personnalisé/i.test(String(m||"")));
+  const lp28BasePrep=[];
+  lp28Booths.forEach(b=>lp28BasePrep.push({id:"booth-"+b,label:b,icon:"📸"}));
+  if(lp28Booths.length){
+    lp28BasePrep.push({id:"camera",label:"Appareil photo",icon:"📷"});
+    lp28BasePrep.push({id:"umbrella",label:"Parapluie pour flash",icon:"☂️"});
+    lp28BasePrep.push({id:"flash-ms300",label:"Flash Godox MS300",icon:"💡"});
+    lp28BasePrep.push({id:"extension",label:"Rallonge électrique",icon:"🔌"});
+    lp28BasePrep.push({id:"support",label:"Mange-debout ou tonneau",icon:"🪵"});
+  }
+  if(lp28HasPrint){
+    lp28BasePrep.push({id:"printer",label:"Imprimante",icon:"🖨️"});
+    lp28BasePrep.push({id:"paper",label:"Papier photo / consommables",icon:"🧻"});
+  }
+  const lp28OptionPrep=lp28SelectedMaterials.filter(m=>/livre d.or|karaok|enceinte|micro|fontaine|jet d.|poteaux|toile|clé usb/i.test(String(m||""))).map((m,i)=>({id:"option-"+String(m).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||i,label:m,icon:/livre d.or/i.test(m)?"☎️":/karaok/i.test(m)?"🎤":/enceinte|micro/i.test(m)?"🔊":/fontaine/i.test(m)?"🍹":/jet d./i.test(m)?"✨":"📦"}));
+  const lp28PrepItems=[...lp28BasePrep,...lp28OptionPrep];
+  const lp28PrepChecks=(lp28PrepState.checklist&&typeof lp28PrepState.checklist==="object")?lp28PrepState.checklist:{};
+  const lp28PrepDone=lp28PrepItems.filter(i=>lp28PrepChecks[i.id]===true).length;
+  const lp28PrepTotal=lp28PrepItems.length;
+  const lp28PrepPercent=lp28PrepTotal?Math.round(lp28PrepDone*100/lp28PrepTotal):0;
+  const setLp28PrepCheck=(id,value)=>setForm(f=>({...f,preparation:{...((f.preparation&&typeof f.preparation==="object")?f.preparation:{}),checklist:{...((((f.preparation&&typeof f.preparation==="object")?f.preparation:{}).checklist)||{}),[id]:value}}}));
+  const lp28PreparationPanel=<section className="lp28-prep-panel" data-lp28-tab="prep">
+    <style>{`
+      .lp28-prep-panel{border:1px solid rgba(70,140,255,.24);border-radius:16px;background:linear-gradient(180deg,rgba(15,26,42,.98),rgba(8,17,29,.98));padding:16px;margin:4px 0 18px;color:#f7f8fb}.lp28-prep-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}.lp28-prep-top h3{margin:0!important;font-size:18px}.lp28-prep-top p{margin:5px 0 0;color:#aeb8c7;font-size:12px}.lp28-prep-score{white-space:nowrap;font-size:12px;font-weight:900;padding:7px 10px;border-radius:999px;background:rgba(46,140,255,.13);border:1px solid rgba(46,140,255,.35);color:#b9d8ff}.lp28-prep-progress{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:14px}.lp28-prep-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#2e8cff,#22c98b);transition:width .2s ease}.lp28-prep-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.lp28-prep-item{display:flex!important;align-items:center;gap:10px;margin:0!important;padding:11px 12px;border:1px solid rgba(255,255,255,.09);border-radius:11px;background:rgba(255,255,255,.025);cursor:pointer}.lp28-prep-item.done{border-color:rgba(34,201,139,.3);background:rgba(34,201,139,.07)}.lp28-prep-item input{width:21px!important;height:21px!important;margin:0!important;accent-color:#22c98b;flex:0 0 auto}.lp28-prep-icon{font-size:18px}.lp28-prep-label{font-weight:750;font-size:12px}.lp28-prep-complete{margin-top:12px;padding:11px 13px;border:1px solid rgba(34,201,139,.35);border-radius:11px;background:rgba(34,201,139,.1);color:#91f2d0;font-weight:900;text-align:center}.lp28-prep-empty{padding:16px;border:1px dashed rgba(255,255,255,.15);border-radius:11px;color:#aeb8c7;text-align:center;font-size:12px}@media(max-width:700px){.lp28-prep-list{grid-template-columns:1fr}.lp28-prep-top{flex-direction:column}.lp28-prep-score{align-self:flex-start}}
+    `}</style>
+    <div className="lp28-prep-top"><div><h3>✅ Check-list de préparation</h3><p>Le matériel de base est ajouté selon la borne et les options cochées dans la prestation.</p></div><span className="lp28-prep-score">{lp28PrepDone}/{lp28PrepTotal} · {lp28PrepPercent}%</span></div>
+    <div className="lp28-prep-progress"><span style={{width:lp28PrepPercent+"%"}}/></div>
+    {lp28PrepTotal?<div className="lp28-prep-list">{lp28PrepItems.map(item=><label key={item.id} className={lp28PrepChecks[item.id]?"lp28-prep-item done":"lp28-prep-item"}><input type="checkbox" checked={lp28PrepChecks[item.id]===true} onChange={e=>setLp28PrepCheck(item.id,e.target.checked)}/><span className="lp28-prep-icon">{item.icon}</span><span className="lp28-prep-label">{item.label}</span></label>)}</div>:<div className="lp28-prep-empty">Sélectionne une borne et les options dans l’onglet Matériel : la check-list sera créée automatiquement.</div>}
+    {lp28PrepTotal>0&&lp28PrepDone===lp28PrepTotal&&<div className="lp28-prep-complete">✅ Matériel prêt pour l’événement</div>}
+  </section>;
+
   const groups=[...new Set(MATERIALS.map(m=>m.group))];
   return <div className="modal-backdrop"><div className="event-modal">
     <div className="modal-head"><div><div className="eyebrow">{event?"MODIFIER":"NOUVEL"} ÉVÉNEMENT</div><h2>{event?"Modifier l'événement":"Créer un événement"}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
     <form onSubmit={save}>
+      <style>{`
+        /* LP28_EVENT_FORM_TABS_V1 */
+        .lp28-event-tabs{position:sticky;top:0;z-index:12;display:flex;gap:7px;overflow-x:auto;padding:10px 0 12px;margin:0 0 14px;background:linear-gradient(180deg,rgba(17,17,19,.98),rgba(17,17,19,.94) 78%,rgba(17,17,19,0));scrollbar-width:thin}
+        .lp28-event-tab{flex:0 0 auto;border:1px solid rgba(255,255,255,.13)!important;background:#17181c!important;color:#d7d9df!important;border-radius:11px!important;padding:9px 12px!important;font-size:12px!important;font-weight:800!important;white-space:nowrap;transition:.16s ease}
+        .lp28-event-tab:hover{border-color:rgba(70,140,255,.55)!important;transform:translateY(-1px)}
+        .lp28-event-tab.active{background:linear-gradient(135deg,rgba(35,111,220,.38),rgba(25,62,123,.35))!important;border-color:#3b82f6!important;color:#fff!important;box-shadow:0 0 0 1px rgba(59,130,246,.12) inset}
+        .event-modal form>h3{margin-top:8px}
+        @media(max-width:700px){.lp28-event-tabs{margin-left:-4px;margin-right:-4px;padding-left:4px;padding-right:4px}.lp28-event-tab{padding:8px 10px!important;font-size:11px!important}}
+      `}</style>
+      {eventTab==="prep"&&lp28PreparationPanel}
+      <div className="lp28-event-tabs" role="tablist" aria-label="Sections de l’événement">
+        {[
+          ["event","📅 Événement"],
+          ["client","👤 Client"],
+          ["team","👷 Équipe"],
+          ["finance","💰 Finances"],
+          ["material","📦 Matériel"],
+          ["portal","🌐 Portail"],
+          ["prep","✅ Préparation"],
+          ["tech","⚙️ Technique & notes"]
+        ].map(([key,label])=><button key={key} type="button" role="tab" aria-selected={eventTab===key} className={eventTab===key?"lp28-event-tab active":"lp28-event-tab"} onClick={()=>setEventTab(key)}>{label}</button>)}
+      </div>
       <h3>Informations générales</h3>
       <div className="form-grid">
         <div><label>Nom de l'événement *</label><input value={form.name} onChange={e=>set("name",e.target.value)} required/></div>
@@ -1071,11 +1231,23 @@ Johan — Location Photobooth 28`;
         </div>
       </div>
 
-      <h3>Organisateur</h3>
+      <h3>Organisateur / Client</h3>
       <div className="form-grid">
-        <div><label>Nom / prénom</label><input value={form.organizerName} onChange={e=>set("organizerName",e.target.value)}/></div>
-        <div><label>Téléphone</label><input value={form.organizerPhone} onChange={e=>set("organizerPhone",e.target.value)}/></div>
-        <div><label>E-mail</label><input type="email" value={form.organizerEmail} onChange={e=>set("organizerEmail",e.target.value)}/></div>
+        <div><label>Nom</label><input value={form.organizerName||""} onChange={e=>set("organizerName",e.target.value)} placeholder="Nom du client"/></div>
+        <div><label>Prénom</label><input value={form.preparation?.clientFirstName||""} onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),clientFirstName:e.target.value}}))} placeholder="Prénom du client"/></div>
+        <div><label>Téléphone</label><input value={form.organizerPhone||""} onChange={e=>set("organizerPhone",e.target.value)}/></div>
+        <div><label>E-mail</label><input type="email" value={form.organizerEmail||""} onChange={e=>set("organizerEmail",e.target.value)}/></div>
+        <div><label>Établissement / Société / Association <span className="muted">(facultatif)</span></label><input value={form.preparation?.clientEstablishment||""} onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),clientEstablishment:e.target.value}}))} placeholder="Ex : Mairie de Thivars"/></div>
+        <div>
+          <label>SIRET <span className="muted">(facultatif)</span></label>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input inputMode="numeric" maxLength={14} value={form.preparation?.clientSiret||""} onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),clientSiret:e.target.value.replace(/\D/g,"").slice(0,14),clientSiretVerified:false}}))} placeholder="14 chiffres"/>
+            <button type="button" onClick={()=>lookupSiret(form.preparation?.clientSiret)} disabled={siretLoading || String(form.preparation?.clientSiret||"").length!==14}>{siretLoading?"Recherche…":"🔎 Rechercher"}</button>
+          </div>
+          {form.preparation?.clientSiretVerified && <small style={{display:"block",marginTop:6}}>✅ Établissement vérifié · {form.preparation?.clientLegalName||form.preparation?.clientEstablishment||""}</small>}
+          {siretError && <small style={{display:"block",marginTop:6,color:"#ef4444"}}>{siretError}</small>}
+        </div>
+        {form.preparation?.clientSiretVerified && <div className="wide"><label>Adresse officielle de l’établissement</label><input value={form.preparation?.clientEstablishmentAddress||""} onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),clientEstablishmentAddress:e.target.value}}))}/></div>}
       </div>
 <h3>👷 Équipe affectée</h3>
 
@@ -1267,7 +1439,18 @@ Johan — Location Photobooth 28`;
       <div className="form-grid">
         <div>
           <label>Statut</label>
-          <select value={form.bookingStatus||"CONFIRMED"} onChange={e=>set("bookingStatus",e.target.value)}>
+          {/* LP28_QUOTE_SENT_DATE_V1 */}
+          <select value={form.bookingStatus||"CONFIRMED"} onChange={e=>{
+            const next=e.target.value;
+            setForm(f=>{
+              const prep={...(f.preparation||{})};
+              if(next==="QUOTE_SENT"&&!prep.quoteSentAt){
+                const now=new Date();
+                prep.quoteSentAt=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+              }
+              return {...f,bookingStatus:next,preparation:prep};
+            });
+          }}>
             <option value="QUOTE_DRAFT">📝 Devis en préparation</option>
             <option value="QUOTE_SENT">📤 Devis envoyé</option>
             <option value="OPTION">🟠 Option / en attente client</option>
@@ -1277,6 +1460,24 @@ Johan — Location Photobooth 28`;
             <option value="COMPLETED">🔵 Terminée</option>
           </select>
         </div>
+        {form.bookingStatus==="QUOTE_SENT"&&<div>
+          <label>📅 Date d’envoi du devis</label>
+          <input
+            type="date"
+            value={form.preparation?.quoteSentAt||""}
+            onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),quoteSentAt:e.target.value}}))}
+            required
+          />
+          <small className="muted">Le devis reste valable 15 jours à partir de cette date.</small>
+          <label style={{marginTop:10}}>🔗 Lien du devis</label>
+          <input
+            type="url"
+            placeholder="https://..."
+            value={form.preparation?.quoteUrl||""}
+            onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),quoteUrl:e.target.value}}))}
+          />
+          <small className="muted">Ce lien est renseigné manuellement par l’administrateur et sera utilisé dans les relances client.</small>
+        </div>}
         {form.bookingStatus==="OPTION" && <div>
           <label>Maintenir l'option jusqu'au</label>
           <input type="date" value={form.optionUntil||""} onChange={e=>set("optionUntil",e.target.value)}/>
@@ -1425,27 +1626,71 @@ Johan — Location Photobooth 28`;
         </div>
       </details>
 
-      <details className="accordion-block">
+      <details className="accordion-block lp28-portal-accordion">
         <summary><span>📸 Portail événement</span><small>{form.portalEnabled?"Activé":"Désactivé"}</small></summary>
-        <div className="accordion-content"><div className="form-grid">
-          <label className="switch-line"><input type="checkbox" checked={Boolean(form.portalEnabled)} onChange={e=>set("portalEnabled",e.target.checked)}/> Activer le portail</label>
-          {form.portalEnabled && <>
-            <div className="wide" style={{padding:"12px",border:"1px solid rgba(214,185,79,.25)",borderRadius:12}}><strong>🔐 Visibilité des portails</strong><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:8,marginTop:10}}>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerContract} onChange={e=>setPortalPermissions(p=>({...p,organizerContract:e.target.checked}))}/> Organisateur : contrat</label>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerDocuments} onChange={e=>setPortalPermissions(p=>({...p,organizerDocuments:e.target.checked}))}/> Organisateur : documents / factures</label>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerShare} onChange={e=>setPortalPermissions(p=>({...p,organizerShare:e.target.checked}))}/> Organisateur : partage / QR invités</label>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.organizerMathis} onChange={e=>setPortalPermissions(p=>({...p,organizerMathis:e.target.checked}))}/> Organisateur : assistance Mathis</label>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.guestGallery} onChange={e=>setPortalPermissions(p=>({...p,guestGallery:e.target.checked}))}/> Invité : galerie</label>
-              <label className="switch-line"><input type="checkbox" checked={portalPermissions.guestMathis} onChange={e=>setPortalPermissions(p=>({...p,guestMathis:e.target.checked}))}/> Invité : assistance Mathis</label>
-            </div></div>
-            <label className="switch-line"><input type="checkbox" checked={Boolean(form.guestUploadEnabled)} onChange={e=>set("guestUploadEnabled",e.target.checked)}/> Autoriser les photos invités</label>
-            <label className="switch-line"><input type="checkbox" checked={Boolean(form.guestVideoEnabled)} onChange={e=>set("guestVideoEnabled",e.target.checked)}/> Autoriser les vidéos invités</label>
-            <label className="switch-line"><input type="checkbox" checked={form.guestUploadModerated!==false} onChange={e=>set("guestUploadModerated",e.target.checked)}/> Modération avant publication (optionnelle)</label>
-            <div><label>Expiration</label><input type="date" value={form.portalExpiresAt||""} onChange={e=>set("portalExpiresAt",e.target.value)}/></div>
-            <div><label>Mot de passe (facultatif)</label><input value={form.portalPassword||""} onChange={e=>set("portalPassword",e.target.value)}/></div>
-            <div className="wide"><label>Galerie Photos Borne — lien LumaBooth / FotoShare</label><input placeholder="https://fotoshare.co/..." value={form.fotoshareUrl||""} onChange={e=>set("fotoshareUrl",e.target.value)}/><small className="muted">Ce lien alimente le bouton « Photos Borne » du portail. Accès client prévu pendant 30 jours.</small></div>
-          </>}
-        </div></div>
+        <div className="accordion-content lp28-portal-table-wrap">
+          <style>{`
+            .lp28-portal-table-wrap{--bg:#0b111a;--card:#0f1a28;--line:rgba(93,130,178,.28);--text:#f6f8fb;--muted:#aeb8c7;--blue:#2e8cff;--purple:#a542ff;--green:#22c98b;color:var(--text)}
+            .lp28-portal-table-wrap *{box-sizing:border-box}.lp28-portal-table-shell{display:grid;gap:14px}.lp28-portal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,rgba(19,34,55,.96),rgba(10,19,31,.96))}.lp28-portal-head-left{display:flex;align-items:center;gap:12px}.lp28-portal-head input{width:27px!important;height:27px!important;margin:0!important;accent-color:var(--blue)}.lp28-portal-head strong{font-size:15px}.lp28-portal-head small{display:block;color:var(--muted);margin-top:3px}.lp28-state{padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900;border:1px solid rgba(34,201,139,.4);background:rgba(34,201,139,.12);color:#82f1ca}.lp28-state.off{border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.1);color:#c3cad4}
+            .lp28-table-card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(12,25,41,.96),rgba(8,18,31,.98))}.lp28-table-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);font-weight:900}.lp28-table-title small{color:var(--muted);font-weight:600}.lp28-table{width:100%;border-collapse:collapse;table-layout:fixed}.lp28-table th,.lp28-table td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.055);vertical-align:middle}.lp28-table tr:last-child td{border-bottom:0}.lp28-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9fb0c6;background:rgba(255,255,255,.025)}.lp28-table th:nth-child(2),.lp28-table th:nth-child(3),.lp28-table td:nth-child(2),.lp28-table td:nth-child(3){width:100px;text-align:center}.lp28-table th:nth-child(4),.lp28-table td:nth-child(4){width:230px}.lp28-feature{font-weight:850}.lp28-feature small{display:block;color:var(--muted);font-size:10px;font-weight:500;margin-top:2px}.lp28-check{display:inline-flex;align-items:center;justify-content:center}.lp28-check input{width:21px!important;height:21px!important;margin:0!important;accent-color:var(--blue)}.lp28-dash{color:#667487}.lp28-action-btn{width:100%;min-height:36px;border-radius:9px!important;border:1px solid rgba(165,66,255,.48)!important;background:linear-gradient(135deg,rgba(112,44,184,.78),rgba(65,36,117,.78))!important;color:#fff!important;font-size:11px!important;font-weight:900!important;padding:7px 9px!important}.lp28-action-btn.blue{border-color:rgba(46,140,255,.55)!important;background:linear-gradient(135deg,rgba(27,116,224,.86),rgba(23,74,143,.82))!important}.lp28-action-btn:disabled{opacity:.42!important;cursor:not-allowed}.lp28-paid-row td{background:rgba(136,54,210,.08)}.lp28-paid-tag{display:inline-flex;padding:4px 7px;border-radius:8px;border:1px solid rgba(165,66,255,.5);background:rgba(165,66,255,.11);color:#dfb7ff;font-size:10px;font-weight:900;margin-left:7px}.lp28-renew-note{padding:9px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
+            .lp28-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.lp28-field{border:1px solid var(--line);border-radius:12px;background:rgba(13,27,44,.9);padding:11px;min-width:0}.lp28-field label{display:block!important;margin:0 0 7px!important;font-size:11px;font-weight:900}.lp28-field input{width:100%;margin:0!important}.lp28-field small{display:block;margin-top:6px;color:var(--muted);font-size:10px;line-height:1.4}.lp28-options-card{border:1px solid var(--line);border-radius:14px;padding:12px;background:rgba(10,21,35,.96)}.lp28-options-head{font-weight:900;margin-bottom:10px}.lp28-options-table th:nth-child(2),.lp28-options-table td:nth-child(2){width:130px;text-align:center}.lp28-options-table th:nth-child(3),.lp28-options-table td:nth-child(3){width:130px;text-align:center}.lp28-info-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.lp28-info-box{border:1px solid rgba(46,140,255,.35);border-radius:12px;padding:11px 12px;background:rgba(33,79,137,.11)}.lp28-info-box.tip{border-color:rgba(225,182,64,.38);background:rgba(95,73,16,.12)}.lp28-info-box strong{display:block;margin-bottom:4px}.lp28-info-box p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
+            @media(max-width:820px){.lp28-info-row,.lp28-fields{grid-template-columns:1fr}.lp28-table{table-layout:auto}.lp28-table th:nth-child(4),.lp28-table td:nth-child(4){width:170px}.lp28-table th:nth-child(2),.lp28-table th:nth-child(3),.lp28-table td:nth-child(2),.lp28-table td:nth-child(3){width:78px}}
+            @media(max-width:620px){.lp28-table-card{overflow-x:auto}.lp28-table{min-width:660px}.lp28-options-table{min-width:520px}.lp28-portal-head{align-items:flex-start;flex-direction:column}.lp28-portal-head .lp28-state{align-self:flex-start}}
+          `}</style>
+
+          <div className="lp28-portal-table-shell">
+            <div className="lp28-portal-head">
+              <label className="lp28-portal-head-left">
+                <input type="checkbox" checked={Boolean(form.portalEnabled)} onChange={e=>set("portalEnabled",e.target.checked)}/>
+                <span><strong>Activer le portail</strong><small>Rend le portail accessible à l’organisateur.</small></span>
+              </label>
+              <span className={form.portalEnabled?"lp28-state":"lp28-state off"}>{form.portalEnabled?"● Activé":"● Désactivé"}</span>
+            </div>
+
+            <div className="lp28-info-row">
+              <div className="lp28-info-box"><strong>ℹ️ Information</strong><p>Cochez les éléments que l’organisateur et les invités pourront utiliser.</p></div>
+              <div className="lp28-info-box tip"><strong>💡 Bon à savoir</strong><p>Les accès peuvent être modifiés à tout moment. Les jetons catalogue peuvent être renouvelés si nécessaire.</p></div>
+            </div>
+
+            {form.portalEnabled && <>
+              <div className="lp28-table-card">
+                <div className="lp28-table-title"><span>🔐 Accès au portail</span><small>Gestion centralisée des droits</small></div>
+                <table className="lp28-table">
+                  <thead><tr><th>Fonction</th><th>Organisateur</th><th>Invité</th><th>Action</th></tr></thead>
+                  <tbody>
+                    <tr><td className="lp28-feature">📄 Contrat<small>Consultation du contrat</small></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.organizerContract} onChange={e=>setPortalPermissions(p=>({...p,organizerContract:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td></td></tr>
+                    <tr><td className="lp28-feature">🧾 Documents / Factures<small>Factures et documents client</small></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.organizerDocuments} onChange={e=>setPortalPermissions(p=>({...p,organizerDocuments:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td></td></tr>
+                    <tr><td className="lp28-feature">👥 Partage / QR invités<small>Partage du lien et QR code invités</small></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.organizerShare} onChange={e=>setPortalPermissions(p=>({...p,organizerShare:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td></td></tr>
+                    <tr><td className="lp28-feature">🎧 Assistance Mathis<small>Accès à l’assistance LP28</small></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.organizerMathis} onChange={e=>setPortalPermissions(p=>({...p,organizerMathis:e.target.checked}))}/></span></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.guestMathis} onChange={e=>setPortalPermissions(p=>({...p,guestMathis:e.target.checked}))}/></span></td><td></td></tr>
+                    <tr><td className="lp28-feature">🖼️ Galerie photos<small>Accès galerie côté invités</small></td><td className="lp28-dash">—</td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.guestGallery} onChange={e=>setPortalPermissions(p=>({...p,guestGallery:e.target.checked}))}/></span></td><td></td></tr>
+                    <tr className="lp28-paid-row"><td className="lp28-feature">🎨 Catalogues personnalisation <span className="lp28-paid-tag">25 €</span><small>Activation générale de l’option payante</small></td><td><span className="lp28-check"><input type="checkbox" checked={portalPermissions.personalizationAccess===true} onChange={e=>setPortalPermissions(p=>({...p,personalizationAccess:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td></td></tr>
+                    <tr className="lp28-paid-row"><td className="lp28-feature">🎨 Catalogue TemplatesBooth<small>Modèles TemplatesBooth</small></td><td><span className="lp28-check"><input type="checkbox" disabled={portalPermissions.personalizationAccess!==true} checked={portalPermissions.personalizationTemplatesBooth!==false} onChange={e=>setPortalPermissions(p=>({...p,personalizationTemplatesBooth:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td><button type="button" className="lp28-action-btn" disabled={!form?.id||portalPermissions.personalizationAccess!==true} onClick={()=>renewPersonalizationLink("templates")}>🔄 Nouveau jeton TemplatesBooth</button></td></tr>
+                    <tr className="lp28-paid-row"><td className="lp28-feature">🏞️ Catalogue BoothWidget<small>Modèles BoothWidget</small></td><td><span className="lp28-check"><input type="checkbox" disabled={portalPermissions.personalizationAccess!==true} checked={portalPermissions.personalizationBoothWidget!==false} onChange={e=>setPortalPermissions(p=>({...p,personalizationBoothWidget:e.target.checked}))}/></span></td><td className="lp28-dash">—</td><td><button type="button" className="lp28-action-btn blue" disabled={!form?.id||portalPermissions.personalizationAccess!==true} onClick={()=>renewPersonalizationLink("boothwidget")}>🔄 Nouveau jeton BoothWidget</button></td></tr>
+                  </tbody>
+                </table>
+                {personalizationRenewMsg&&<div className="lp28-renew-note">{personalizationRenewMsg}</div>}
+              </div>
+
+              <div className="lp28-options-card">
+                <div className="lp28-options-head">⚙️ Options supplémentaires</div>
+                <table className="lp28-table lp28-options-table">
+                  <thead><tr><th>Option</th><th>Autoriser</th><th>Portée</th></tr></thead>
+                  <tbody>
+                    <tr><td className="lp28-feature">📷 Photos invités<small>Ajout de photos par les invités</small></td><td><span className="lp28-check"><input type="checkbox" checked={Boolean(form.guestUploadEnabled)} onChange={e=>set("guestUploadEnabled",e.target.checked)}/></span></td><td>Invités</td></tr>
+                    <tr><td className="lp28-feature">🎥 Vidéos invités<small>Ajout de vidéos par les invités</small></td><td><span className="lp28-check"><input type="checkbox" checked={Boolean(form.guestVideoEnabled)} onChange={e=>set("guestVideoEnabled",e.target.checked)}/></span></td><td>Invités</td></tr>
+                    <tr><td className="lp28-feature">🛡️ Modération avant publication<small>Validation avant affichage</small></td><td><span className="lp28-check"><input type="checkbox" checked={form.guestUploadModerated!==false} onChange={e=>set("guestUploadModerated",e.target.checked)}/></span></td><td>Photos / vidéos</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="lp28-fields">
+                <div className="lp28-field"><label>📅 Expiration de l’accès</label><input type="date" value={form.portalExpiresAt||""} onChange={e=>set("portalExpiresAt",e.target.value)}/><small>Laissez vide pour un accès sans limite de date.</small></div>
+                <div className="lp28-field"><label>🔒 Mot de passe (facultatif)</label><input value={form.portalPassword||""} onChange={e=>set("portalPassword",e.target.value)}/><small>Optionnel : protège l’accès au portail.</small></div>
+                <div className="lp28-field"><label>🔗 Galerie Photos du Photobooth</label><input placeholder="https://fotoshare.co/..." value={form.fotoshareUrl||""} onChange={e=>set("fotoshareUrl",e.target.value)}/><small>Alimente le bouton « Photos Borne ». Accès client prévu pendant 30 jours.</small></div>
+              </div>
+            </>}
+          </div>
+        </div>
       </details>
 
       <h3>🚗 Frais de déplacement</h3>
@@ -1613,18 +1858,102 @@ Johan — Location Photobooth 28`;
 
 function ShareModal({event,onClose}) {
   const [share,setShare]=useState(null);
+  const [copied,setCopied]=useState(false);
   useEffect(()=>{fetch(`/api/events/${event.id}/share`).then(r=>r.json()).then(setShare)},[event.id]);
-  if(!share) return <div className="modal-backdrop"><div className="share-modal">Chargement…</div></div>
-  const whatsapp=`https://wa.me/?text=${encodeURIComponent(`📸 Bonjour !\n\nVoici le lien pour partager vos photos et consulter la galerie :\n${share.guestUrl}\n\nLocation Photobooth 28`)}`;
-  return <div className="modal-backdrop"><div className="share-modal">
-    <div className="modal-head"><div><div className="eyebrow">PARTAGE</div><h2>{event.name}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
-    <img className="qr-large" src={share.qrDataUrl}/>
-    <label>Lien invités</label><div className="copy-row"><input readOnly value={share.guestUrl}/><button className="secondary-btn" onClick={()=>navigator.clipboard.writeText(share.guestUrl)}>Copier</button></div>
-    <label>Lien organisateur</label><div className="copy-row"><input readOnly value={share.organizerUrl}/><button className="secondary-btn" onClick={()=>navigator.clipboard.writeText(share.organizerUrl)}>Copier</button></div>
-    <a className="primary whatsapp-link" href={whatsapp} target="_blank">💬 Partager sur WhatsApp</a>
-  </div></div>
-}
+  if(!share) return <div className="modal-backdrop"><div className="share-modal">Chargement…</div></div>;
 
+  const eventDate=event.date?new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}):"Date non renseignée";
+  const ficheUrl=share.organizerUrl||share.guestUrl||window.location.href;
+  const EMOJI={
+    smile:String.fromCodePoint(0x1F60A),
+    camera:String.fromCodePoint(0x1F4F8),
+    calendar:String.fromCodePoint(0x1F4C5),
+    check:String.fromCodePoint(0x2705),
+    down:String.fromCodePoint(0x2B07,0xFE0F),
+    mobile:String.fromCodePoint(0x1F4F2),
+    sos:String.fromCodePoint(0x1F198),
+    lock:String.fromCodePoint(0x1F510),
+    link:String.fromCodePoint(0x1F517)
+  };
+  const ficheText=[
+    `Bonjour ${event.preparation?.clientFirstName ? event.preparation.clientFirstName+" " : ""}${EMOJI.smile}`,
+    ``,
+    `Voici votre lien personnel de notre application Location Photobooth 28 pour votre événement ${EMOJI.camera}`,
+    ``,
+    `Grâce à ce lien, vous pourrez :`,
+    ``,
+    `${EMOJI.calendar} Retrouver les informations de votre événement`,
+    `${EMOJI.camera} Accéder à votre galerie photos`,
+    `${EMOJI.check} Sélectionner une ou plusieurs photos`,
+    `${EMOJI.down} Télécharger vos photos directement`,
+    `${EMOJI.mobile} Partager l'accès à la galerie avec vos invités`,
+    `${EMOJI.sos} Accéder rapidement à l’assistance LP28 en cas de besoin`,
+    ``,
+    `${EMOJI.lock} Ce lien est votre accès Organisateur, je vous conseille donc de le conserver jusqu’à la fin de votre événement.`,
+    ``,
+    `Tout est regroupé au même endroit pour vous simplifier la gestion de votre prestation ${EMOJI.smile}`,
+    ``,
+    `${EMOJI.link} Votre lien Organisateur :`,
+    ficheUrl,
+    ``,
+    `Location Photobooth 28`
+  ].join("\n");
+  const whatsapp=`https://wa.me/?text=${encodeURIComponent(ficheText)}`;
+  const sms=`sms:?&body=${encodeURIComponent(ficheText)}`;
+  const messenger=`fb-messenger://share/?link=${encodeURIComponent(ficheUrl)}`;
+  async function copyFiche(){
+    try{await navigator.clipboard.writeText(ficheText);setCopied(true);setTimeout(()=>setCopied(false),1800);}catch{alert("Copie impossible sur cet appareil.");}
+  }
+
+  return <div className="modal-backdrop"><div className="share-modal">
+    <div className="modal-head"><div><div className="eyebrow">PARTAGER LA FICHE ÉVÉNEMENT</div><div style={{marginTop:14,padding:14,border:"1px solid rgba(234,179,8,.35)",borderRadius:14}}><b>🖼️ Affiche pour vos invités</b><p className="muted">Préparez une affiche A4 avec votre QR Code Invité à mettre près de la borne, à l’entrée ou sur les tables.</p><button type="button" onClick={()=>{const btn=document.querySelector('[data-lp28-poster-trigger]');if(btn)btn.click();else alert("Ouvrez Partager pour créer votre affiche invités.")}}>🎨 Choisir mon affiche invités</button></div><h2>{event.name}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
+    <div className="card" style={{marginBottom:14}}>
+      <strong>{eventDate}</strong>
+      {event.address&&<div className="muted" style={{marginTop:5}}>📍 {event.address}</div>}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10}}>
+      <button type="button" className="secondary-btn" onClick={copyFiche}>{copied?"✅ Message copié":"📋 Copier le message"}</button>
+      <a className="primary whatsapp-link" href={whatsapp} target="_blank" rel="noreferrer">💬 Partager sur WhatsApp</a>
+      <a className="secondary-btn" href={messenger}>💜 Messenger</a>
+      <a className="secondary-btn" href={sms}>💬 SMS</a>
+    </div>
+    <div style={{marginTop:16,padding:14,border:"1px solid rgba(234,179,8,.35)",borderRadius:14,background:"rgba(234,179,8,.05)"}}>
+      <div style={{fontWeight:900,fontSize:"1.05rem",marginBottom:6}}>🖼️ Affiche pour vos invités</div>
+      <div className="muted" style={{marginBottom:12}}>Créez une affiche A4 avec le QR Code Invité. Vous pourrez l’imprimer et la placer près de la borne, à l’entrée ou sur les tables.</div>
+      <button type="button" className="primary" onClick={()=>{
+        const guestUrl=share.guestUrl||"";
+        if(!guestUrl)return alert("Le lien Invité n’est pas encore disponible.");
+        openLP28PosterStudio({guestUrl,qrDataUrl:share.qrDataUrl,eventName:event.name});
+        return;
+        const qr='https://api.qrserver.com/v1/create-qr-code/?size=700x700&data='+encodeURIComponent(guestUrl);
+        const styles=[
+          {id:'elegant',name:'Élégant',bg:'#fffaf0',fg:'#171717',accent:'#d4af37',border:'#d4af37',tag:'Merci d’être là ! ♡'},
+          {id:'modern',name:'Moderne',bg:'#080910',fg:'#ffffff',accent:'#ff28d7',border:'#22d3ee',tag:'Bonnes photos !'},
+          {id:'phone',name:'Photo & smartphone',bg:'#fff7f2',fg:'#171717',accent:'#ec4899',border:'#f59e0b',tag:'Des souvenirs à partager !'},
+          {id:'minimal',name:'Minimaliste',bg:'#ffffff',fg:'#111111',accent:'#d4af37',border:'#111111',tag:'Simple • Rapide • Gratuit'},
+          {id:'fun',name:'Fun',bg:'#fffdf8',fg:'#111111',accent:'#ec4899',border:'#38bdf8',tag:'FRIENDS • PHOTOS • GOOD VIBES !'}
+        ];
+        const picker=window.open('', '_blank');
+        if(!picker)return alert("Autorisez les fenêtres pop-up pour générer l’affiche.");
+        const safeName=String(event.name||'Votre événement').replace(/[<>&"']/g,'');
+        picker.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Affiche invités - ${safeName}</title><style>*{box-sizing:border-box}body{margin:0;background:#0b0f14;color:#f7f7f7;font-family:Arial,sans-serif}.wrap{padding:24px;max-width:1400px;margin:auto}.head{display:flex;justify-content:space-between;gap:20px;align-items:center}.brand{font-weight:900;color:#e8c24a}.info{background:#0d2a45;border:1px solid #1976b9;padding:12px 16px;border-radius:10px;margin:18px 0}.grid{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:12px}.model{background:#111821;border:1px solid #334155;border-radius:12px;padding:10px;cursor:pointer}.model.sel{border:2px solid #e8c24a}.thumb{aspect-ratio:210/297;border-radius:8px;padding:14px;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:space-between;position:relative;overflow:hidden}.thumb>*{position:relative;z-index:2}.thumb{isolation:isolate}.thumb b:first-child{font-size:11px;letter-spacing:.7px;text-transform:uppercase}.thumb h2{font-family:Georgia,serif;font-size:31px;line-height:1;margin:8px 0 4px;letter-spacing:1px}.thumb img{width:56%;background:#fff;padding:7px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.24)}.thumb small{font-size:10px;font-weight:800;letter-spacing:.15px}.thumb b:last-of-type{font-size:16px}.thumb.elegant{background:radial-gradient(circle at 92% 5%,rgba(212,175,55,.22),transparent 23%),linear-gradient(145deg,#fffef9,#f8f0dc)!important;border-color:#d4af37!important}.thumb.elegant:before{content:'❧';position:absolute;left:-14px;top:18px;color:#b98b2e;font-size:112px;opacity:.38;transform:rotate(-20deg)}.thumb.elegant:after{content:'❧';position:absolute;right:-14px;bottom:18px;color:#b98b2e;font-size:112px;opacity:.34;transform:rotate(158deg)}.thumb.elegant h2{font-family:cursive;font-size:36px;font-weight:500}.thumb.elegant b:last-of-type{background:linear-gradient(90deg,#c99a2e,#f2cf69);color:#171717!important;padding:5px 11px;border-radius:999px}.thumb.modern{background:linear-gradient(128deg,transparent 0 28%,rgba(0,194,255,.22) 28.5% 29.2%,transparent 30% 63%,rgba(255,30,210,.2) 63.5% 64.2%,transparent 65%),radial-gradient(circle at 18% 18%,rgba(0,194,255,.24),transparent 29%),radial-gradient(circle at 82% 25%,rgba(255,30,210,.24),transparent 31%),#050711!important;border-color:#25c7ff!important}.thumb.modern:before,.thumb.modern:after{content:'';position:absolute;width:120%;height:2px;background:linear-gradient(90deg,transparent,#24d6ff,#ff2bd6,transparent);filter:drop-shadow(0 0 9px #29d3ff)}.thumb.modern:before{top:22%;left:-10%;transform:rotate(-34deg)}.thumb.modern:after{bottom:18%;left:-10%;transform:rotate(34deg)}.thumb.modern h2{color:#fff;text-shadow:0 0 9px #ff27d4,0 0 18px #20d5ff;font-family:Arial,sans-serif;font-weight:900}.thumb.modern img{box-shadow:0 0 0 3px #ff2bd6,0 0 0 7px rgba(34,211,238,.18),0 0 32px #1dc7ff}.thumb.phone{background:radial-gradient(circle at 15% 12%,rgba(255,255,255,.95) 0 7px,transparent 8px),radial-gradient(circle at 70% 15%,rgba(255,255,255,.72) 0 10px,transparent 11px),radial-gradient(circle at 85% 38%,rgba(245,194,130,.34) 0 18px,transparent 19px),linear-gradient(160deg,#fff7ed,#eed8c4)!important;border-color:#e7aa4b!important}.thumb.phone:before{content:'';position:absolute;width:48%;height:57%;left:12%;top:28%;border:9px solid #171717;border-radius:28px;background:linear-gradient(#252525,#0f0f0f);box-shadow:0 18px 30px rgba(0,0,0,.28);transform:rotate(-7deg);opacity:.94}.thumb.phone img{width:45%;margin-left:35%;transform:rotate(2deg);box-shadow:0 8px 20px rgba(0,0,0,.18)}.thumb.phone h2{font-family:cursive;font-size:31px;margin-left:25%}.thumb.minimal{background:linear-gradient(135deg,#fff,#fbfaf4)!important;border-color:#d7b55b!important}.thumb.minimal:before{content:'❧';position:absolute;left:-20px;top:-2px;color:#6f8f67;font-size:105px;opacity:.28;transform:rotate(-22deg)}.thumb.minimal:after{content:'❧';position:absolute;right:-18px;bottom:-8px;color:#6f8f67;font-size:105px;opacity:.25;transform:rotate(158deg)}.thumb.minimal h2{font-family:Arial,sans-serif;font-weight:900;font-size:30px;letter-spacing:2px}.thumb.fun{background:linear-gradient(25deg,transparent 0 12%,rgba(255,47,156,.8) 12.5% 13.7%,transparent 14.3% 80%,rgba(0,204,255,.8) 80.5% 81.8%,transparent 82.5%),radial-gradient(circle at 8% 10%,#ffd54a 0 18px,transparent 19px),radial-gradient(circle at 90% 17%,#ff3e97 0 14px,transparent 15px),radial-gradient(circle at 18% 85%,#18bfff 0 17px,transparent 18px),radial-gradient(circle at 88% 82%,#20cf72 0 15px,transparent 16px),repeating-linear-gradient(0deg,#0d1117 0 18px,#111827 19px 20px)!important;color:#fff!important;border-color:#2ed4ff!important}.thumb.fun:before{content:'♛';position:absolute;left:10px;top:8px;color:#ffd400;font-size:58px;transform:rotate(-12deg)}.thumb.fun:after{content:'♡';position:absolute;right:13px;bottom:58px;color:#ffdf57;font-size:46px;transform:rotate(12deg)}.thumb.fun h2{font-family:cursive;font-size:35px;color:#fff;transform:rotate(-3deg)}.thumb.fun b:last-of-type{background:#ff3e97;color:#111!important;padding:5px 10px;transform:rotate(-2deg)}.controls{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:#111821;border:1px solid #334155;border-radius:12px;padding:16px}.panel input{width:100%;padding:11px;border-radius:8px;border:1px solid #475569;background:#0b0f14;color:white}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions button{padding:12px 16px;border-radius:9px;border:1px solid #64748b;background:#17202b;color:white;font-weight:800;cursor:pointer}.actions .primary{background:#e8c24a;color:#111;border-color:#e8c24a}.social{font-size:12px;margin-top:8px}.poster{display:none}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.controls{grid-template-columns:1fr}}@media print{body>*{display:none!important}.poster{display:flex!important;position:fixed;inset:0;width:210mm;height:297mm;padding:17mm 15mm;flex-direction:column;align-items:center;text-align:center;background:var(--bg);color:var(--fg);border:7mm solid var(--border)}.poster .pbrand{font-size:18px;font-weight:900;letter-spacing:1px}.poster h1{font-size:45px;margin:14px 0 5px}.poster .event{font-size:23px;font-weight:800}.poster .lead{font-size:24px;font-weight:900;margin:14px 0}.poster .qr{width:103mm;height:103mm;background:#fff;padding:7px;border:4px solid var(--accent);border-radius:14px}.poster .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;margin-top:18px;font-size:14px;font-weight:700}.poster .tag{font-size:19px;font-weight:900;margin-top:17px}.poster .social{margin-top:auto;font-size:12px;font-weight:800}.poster{box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}.poster h1{letter-spacing:2px}.poster .lead{padding:6px 16px;border-radius:999px}.poster.elegant .lead{background:linear-gradient(90deg,#c99a2e,#f2cf69);color:#171717}.poster.modern .lead{background:#0c1020;color:#fff;box-shadow:0 0 0 2px #ff2bd6,0 0 24px rgba(34,211,238,.7)}.poster.phone .lead{font-family:cursive;font-size:27px}.poster.minimal .lead{border:1px solid #d4af37;background:rgba(255,255,255,.78)}.poster.fun .lead{background:#ff3e97;color:#111;transform:rotate(-1deg)}.poster .steps>div{padding:8px 4px;border-radius:10px;background:rgba(255,255,255,.10)}.poster.elegant .steps>div,.poster.minimal .steps>div,.poster.phone .steps>div{background:rgba(255,255,255,.62)}.poster.fun .steps>div{background:rgba(0,0,0,.38);color:#fff}.poster .social b{color:var(--accent)}.poster.elegant{background:linear-gradient(145deg,#fffdf7,#f5ead0)!important}.poster.elegant:before,.poster.elegant:after{content:'❧';position:absolute;color:#caa544;font-size:155px;opacity:.42}.poster.elegant:before{left:3mm;top:22mm;transform:rotate(-28deg)}.poster.elegant:after{right:3mm;bottom:28mm;transform:rotate(150deg)}.poster.modern{background:radial-gradient(circle at 20% 14%,rgba(255,0,214,.25),transparent 30%),radial-gradient(circle at 82% 32%,rgba(0,195,255,.24),transparent 32%),#05060b!important}.poster.modern .qr{box-shadow:0 0 0 4px #ff20d6,0 0 35px #00c8ff}.poster.phone{background:linear-gradient(160deg,#fff7ef,#f4e0d2)!important}.poster.phone:before{content:'📱';position:absolute;font-size:220px;left:5mm;top:80mm;opacity:.12;transform:rotate(-8deg)}.poster.minimal{background:linear-gradient(135deg,#fff,#f7f3ea)!important}.poster.minimal:before,.poster.minimal:after{content:'🌿';position:absolute;font-size:110px;opacity:.2}.poster.minimal:before{left:0;top:10mm}.poster.minimal:after{right:0;bottom:18mm;transform:rotate(180deg)}.poster.fun{background:radial-gradient(circle at 8% 8%,#ffd54a 0 8mm,transparent 9mm),radial-gradient(circle at 90% 15%,#ff4fa3 0 7mm,transparent 8mm),radial-gradient(circle at 13% 85%,#38bdf8 0 8mm,transparent 9mm),radial-gradient(circle at 88% 82%,#22c55e 0 7mm,transparent 8mm),#fffdf8!important}}</style></head><body><div class="wrap"><div class="head"><div><h1>🖼️ Affiche pour vos invités</h1><div>Choisissez un modèle, personnalisez le petit message puis imprimez ou enregistrez l’affiche A4.</div></div><div class="brand">📸 LOCATION PHOTOBOOTH 28</div></div><div class="info">ℹ️ Le logo et le nom <b>Location Photobooth 28</b> sont toujours présents. Le QR Code utilise automatiquement le lien Invité de votre événement.</div><div class="grid" id="models"></div><div class="controls"><div class="panel"><h3>✍️ Personnalisation facultative</h3><label>Petit message en bas de page</label><input id="custom" maxlength="60" placeholder="Merci d’être là ! ♡"><p style="color:#94a3b8">Seul ce petit message est personnalisable. La marque LP28 et les réseaux sociaux restent affichés.</p></div><div class="panel"><h3>📄 Votre affiche</h3><p>Format A4 prêt à imprimer. Placez-la près de la borne, à l’entrée ou sur les tables.</p><div class="actions"><button class="primary" onclick="makePrint()">⬇️ Télécharger / enregistrer en PDF</button><button onclick="makePrint()">🖨️ Imprimer directement</button></div></div></div></div><div class="poster" id="poster"><div class="pbrand">📸 LOCATION PHOTOBOOTH 28</div><h1>INVITÉS</h1><div class="event">${safeName}</div><div class="lead">📸 Scannez-moi !</div><img class="qr" src="${qr}"><div class="steps"><div>🖼️<br>Consultez<br>les photos</div><div>👆<br>Sélectionnez<br>vos préférées</div><div>⬇️<br>Téléchargez<br>directement</div><div>📲<br>Partagez<br>vos souvenirs</div></div><div class="tag" id="tag"></div><div class="social">Suivez-nous sur <b>ⓕ Facebook</b> Location Photobooth 28 &nbsp; • &nbsp; <b>◎ Instagram</b> Location Photobooth 28</div></div><script>const styles=${JSON.stringify(styles)};let selected=0;const models=document.getElementById('models');function draw(){models.innerHTML=styles.map((s,i)=>'<div class="model '+(i===selected?'sel':'')+'" onclick="selected='+i+';draw()"><b>Modèle '+(i+1)+'</b><div style="color:#94a3b8;margin:3px 0 8px">'+s.name+'</div><div class="thumb '+s.id+'" style="background:'+s.bg+';color:'+s.fg+';border:3px solid '+s.border+'"><b>LOCATION PHOTOBOOTH 28</b><h2>INVITÉS</h2><img src="${qr}"><b style="color:'+s.accent+'">📸 Scannez-moi !</b><small>ⓕ Facebook • ◎ Instagram</small></div></div>').join('')}function makePrint(){const s=styles[selected];const p=document.getElementById('poster');p.className='poster '+s.id;p.style.setProperty('--bg',s.bg);p.style.setProperty('--fg',s.fg);p.style.setProperty('--accent',s.accent);p.style.setProperty('--border',s.border);document.getElementById('tag').textContent=document.getElementById('custom').value.trim()||s.tag;setTimeout(()=>window.print(),100)}draw();<\/script></body></html>`);
+        picker.document.close();
+        return;
+        const w=window.open('', '_blank');
+        if(!w)return alert("Autorisez les fenêtres pop-up pour générer l’affiche.");
+        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Affiche invités - ${event.name}</title><style>@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#111}.page{width:210mm;height:297mm;padding:18mm 16mm;display:flex;flex-direction:column;align-items:center;text-align:center;border:8px solid #d4af37}.brand{font-size:18px;font-weight:900;letter-spacing:2px;margin-bottom:18px}.title{font-size:46px;font-weight:900;margin:6px 0;color:#111}.event{font-size:24px;font-weight:800;margin-bottom:12px}.lead{font-size:25px;font-weight:800;margin:8px 0 18px}.qr{width:105mm;height:105mm;object-fit:contain;border:4px solid #d4af37;border-radius:18px;padding:8px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;margin-top:20px;font-size:15px;font-weight:700}.step{padding:10px 5px}.icon{font-size:28px;display:block;margin-bottom:5px}.foot{margin-top:auto;font-size:20px;font-weight:800}.sub{font-size:14px;margin-top:5px}@media print{.no-print{display:none!important}}</style></head><body><div class="page"><div class="brand">📸 LOCATION PHOTOBOOTH 28</div><div class="title">INVITÉS</div><div class="event">${event.name}</div><div class="lead">Scannez le QR Code et retrouvez les photos de l’événement !</div><img class="qr" src="${qr}"><div class="steps"><div class="step"><span class="icon">🖼️</span>Consultez<br>les photos</div><div class="step"><span class="icon">👆</span>Sélectionnez<br>vos préférées</div><div class="step"><span class="icon">⬇️</span>Téléchargez<br>directement</div><div class="step"><span class="icon">📲</span>Partagez<br>vos souvenirs</div></div><div class="foot">Merci d’être là ! ✨<div class="sub">Location Photobooth 28 — Vos souvenirs prennent vie</div></div></div><script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`);
+        w.document.close();
+      }} data-lp28-poster-trigger="1">🎨 Choisir parmi 5 affiches A4</button>
+    </div>
+    <details style={{marginTop:16}}>
+      <summary style={{cursor:"pointer",fontWeight:800}}>Liens LP28</summary>
+      <div style={{marginTop:10}}>
+        <label>Lien invités</label><div className="copy-row"><input readOnly value={share.guestUrl||""}/><button className="secondary-btn" onClick={()=>navigator.clipboard.writeText(share.guestUrl||"")}>Copier</button></div>
+        <label>Lien organisateur</label><div className="copy-row"><input readOnly value={share.organizerUrl||""}/><button className="secondary-btn" onClick={()=>navigator.clipboard.writeText(share.organizerUrl||"")}>Copier</button></div>
+      </div>
+    </details>
+  </div></div>;
+}
 
 function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent,refreshKey=0}){
   const [blocks,setBlocks]=useState([]);
@@ -3271,8 +3600,7 @@ const MATHIS_BOOTHS={
 const MATHIS_PRINTERS={
   dnp1:{name:"DNP DS620 — N°1",icon:"🖨️"},
   dnp2:{name:"DNP DS620 — N°2",icon:"🖨️"},
-  citizen:{name:"Citizen CY-02",icon:"🖨️"},
-  unknown:{name:"Je ne sais pas",icon:"❓"}
+  citizen:{name:"Citizen CY-02",icon:"🖨️"}
 };
 const MATHIS_ISSUES=[
   ["system","💻","Borne / Windows & LumaBooth","Écran, blocage, LumaBooth, périphérique"],
@@ -3588,11 +3916,11 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       <div className="mathis-choice-grid mathis-led-grid">
         {codes.map(c=><button key={c.id} onClick={()=>setLedCode(c.id)}><span>💡</span><b>{c.label}</b><small>{c.status}</small></button>)}
       </div>
-      <div className="mathis-actions"><button onClick={()=>{setLedCode("");setPrinterStage("symptom")}}>↩️ Aucun voyant ne clignote finalement</button></div>
+      <div className="mathis-actions"><button onClick={()=>goN2("Combinaison de voyants absente de la liste")}>❓ La combinaison de voyants n’est pas dans la liste</button><button onClick={()=>{setLedCode("");setPrinterStage("symptom")}}>↩️ Aucun voyant ne clignote finalement</button></div>
     </>;
     return <>
       <div className="mathis-bubble mathis-bubble-bot"><b>{riskBadge(led.level)} — {led.status}</b><br/><b>Voyants :</b> {led.label}<br/><b>Action autorisée :</b> {led.safe}{(ledCode==="paper-end"||ledCode==="ribbon-end")&&<><br/><br/>🖨️ <b>Important :</b> le client ne remplace jamais le papier ni le ruban. Johan gère les consommables. Il est aussi possible que le forfait d’impressions de l’événement soit arrivé à son terme : Johan le vérifiera au niveau 2.</>}<br/><br/>📸 <b>Les invités peuvent continuer à prendre leurs photos</b> tant que Nikon et LumaBooth fonctionnent. L'impression peut rester indisponible pendant le diagnostic.</div>
-      <div className="mathis-actions"><button onClick={printerSolved}>✅ Impression rétablie</button><button onClick={printerStillBroken}>❌ Toujours en panne</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>
+      {(ledCode==="paper-end"||ledCode==="ribbon-end")?<div className="mathis-actions"><button onClick={printerStillBroken}>🟠 Demander le contrôle de Johan</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>:<div className="mathis-actions"><button onClick={printerSolved}>✅ Impression rétablie</button><button onClick={printerStillBroken}>❌ Toujours en panne</button><button onClick={()=>setLedCode("")}>↩️ Revoir les voyants</button></div>}
     </>;
   }
 
@@ -3718,7 +4046,12 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       </div></>;
       if(diagStage==="describe")return <><div className="mathis-bubble mathis-bubble-bot"><b>Décrivez simplement ce que vous voyez.</b><br/>Si une image peut m'aider, je vous la demanderai ensuite.</div><textarea className="mathis-free-text" value={freeText} onChange={e=>setFreeText(e.target.value)} placeholder="Exemple : LumaBooth a disparu et je vois le bureau Windows…"/><div className="mathis-actions"><button disabled={!freeText.trim()} onClick={()=>goN2(freeText.trim())}>📨 Transmettre à Johan</button></div></>;
       if(diagStage==="screen")return <><div className="mathis-bubble mathis-bubble-bot"><b>Ne débranchez rien et n'ouvrez pas l'ordinateur.</b><br/>Touchez simplement l'écran : voyez-vous une réaction ou un message ? Si Windows est visible, ne cliquez sur rien.</div>{askPhoto("Photo de l'écran complet si Mathis en a besoin")}<div className="mathis-actions"><button onClick={()=>goN2("Écran noir / borne indisponible")}>🟠 Toujours noir / aucune réaction</button><button onClick={()=>setDiagStage("luma-start")}>🪟 Je vois Windows</button></div></>;
-      if(diagStage==="luma-start"||diagStage==="luma-freeze"||diagStage==="slow"||diagStage==="camera"||diagStage==="usb")return <><div className="mathis-bubble mathis-bubble-bot"><b>Merci. N'effectuez aucune manipulation dans Windows.</b><br/>{diagStage==="luma-start"?"Si le bureau Windows est affiché à la place de LumaBooth, Johan doit intervenir à distance.":diagStage==="luma-freeze"?"Si LumaBooth ne répond plus, ne forcez pas sa fermeture.":"Je vais transmettre ce constat à Johan pour un contrôle à distance."}</div>{askPhoto("Photo de ce que vous voyez à l'écran")}<div className="mathis-actions"><button onClick={()=>goN2("Borne / Windows / LumaBooth — "+diagStage)}>🟠 Demander l'aide de Johan</button></div></>;
+      if(diagStage==="luma-start")return <><div className="mathis-bubble mathis-bubble-bot"><b>🐰 Première vérification : relancer simplement LumaBooth.</b><br/>Si vous voyez le bureau Windows, repérez l’icône <b>LumaBooth</b> puis faites un <b>double-clic</b> dessus. Patientez quelques secondes.<br/><br/><b>Est-ce que LumaBooth s’est ouvert ?</b></div><div className="mathis-actions"><button onClick={()=>finishN1("LumaBooth relancé par double-clic")}>✅ Oui, LumaBooth est ouvert</button><button onClick={()=>setDiagStage("luma-start-open")}>❌ Non, rien ne se passe</button></div></>;
+      if(diagStage==="luma-start-open")return <><div className="mathis-bubble mathis-bubble-bot"><b>🖱️ Deuxième vérification.</b><br/>Laissez votre doigt appuyé quelques instants sur l’icône <b>LumaBooth</b> (ou faites un clic droit avec une souris). Un menu va s’ouvrir.<br/><br/>Sélectionnez uniquement <b>« Ouvrir »</b> en haut du menu, puis patientez quelques secondes.<br/><br/><b>Est-ce que LumaBooth s’est ouvert ?</b><br/><small>⚠️ Ne choisissez pas « Exécuter en tant qu’administrateur » et ne modifiez aucun autre réglage.</small></div><div className="mathis-actions"><button onClick={()=>finishN1("LumaBooth relancé via Ouvrir")}>✅ Oui, LumaBooth est ouvert</button><button onClick={()=>setDiagStage("luma-start-photo")}>❌ Non, toujours rien</button></div></>;
+      if(diagStage==="luma-start-photo")return <><div className="mathis-bubble mathis-bubble-bot"><b>Merci. Les deux tentatives simples n’ont pas relancé LumaBooth.</b><br/>Ne faites aucune autre manipulation dans Windows. Mathis va maintenant transmettre la situation à Johan.</div>{askPhoto("Photo de ce que vous voyez à l’écran")}<div className="mathis-actions"><button onClick={()=>goN2("LumaBooth ne démarre pas après double-clic puis Ouvrir")}>🟠 Demander l’aide de Johan</button></div></>;
+      if(diagStage==="luma-freeze")return <><div className="mathis-bubble mathis-bubble-bot"><b>LumaBooth semble bloqué.</b><br/>Ne forcez pas sa fermeture et ne touchez pas à Windows. <b>Attendez environ 20 secondes</b> sans cliquer, afin de vérifier si l’application reprend d’elle-même.<br/><br/><b>LumaBooth répond-il de nouveau ?</b></div><div className="mathis-actions"><button onClick={()=>finishN1("LumaBooth a repris après attente")}>✅ Oui, c’est reparti</button><button onClick={()=>setDiagStage("luma-freeze-photo")}>❌ Non, toujours bloqué</button></div></>;
+      if(diagStage==="luma-freeze-photo")return <><div className="mathis-bubble mathis-bubble-bot"><b>LumaBooth reste bloqué après l’attente.</b><br/>Ne forcez pas sa fermeture. Une photo de l’écran peut maintenant aider Johan à identifier la situation avant la prise en main à distance.</div>{askPhoto("Photo de ce que vous voyez à l’écran")}<div className="mathis-actions"><button onClick={()=>goN2("LumaBooth toujours bloqué après 20 secondes")}>🟠 Demander l’aide de Johan</button></div></>;
+      if(diagStage==="slow"||diagStage==="camera"||diagStage==="usb")return <><div className="mathis-bubble mathis-bubble-bot"><b>Merci. N’effectuez aucune manipulation dans Windows.</b><br/>Je vais transmettre ce constat à Johan pour un contrôle à distance.</div>{askPhoto("Photo de ce que vous voyez à l’écran")}<div className="mathis-actions"><button onClick={()=>goN2("Borne / Windows / LumaBooth — "+diagStage)}>🟠 Demander l’aide de Johan</button></div></>;
       if(diagStage==="print")return <><div className="mathis-bubble mathis-bubble-bot">Si les photos sont bien prises mais ne partent plus à l'impression, <b>ne touchez pas à Windows ni aux réglages LumaBooth.</b> Nous allons utiliser le diagnostic Imprimante.</div><div className="mathis-actions"><button onClick={()=>{setIssue("printer");setStep("printer")}}>🖨️ Ouvrir le diagnostic imprimante</button></div></>;
     }
 
@@ -3772,7 +4105,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
         {step!=="booth"&&<div className="mathis-bubble mathis-bubble-user">{boothInfo?.icon} Borne <b>{boothInfo?.name}</b></div>}
         {step==="issue"&&<><div className="mathis-bubble mathis-bubble-bot">D'accord 👍 <b>Quel problème rencontres-tu sur {boothInfo?.name} ?</b></div><div className="mathis-choice-grid">{MATHIS_ISSUES.map(([id,icon,label,desc])=><button key={id} onClick={()=>chooseIssue(id)}><span>{icon}</span><b>{label}</b><small>{desc}</small></button>)}</div></>}
         {(step==="printer"||step==="diagnostic")&&<div className="mathis-bubble mathis-bubble-user">{issueInfo?.[1]} <b>{issueInfo?.[2]}</b></div>}
-        {step==="printer"&&<><div className="mathis-bubble mathis-bubble-bot">Les imprimantes ne sont pas affectées à une borne.<br/><b>Quelle imprimante est actuellement branchée à {boothInfo?.name} ?</b></div><div className="mathis-choice-grid mathis-printers">{Object.entries(MATHIS_PRINTERS).map(([id,p])=><button key={id} onClick={()=>choosePrinter(id)}><span>{p.icon}</span><b>{p.name}</b>{id.startsWith("dnp")&&<small>Repère physique {id==="dnp1"?"1":"2"}</small>}</button>)}</div></>}
+        {step==="printer"&&<><div className="mathis-bubble mathis-bubble-bot"><b>Identifiez l’imprimante actuellement branchée à {boothInfo?.name}.</b><br/>Regardez <b>l’étiquette située derrière l’imprimante</b>. Si vous utilisez une <b>DNP DS620</b>, l’étiquette indique le chiffre <b>1</b> ou <b>2</b>. Sélectionnez ci-dessous le numéro indiqué.</div><div className="mathis-choice-grid mathis-printers">{Object.entries(MATHIS_PRINTERS).map(([id,p])=><button key={id} onClick={()=>choosePrinter(id)}><span>{p.icon}</span><b>{p.name}</b>{id.startsWith("dnp")&&<small>Étiquette arrière : {id==="dnp1"?"1":"2"}</small>}</button>)}</div></>}
         {step==="diagnostic"&&issue==="printer"&&<div className="mathis-bubble mathis-bubble-user">🖨️ <b>{MATHIS_PRINTERS[printer]?.name}</b></div>}
         {step==="diagnostic"&&diagnostic()}
       </div>
@@ -3875,11 +4208,115 @@ function AssistanceCenter(){
   </section>;
 }
 
+
+function LP28PersonalizationCatalog({token,permissions={}}){
+  const access=permissions.personalizationAccess===true;
+  const templatesAllowed=access && permissions.personalizationTemplatesBooth!==false;
+  const boothWidgetAllowed=access && permissions.personalizationBoothWidget!==false;
+  const [view,setView]=useState("");
+  const [copyState,setCopyState]=useState({templates:"",boothwidget:""});
+
+  async function copyTemporaryLink(catalog){
+    setCopyState(s=>({...s,[catalog]:"Création du lien…"}));
+    try{
+      const r=await fetch("/api/guest/"+encodeURIComponent(token)+"/personalization-link/"+catalog,{method:"POST"});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Impossible de créer le lien temporaire.");
+      const text=d.url;
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(text);
+      }else{
+        const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();
+      }
+      setCopyState(s=>({...s,[catalog]:d.activated&&d.expiresAt?"✅ Lien copié · actif jusqu’au "+new Date(d.expiresAt).toLocaleDateString("fr-FR"):"✅ Lien copié · 7 jours à partir du 1er clic"}));
+    }catch(err){setCopyState(s=>({...s,[catalog]:"⚠️ "+(err.message||"Lien indisponible")}));}
+  }
+
+  useEffect(()=>{
+    if(!templatesAllowed)return;
+    const allowedOrigin="https://templatesbooth.com";
+    function onTemplatesBoothMessage(event){
+      const iframe=document.getElementById("tb-widget-embed-7a50d83a1e");
+      if(!iframe||event.source!==iframe.contentWindow)return;
+      if(event.origin!==allowedOrigin)return;
+      const data=event.data||{};
+      if(data.type!=="TB_WIDGET_REDIRECT"||!data.url)return;
+      window.location.href=data.url;
+    }
+    window.addEventListener("message",onTemplatesBoothMessage);
+    return()=>window.removeEventListener("message",onTemplatesBoothMessage);
+  },[templatesAllowed]);
+
+  const examples=[
+    ["/personalization-examples/guillaume.svg","Exemple – Anniversaire"],
+    ["/personalization-examples/birthday18.svg","Exemple – Anniversaire"],
+    ["/personalization-examples/bandelette.svg","Exemple – Personnalisé"]
+  ];
+
+  const buttonBox={display:"flex",flexDirection:"column",gap:7,alignItems:"stretch",minWidth:260};
+  const copyStyle={fontSize:12,padding:"8px 10px",opacity:.92};
+
+  return <section className="portal-section" style={{marginTop:22}}>
+    <div className="portal-document-card" style={{padding:20,overflow:"hidden"}}>
+      <div style={{display:"flex",gap:14,alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 520px"}}>
+          <div className="eyebrow">PERSONNALISATION PHOTO</div>
+          <h2 style={{margin:"4px 0 8px"}}>🎨 Personnalisez votre photobooth</h2>
+          <p style={{margin:"0 0 8px",lineHeight:1.55}}>Envie d’un cadre photo qui correspond parfaitement à votre événement ? Découvrez nos catalogues de personnalisation avec des milliers de modèles pour votre mariage, anniversaire, soirée ou événement professionnel. 📸✨</p>
+        </div>
+        <div style={{flex:"0 1 300px",padding:"14px 16px",borderRadius:16,border:"1px solid rgba(214,185,79,.35)",background:"rgba(214,185,79,.08)"}}>
+          <strong>🏷️ Accès aux catalogues de personnalisation</strong>
+          <div style={{fontSize:34,fontWeight:950,margin:"6px 0"}}>25 €</div>
+          <div className="muted">Pour obtenir l’accès, merci de valider l’option directement avec <strong>Johan – Location Photobooth 28</strong>.</div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:14,alignItems:"end",marginTop:18}}>
+        {examples.map(([src,label])=><figure key={src} style={{margin:0,textAlign:"center"}}>
+          <div style={{background:"#fff",borderRadius:14,padding:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",minHeight:190,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src={src} alt={label} style={{maxWidth:"100%",maxHeight:310,objectFit:"contain",borderRadius:8}}/>
+          </div>
+          <figcaption style={{marginTop:8,fontWeight:800}}>{label}</figcaption>
+        </figure>)}
+      </div>
+
+      <div style={{marginTop:18,padding:"14px 16px",borderRadius:14,border:access?"1px solid rgba(34,197,94,.35)":"1px solid rgba(96,165,250,.35)",background:access?"rgba(34,197,94,.08)":"rgba(59,130,246,.08)"}}>
+        <strong>{access?"✅ Accès aux catalogues activé":"🔒 Accès aux catalogues non activé"}</strong>
+        {!access&&<p className="muted" style={{margin:"6px 0 0"}}>Si vous souhaitez accéder à nos catalogues de personnalisation, merci de valider l’option avec Johan (25 € l’accès).</p>}
+      </div>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+        <div style={buttonBox}>
+          <button type="button" className={templatesAllowed?"portal-action primary":"portal-action disabled"} disabled={!templatesAllowed} onClick={()=>setView(view==="templates"?"":"templates")}>🎨 Catalogue TemplatesBooth</button>
+          <button type="button" disabled={!templatesAllowed} onClick={()=>copyTemporaryLink("templates")} style={copyStyle}>🔗 Copier le lien pour tablette / PC</button>
+          {copyState.templates&&<small className="muted">{copyState.templates}</small>}
+        </div>
+        <div style={buttonBox}>
+          <button type="button" className={boothWidgetAllowed?"portal-action primary":"portal-action disabled"} disabled={!boothWidgetAllowed} onClick={()=>setView(view==="boothwidget"?"":"boothwidget")}>🖼️ Catalogue BoothWidget</button>
+          <button type="button" disabled={!boothWidgetAllowed} onClick={()=>copyTemporaryLink("boothwidget")} style={copyStyle}>🔗 Copier le lien pour tablette / PC</button>
+          {copyState.boothwidget&&<small className="muted">{copyState.boothwidget}</small>}
+        </div>
+      </div>
+
+      {view==="templates"&&templatesAllowed&&<div style={{marginTop:18,borderTop:"1px solid rgba(255,255,255,.12)",paddingTop:18}}>
+        <iframe id="tb-widget-embed-7a50d83a1e" title="Catalogue TemplatesBooth Location Photobooth 28" srcDoc="Loading..." onLoad={e=>e.currentTarget.removeAttribute("srcdoc")} src="https://templatesbooth.com/widget-embed/?key=NDc4MQ%3D%3D" scrolling="yes" width="100%" height="2200px" frameBorder="0" style={{width:"100%",minHeight:900,border:"none",borderRadius:14,background:"#fff"}}></iframe>
+      </div>}
+
+      {view==="boothwidget"&&boothWidgetAllowed&&<div style={{marginTop:18,borderTop:"1px solid rgba(255,255,255,.12)",paddingTop:18}}>
+        <iframe title="Catalogue BoothWidget Location Photobooth 28" src="https://locphotobooth28.boothwidget.com" style={{width:"100%",height:"100vh",minHeight:650,border:"none",borderRadius:14,background:"#fff"}} scrolling="yes"></iframe>
+      </div>}
+    </div>
+  </section>;
+}
+
 function PortalPage({token}){
   const [data,setData]=useState(null),[error,setError]=useState(""),[media,setMedia]=useState([]),[busy,setBusy]=useState(false);
   const [deleteItem,setDeleteItem]=useState(null),[deleteText,setDeleteText]=useState("");
   const [lightbox,setLightbox]=useState(null),[visibleCount,setVisibleCount]=useState(80);
   const [selectMode,setSelectMode]=useState(false),[selected,setSelected]=useState([]);
+  const [guestAccessBusy,setGuestAccessBusy]=useState(false);
+  const [portalTab,setPortalTab]=useState("home");
+  const [portalMenuOpen,setPortalMenuOpen]=useState(false); // LP28_PORTAL_TABS_V1
   const touchStart=useRef(null);
 
   async function loadMemories(){
@@ -3901,8 +4338,39 @@ function PortalPage({token}){
       .catch(e=>setError(e.message));
   },[token]);
 
+  /* LP28_ORGANIZER_GALLERY_LOCKS_V1 */
+  async function setGuestGalleryAccess(section,open){
+    try{
+      setGuestAccessBusy(true);
+      const r=await fetch(`/api/guest/${token}/guest-gallery-access`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section,open})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.message||"Impossible de modifier l’accès.");
+      setData(prev=>prev?{...prev,portalPermissions:{...(prev.portalPermissions||{}),guestPhotoboothOpen:d.guestPhotoboothOpen!==false,guestQrGalleryOpen:d.guestQrGalleryOpen!==false}}:prev);
+    }catch(err){alert(err.message||"Impossible de modifier l’accès des invités.");}
+    finally{setGuestAccessBusy(false);}
+  }
+
   const organizer=data?.role==="ORGANIZER";
   const portalPermissions=data?.portalPermissions||{};
+  const guestPhotoboothOpen=portalPermissions.guestPhotoboothOpen!==false;
+  const guestQrGalleryOpen=portalPermissions.guestQrGalleryOpen!==false;
+  const portalTabs=organizer
+    ? [
+        ["home","🏠","Accueil"],
+        ["documents","📄","Documents"],
+        ["personalization","🎨","Personnalisation"],
+        ["qr","📱","QR invités"],
+        ["photos","📸","Accès photos"],
+        ["gallery","🖼️","Galerie QR"],
+        ["support","🆘","Assistance"]
+      ]
+    : [
+        ["home","🏠","Accueil"],
+        ["photos","📸","Accès photos"],
+        ["gallery","🖼️","Galerie"],
+        ["support","🆘","Assistance"]
+      ];
+  const activePortalTab=portalTabs.find(([key])=>key===portalTab)||portalTabs[0];
   const canPortalMathis=organizer?portalPermissions.organizerMathis!==false:portalPermissions.guestMathis!==false;
   const organizerDocuments=data?.documents||null;
 const contract=organizerDocuments?.contract||null;
@@ -4093,6 +4561,19 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       )}`
     : "";
 
+  function openGuestPosterDesigner(){
+    const guestUrl=guestShare?.guestUrl||"";
+    if(!guestUrl)return alert("Le lien Invité n’est pas encore disponible.");
+    openLP28PosterStudio({guestUrl,qrDataUrl:guestShare?.qrDataUrl,eventName:eventDisplayName});
+    return;
+    const qr='https://api.qrserver.com/v1/create-qr-code/?size=700x700&data='+encodeURIComponent(guestUrl);
+    const safeName=String(eventDisplayName||'Votre événement').replace(/[<>&"']/g,'');
+    const w=window.open('', '_blank');
+    if(!w)return alert("Autorisez les fenêtres pop-up pour ouvrir le générateur d’affiche.");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Affiche invités - ${safeName}</title><style>*{box-sizing:border-box}body{margin:0;background:#0b0f14;color:#f7f7f7;font-family:Arial,sans-serif}.wrap{padding:24px;max-width:1450px;margin:auto}.head{display:flex;justify-content:space-between;gap:20px;align-items:center}.brand{font-weight:900;color:#e8c24a}.info{background:#0d2a45;border:1px solid #1976b9;padding:12px 16px;border-radius:10px;margin:18px 0}.grid{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px}.model{background:#111821;border:1px solid #334155;border-radius:12px;padding:10px;cursor:pointer}.model.sel{border:2px solid #e8c24a}.thumb{aspect-ratio:210/297;border-radius:8px;padding:14px;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:space-between;position:relative;overflow:hidden}.thumb>*{position:relative;z-index:2}.thumb{isolation:isolate}.thumb b:first-child{font-size:11px;letter-spacing:.7px;text-transform:uppercase}.thumb h2{font-family:Georgia,serif;font-size:31px;line-height:1;margin:8px 0 4px;letter-spacing:1px}.thumb img{width:56%;background:#fff;padding:7px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.24)}.thumb small{font-size:10px;font-weight:800;letter-spacing:.15px}.thumb b:last-of-type{font-size:16px}.elegant{background:radial-gradient(circle at 92% 5%,rgba(212,175,55,.22),transparent 23%),linear-gradient(145deg,#fffef9,#f8f0dc)!important;color:#171717;border-color:#d4af37!important}.elegant:before{content:'❧';position:absolute;left:-14px;top:18px;color:#b98b2e;font-size:112px;opacity:.38;transform:rotate(-20deg)}.elegant:after{content:'❧';position:absolute;right:-14px;bottom:18px;color:#b98b2e;font-size:112px;opacity:.34;transform:rotate(158deg)}.elegant h2{font-family:cursive;font-size:36px;font-weight:500}.modern{background:linear-gradient(128deg,transparent 0 28%,rgba(0,194,255,.22) 28.5% 29.2%,transparent 30% 63%,rgba(255,30,210,.2) 63.5% 64.2%,transparent 65%),radial-gradient(circle at 18% 18%,rgba(0,194,255,.24),transparent 29%),radial-gradient(circle at 82% 25%,rgba(255,30,210,.24),transparent 31%),#050711!important;color:#fff}.modern:before,.modern:after{content:'';position:absolute;width:120%;height:2px;background:linear-gradient(90deg,transparent,#24d6ff,#ff2bd6,transparent);filter:drop-shadow(0 0 9px #29d3ff)}.modern:before{top:22%;left:-10%;transform:rotate(-34deg)}.modern:after{bottom:18%;left:-10%;transform:rotate(34deg)}.modern h2{color:#fff;text-shadow:0 0 9px #ff27d4,0 0 18px #20d5ff;font-family:Arial,sans-serif;font-weight:900}.modern img{box-shadow:0 0 0 3px #ff2bd6,0 0 0 7px rgba(34,211,238,.18),0 0 32px #1dc7ff}.phone{background:radial-gradient(circle at 15% 12%,rgba(255,255,255,.95) 0 7px,transparent 8px),radial-gradient(circle at 70% 15%,rgba(255,255,255,.72) 0 10px,transparent 11px),radial-gradient(circle at 85% 38%,rgba(245,194,130,.34) 0 18px,transparent 19px),linear-gradient(160deg,#fff7ed,#eed8c4)!important;color:#171717}.phone:before{content:'';position:absolute;width:48%;height:57%;left:12%;top:28%;border:9px solid #171717;border-radius:28px;background:linear-gradient(#252525,#0f0f0f);box-shadow:0 18px 30px rgba(0,0,0,.28);transform:rotate(-7deg);opacity:.94}.phone img{width:45%;margin-left:35%;transform:rotate(2deg)}.phone h2{font-family:cursive;font-size:31px;margin-left:25%}.minimal{background:linear-gradient(135deg,#fff,#fbfaf4)!important;color:#111}.minimal:before{content:'❧';position:absolute;left:-20px;top:-2px;color:#6f8f67;font-size:105px;opacity:.28;transform:rotate(-22deg)}.minimal:after{content:'❧';position:absolute;right:-18px;bottom:-8px;color:#6f8f67;font-size:105px;opacity:.25;transform:rotate(158deg)}.minimal h2{font-family:Arial,sans-serif;font-weight:900;font-size:30px;letter-spacing:2px}.fun{background:linear-gradient(25deg,transparent 0 12%,rgba(255,47,156,.8) 12.5% 13.7%,transparent 14.3% 80%,rgba(0,204,255,.8) 80.5% 81.8%,transparent 82.5%),radial-gradient(circle at 8% 10%,#ffd54a 0 18px,transparent 19px),radial-gradient(circle at 90% 17%,#ff3e97 0 14px,transparent 15px),radial-gradient(circle at 18% 85%,#18bfff 0 17px,transparent 18px),radial-gradient(circle at 88% 82%,#20cf72 0 15px,transparent 16px),repeating-linear-gradient(0deg,#0d1117 0 18px,#111827 19px 20px)!important;color:#fff}.fun:before{content:'♛';position:absolute;left:10px;top:8px;color:#ffd400;font-size:58px;transform:rotate(-12deg)}.fun:after{content:'♡';position:absolute;right:13px;bottom:58px;color:#ffdf57;font-size:46px;transform:rotate(12deg)}.fun h2{font-family:cursive;font-size:35px;color:#fff;transform:rotate(-3deg)}.controls{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:#111821;border:1px solid #334155;border-radius:12px;padding:16px}.panel input{width:100%;padding:11px;border-radius:8px;border:1px solid #475569;background:#0b0f14;color:white}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions button{padding:12px 16px;border-radius:9px;border:1px solid #64748b;background:#17202b;color:white;font-weight:800;cursor:pointer}.actions .primary{background:#e8c24a;color:#111;border-color:#e8c24a}.poster{display:none}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.controls{grid-template-columns:1fr}}@media print{body>*{display:none!important}.poster{display:flex!important;position:fixed;inset:0;width:210mm;height:297mm;padding:17mm 15mm;flex-direction:column;align-items:center;text-align:center;color:var(--fg);border:7mm solid var(--border);overflow:hidden}.poster>*{position:relative;z-index:2}.poster .pbrand{font-size:18px;font-weight:900;letter-spacing:1px}.poster h1{font-size:45px;margin:14px 0 5px}.poster .event{font-size:23px;font-weight:800}.poster .lead{font-size:24px;font-weight:900;margin:14px 0}.poster .qr{width:103mm;height:103mm;background:#fff;padding:7px;border:4px solid var(--accent);border-radius:14px}.poster .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;margin-top:18px;font-size:14px;font-weight:700}.poster .tag{font-size:19px;font-weight:900;margin-top:17px}.poster .social{margin-top:auto;font-size:12px;font-weight:800}.poster{box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}.poster h1{letter-spacing:2px}.poster .lead{padding:6px 16px;border-radius:999px}.poster.elegant .lead{background:linear-gradient(90deg,#c99a2e,#f2cf69);color:#171717}.poster.modern .lead{background:#0c1020;color:#fff;box-shadow:0 0 0 2px #ff2bd6,0 0 24px rgba(34,211,238,.7)}.poster.phone .lead{font-family:cursive;font-size:27px}.poster.minimal .lead{border:1px solid #d4af37;background:rgba(255,255,255,.78)}.poster.fun .lead{background:#ff3e97;color:#111;transform:rotate(-1deg)}.poster .steps>div{padding:8px 4px;border-radius:10px;background:rgba(255,255,255,.10)}.poster.elegant .steps>div,.poster.minimal .steps>div,.poster.phone .steps>div{background:rgba(255,255,255,.62)}.poster.fun .steps>div{background:rgba(0,0,0,.38);color:#fff}.poster.elegant:before,.poster.elegant:after{font-size:155px}.poster.modern .qr{box-shadow:0 0 0 4px #ff20d6,0 0 35px #00c8ff}.poster.phone:before{font-size:220px;left:5mm;top:80mm}.poster.minimal:before,.poster.minimal:after{font-size:110px}.poster.fun{background:radial-gradient(circle at 8% 8%,#ffd54a 0 8mm,transparent 9mm),radial-gradient(circle at 90% 15%,#ff4fa3 0 7mm,transparent 8mm),radial-gradient(circle at 13% 85%,#38bdf8 0 8mm,transparent 9mm),radial-gradient(circle at 88% 82%,#22c55e 0 7mm,transparent 8mm),#fffdf8!important}}</style></head><body><div class="wrap"><div class="head"><div><h1>🖼️ Affiche pour vos invités</h1><div>Choisissez le modèle qui correspond le mieux à votre événement.</div></div><div class="brand">📸 LOCATION PHOTOBOOTH 28</div></div><div class="info">ℹ️ Le logo Location Photobooth 28 et les réseaux sociaux restent toujours présents. Le QR Code ouvre directement l’accès Invité.</div><div class="grid" id="models"></div><div class="controls"><div class="panel"><h3>✍️ Personnalisation facultative</h3><label>Petit message en bas de page</label><input id="custom" maxlength="60" placeholder="Merci d’être là ! ♡"><p style="color:#94a3b8">La marque LP28 reste affichée automatiquement.</p></div><div class="panel"><h3>📄 Votre affiche</h3><p>Format A4 prêt à imprimer. Placez-la près de la borne, à l’entrée ou sur les tables.</p><div class="actions"><button class="primary" onclick="makePrint()">⬇️ Télécharger / enregistrer en PDF</button><button onclick="makePrint()">🖨️ Imprimer directement</button></div></div></div></div><div class="poster" id="poster"><div class="pbrand">📸 LOCATION PHOTOBOOTH 28</div><h1>INVITÉS</h1><div class="event">${safeName}</div><div class="lead">📸 Scannez le QR Code</div><img class="qr" src="${qr}"><div class="steps"><div>🖼️<br>Consultez<br>les photos</div><div>👆<br>Sélectionnez<br>vos préférées</div><div>⬇️<br>Téléchargez<br>directement</div><div>📲<br>Partagez<br>vos souvenirs</div></div><div class="tag" id="tag"></div><div class="social">Suivez-nous sur <b>ⓕ Facebook</b> Location Photobooth 28 &nbsp; • &nbsp; <b>◎ Instagram</b> Location Photobooth 28</div></div><script>const styles=[{id:'elegant',name:'Élégant',fg:'#171717',accent:'#d4af37',border:'#d4af37',tag:'Merci d’être là ! ♡'},{id:'modern',name:'Moderne',fg:'#fff',accent:'#ff28d7',border:'#22d3ee',tag:'Bonnes photos !'},{id:'phone',name:'Photo & smartphone',fg:'#171717',accent:'#ec4899',border:'#f59e0b',tag:'Des souvenirs à partager !'},{id:'minimal',name:'Minimaliste',fg:'#111',accent:'#d4af37',border:'#111',tag:'Simple • Rapide • Gratuit'},{id:'fun',name:'Fun',fg:'#111',accent:'#ec4899',border:'#38bdf8',tag:'PHOTOS • SOUVENIRS • GOOD VIBES !'}];let selected=0;const models=document.getElementById('models');function draw(){models.innerHTML=styles.map((s,i)=>'<div class="model '+(i===selected?'sel':'')+'" onclick="selected='+i+';draw()"><b>Modèle '+(i+1)+'</b><div style="color:#94a3b8;margin:3px 0 8px">'+s.name+'</div><div class="thumb '+s.id+'" style="border:3px solid '+s.border+'"><b>📸 LOCATION PHOTOBOOTH 28</b><h2>INVITÉS</h2><img src="${qr}"><b style="color:'+s.accent+'">Scannez le QR Code</b><div style="font-size:11px">🖼️ Photos • 👆 Sélection • ⬇️ Téléchargement • 📲 Partage</div><small>ⓕ Facebook • ◎ Instagram</small></div></div>').join('')}function makePrint(){const s=styles[selected];const p=document.getElementById('poster');p.className='poster '+s.id;p.style.setProperty('--fg',s.fg);p.style.setProperty('--accent',s.accent);p.style.setProperty('--border',s.border);document.getElementById('tag').textContent=document.getElementById('custom').value.trim()||s.tag;setTimeout(()=>window.print(),100)}draw();<\/script></body></html>`);
+    w.document.close();
+  }
+
   function printGuestQr(){
     if(!guestShare?.qrDataUrl)return;
 
@@ -4235,7 +4716,7 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
   {e.type ? ` • ${e.type}` : ""}
 </p>
 
-{organizer&&(portalPermissions.organizerContract!==false||portalPermissions.organizerDocuments!==false)&&(
+{organizer&&portalTab==="documents"&&(portalPermissions.organizerContract!==false||portalPermissions.organizerDocuments!==false)&&(
   <section className="portal-section">
 
     <h2>📄 Mes documents</h2>
@@ -4354,7 +4835,41 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 )}
     {organizer&&<div className="portal-role">🔐 Espace organisateur</div>}
 
-    {organizer&&portalPermissions.organizerShare!==false&&guestShare&&(
+    <style>{`
+      .lp28-portal-topbar{position:fixed;top:0;left:0;right:0;z-index:70;height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 14px;border-bottom:1px solid rgba(214,185,79,.25);background:rgba(8,10,13,.97);box-shadow:0 8px 24px rgba(0,0,0,.28);backdrop-filter:blur(14px)}
+      .lp28-portal-topbar-left{min-width:0;display:flex;align-items:center;gap:10px}.lp28-portal-topbar-brand{font-size:11px;font-weight:950;letter-spacing:.12em;color:#d9bd4b;white-space:nowrap}.lp28-portal-topbar-current{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:850;color:#f4f4f5}
+      .lp28-menu-pin{flex:0 0 auto;height:38px;min-width:92px;padding:0 13px;border-radius:10px;border:1px solid rgba(214,185,79,.45);background:rgba(214,185,79,.08);color:#f5d95d;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+      .lp28-menu-pin:hover,.lp28-menu-pin.open{background:rgba(214,185,79,.16);border-color:#d9bd4b}
+      .lp28-topbar-spacer{height:58px}
+      .lp28-portal-tabs{position:fixed;right:12px;top:62px;z-index:69;width:220px;display:flex;flex-direction:column;gap:7px;padding:10px;border:1px solid rgba(214,185,79,.28);border-radius:14px;background:rgba(8,10,13,.98);box-shadow:0 16px 36px rgba(0,0,0,.42);backdrop-filter:blur(12px);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .16s ease,transform .16s ease,visibility .16s ease}
+      .lp28-portal-tabs.open{opacity:1;visibility:visible;transform:translateY(0)}
+      .lp28-portal-tab{display:flex;align-items:center;gap:9px;width:100%;min-height:42px;padding:9px 11px;border-radius:11px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);color:#e8e8ea;font-weight:850;font-size:12px;text-align:left;cursor:pointer}
+      .lp28-portal-tab:hover{border-color:rgba(214,185,79,.45);background:rgba(214,185,79,.08)}
+      .lp28-portal-tab.active{border-color:#d9bd4b;background:linear-gradient(135deg,rgba(217,189,75,.24),rgba(217,189,75,.10));color:#f5d95d;box-shadow:inset 3px 0 0 #e0c34f}
+      .lp28-portal-tab .ico{font-size:16px;line-height:1}.lp28-portal-tab .label{white-space:nowrap}
+      .lp28-tab-home{margin:14px 0;padding:15px 16px;border:1px solid rgba(214,185,79,.22);border-radius:14px;background:rgba(214,185,79,.055)}
+      .lp28-tab-home h2{margin:0 0 5px;font-size:16px}.lp28-tab-home p{margin:0;line-height:1.5;font-size:12px;color:#b9bac0}
+      @media(max-width:600px){
+        .lp28-portal-topbar{height:50px;padding:0 10px}.lp28-topbar-spacer{height:54px}.lp28-portal-topbar-brand{display:none}.lp28-portal-topbar-current{font-size:12px}.lp28-menu-pin{height:36px;min-width:82px;padding:0 11px;font-size:12px}.lp28-portal-tabs{right:8px;top:57px;width:min(250px,calc(100vw - 16px));max-height:calc(100vh - 68px);overflow-y:auto}
+      }
+    `}</style>
+    <div className="lp28-portal-topbar">
+      <div className="lp28-portal-topbar-left"><span className="lp28-portal-topbar-brand">LP28</span><span className="lp28-portal-topbar-current">{activePortalTab?.[1]} {activePortalTab?.[2]}</span></div>
+      <button type="button" className={`lp28-menu-pin ${portalMenuOpen?"open":""}`} onClick={()=>setPortalMenuOpen(v=>!v)} aria-label={portalMenuOpen?"Fermer le menu":"Ouvrir le menu"} aria-expanded={portalMenuOpen}>☰ <span>Menu</span></button>
+    </div>
+    <div className="lp28-topbar-spacer" aria-hidden="true"></div>
+    <nav className={`lp28-portal-tabs ${portalMenuOpen?"open":""}`} aria-label="Navigation du portail">
+      {portalTabs.map(([key,icon,label])=><button key={key} type="button" className={`lp28-portal-tab ${portalTab===key?"active":""}`} onClick={()=>{setPortalTab(key);setPortalMenuOpen(false);window.scrollTo({top:0,behavior:"smooth"})}}><span className="ico">{icon}</span><span className="label">{label}</span></button>)}
+    </nav>
+
+    {portalTab==="home"&&<section className="lp28-tab-home">
+      <h2>{organizer?"Bienvenue dans votre espace organisateur 👋":"Bienvenue sur l’espace invités 👋"}</h2>
+      <p>{organizer?"Utilisez le bouton Menu pour accéder rapidement à vos documents, à la personnalisation, au QR Code invités, aux accès photos, aux galeries et à l’assistance.":"Utilisez le bouton Menu pour accéder rapidement aux photos, à la galerie de l’événement et à l’assistance."}</p>
+    </section>}
+
+    {organizer&&portalTab==="personalization"&&<LP28PersonalizationCatalog token={token} permissions={portalPermissions}/>} 
+
+    {organizer&&portalTab==="qr"&&portalPermissions.organizerShare!==false&&guestShare&&(
       <section className="portal-section">
         <h2>📱 QR Code invités</h2>
 
@@ -4407,6 +4922,8 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
               justifyContent:"center"
             }}
           >
+            <button type="button" className="portal-action primary" onClick={openGuestPosterDesigner}>🎨 Choisir mon affiche invités A4</button>
+
             <button
               type="button"
               className="portal-action"
@@ -4464,17 +4981,37 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       </section>
     )}
 
+    {portalTab==="photos"&&<>
     <div className="portal-photo-actions">
       {e.fotoshareUrl
-        ? <a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos Borne</a>
-        : <div className="portal-action disabled" aria-disabled="true">📸 Photos Borne — lien bientôt disponible</div>}
-      <a className="portal-action" href="#photos-partagees">❤️ Photos partagées</a>
+        ? (organizer||guestPhotoboothOpen
+            ? <a className="portal-action primary" href={e.fotoshareUrl} target="_blank" rel="noreferrer">📸 Photos du Photobooth</a>
+            : <div className="portal-action disabled" aria-disabled="true">🔒 Photos du Photobooth verrouillées par l’organisateur</div>)
+        : <div className="portal-action disabled" aria-disabled="true">📸 Photos du Photobooth — lien bientôt disponible</div>}
+      {organizer||guestQrGalleryOpen
+        ? <a className="portal-action" href="#photos-partagees">📱 Galerie photos QR Code</a>
+        : <div className="portal-action disabled" aria-disabled="true">🔒 Galerie photos QR Code verrouillée par l’organisateur</div>}
     </div>
-    {e.fotoshareUrl&&<p className="portal-note">La galerie Photos Borne est disponible pendant 30 jours après l’événement.</p>}
+    {organizer&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>
+      <button type="button" disabled={guestAccessBusy} onClick={()=>setGuestGalleryAccess("PHOTOBOOTH",!guestPhotoboothOpen)} style={{padding:"11px 12px",borderRadius:12,fontWeight:900,border:guestPhotoboothOpen?"1px solid rgba(34,197,94,.55)":"1px solid rgba(239,68,68,.6)",background:guestPhotoboothOpen?"rgba(34,197,94,.12)":"rgba(239,68,68,.12)"}}>📸 Accès invités Photobooth : {guestPhotoboothOpen?"🟢 OUVERT":"🔴 VERROUILLÉ"}</button>
+      <button type="button" disabled={guestAccessBusy} onClick={()=>setGuestGalleryAccess("QR",!guestQrGalleryOpen)} style={{padding:"11px 12px",borderRadius:12,fontWeight:900,border:guestQrGalleryOpen?"1px solid rgba(34,197,94,.55)":"1px solid rgba(239,68,68,.6)",background:guestQrGalleryOpen?"rgba(34,197,94,.12)":"rgba(239,68,68,.12)"}}>📱 Accès invités QR Code : {guestQrGalleryOpen?"🟢 OUVERT":"🔴 VERROUILLÉ"}</button>
+    </div>}
+    {organizer&&<div className="portal-note" style={{marginTop:8}}>Les deux accès sont ouverts par défaut. Le verrouillage concerne uniquement les invités ; votre accès organisateur reste disponible.</div>}
+    </>}
+    {e.fotoshareUrl&&<><p className="portal-note">La galerie Photos du Photobooth est disponible pendant 30 jours après l’événement.</p>
+      <div className="lp28-photobooth-link-box" style={{marginTop:12,padding:"14px",border:"1px solid rgba(214,185,79,.28)",borderRadius:12,background:"rgba(214,185,79,.055)"}}>
+        {/* LP28_PHOTOBOOTH_COPY_LINK_V1 */}
+        <div style={{fontWeight:850,marginBottom:5}}>💻 Retrouvez vos photos sur ordinateur</div>
+        <div className="portal-note" style={{marginBottom:10}}>Pour consulter ou télécharger vos photos plus facilement sur un ordinateur, copiez le lien ci-dessous puis ouvrez-le depuis votre ordinateur.</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button type="button" className="portal-action" onClick={async()=>{try{await navigator.clipboard.writeText(e.fotoshareUrl);alert("✅ Lien Photos du Photobooth copié !")}catch(_){window.prompt("Copiez ce lien :",e.fotoshareUrl)}}}>🔗 Copier le lien Photos du Photobooth</button>
+          {navigator.share&&<button type="button" className="portal-action" onClick={async()=>{try{await navigator.share({title:"Photos du Photobooth",text:"Retrouvez les photos de notre événement :",url:e.fotoshareUrl})}catch(_){}}}>📤 Partager le lien</button>}
+        </div>
+      </div><div style={{marginTop:12,padding:"12px 14px",borderRadius:12,border:"1px solid rgba(59,130,246,.55)",background:"rgba(30,64,175,.12)",display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:18,lineHeight:1}}>ℹ️</span><div><div style={{fontSize:13,lineHeight:1.55}}>En cas d’indisponibilité ou de mauvaise qualité réseau, les photos du Photobooth seront disponibles quand la borne fera son retour à notre atelier.</div><div style={{fontSize:13,lineHeight:1.55,fontWeight:800,marginTop:4}}>Désolé de ce désagrément, mais c’est bien sûr contre notre volonté.</div></div></div></>}
 
-    {(organizer||portalPermissions.guestGallery!==false)&&<section className="portal-section" id="photos-partagees">
+    {portalTab==="gallery"&&(organizer||(portalPermissions.guestGallery!==false&&guestQrGalleryOpen))&&<section className="portal-section" id="photos-partagees">
       <div className="memories-heading">
-        <div><h2>❤️ Photos partagées</h2><p className="muted">{galleryMedia.length} photo{galleryMedia.length>1?"s":""} ajoutée{galleryMedia.length>1?"s":""} par l’organisateur et les invités</p></div>
+        <div><h2>📱 Galerie photos QR Code</h2><p className="muted">{galleryMedia.length} photo{galleryMedia.length>1?"s":""} ajoutée{galleryMedia.length>1?"s":""} par l’organisateur et les invités</p></div>
         {organizer&&galleryMedia.length>0&&<button className="memory-select-toggle" onClick={()=>{setSelectMode(v=>!v);setSelected([])}}>{selectMode?"Annuler":"☑ Sélectionner"}</button>}
       </div>
 
@@ -4551,9 +5088,9 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
       {visibleCount<galleryMedia.length&&<button className="memory-load-more" onClick={()=>setVisibleCount(v=>v+80)}>Afficher 80 photos de plus</button>}
     </section>}
 
-    {support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}
+    {portalTab==="home"&&support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}
 
-    {canPortalMathis&&<section className="portal-section">
+    {portalTab==="support"&&canPortalMathis&&<section className="portal-section">
       <MathisAssistant
         videos={data.assistanceVideos||[]}
         eventContext={e}
@@ -5862,7 +6399,7 @@ function AdminDocuments({events,onOpen}){
   );
 }
 
-function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false}) {
+function EventConsultationModal({event,onClose,onEdit,onDocuments,onShare,isAdmin=false,canEventAction=()=>false}) {
   if(!event) return null;
 
   const safeText = value => {
@@ -6065,6 +6602,7 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,
           >
             📄 Voir le contrat
           </button>}
+          {(isAdmin||canEventAction("share"))&&<button type="button" onClick={()=>onShare&&onShare(event)}>📤 Partager la fiche</button>}
           {(isAdmin||canEventAction("documents"))&&<button type="button" onClick={()=>onDocuments(event)}>📁 Documents</button>}
         </div>
       </div>
@@ -6194,11 +6732,126 @@ function Dashboard({onLogout,user}) {
       window.open(url,"_blank","noopener,noreferrer");
     }catch(err){alert(err.message||"Impossible d’ouvrir l’aperçu.");}
   }
+
+  /* LP28_QUOTE_REMINDER_V3 */
+  function quoteExpiryDate(event){
+    const sent=String(event?.preparation?.quoteSentAt||"").slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(sent))return null;
+    const d=new Date(sent+"T12:00:00");
+    if(Number.isNaN(d.getTime()))return null;
+    d.setDate(d.getDate()+15);
+    return d;
+  }
+  function quoteIsExpired(event){
+    if(event?.bookingStatus!=="QUOTE_SENT")return false;
+    const expiry=quoteExpiryDate(event);
+    if(!expiry)return false;
+    const now=new Date();
+    const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12,0,0);
+    return today>expiry;
+  }
+  function quoteDateLabel(value){
+    if(!value)return "";
+    const d=new Date(String(value).slice(0,10)+"T12:00:00");
+    return Number.isNaN(d.getTime())?String(value):d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});
+  }
+  function quoteFirstName(event){
+    const raw=String(event?.organizerName||event?.clientFirstName||event?.name||"").trim();
+    return raw.split(/\s+/)[0]||"";
+  }
+  function quoteManualUrl(event){
+    return String(event?.preparation?.quoteUrl||"").trim();
+  }
+  async function quoteReminderContent(event){
+    const consultationUrl=quoteManualUrl(event);
+    if(!consultationUrl)throw new Error("Renseigne d’abord le lien du devis dans la fiche événement.");
+    if(!/^https?:\/\//i.test(consultationUrl))throw new Error("Le lien du devis doit commencer par http:// ou https://");
+    const firstName=quoteFirstName(event);
+    const eventDate=quoteDateLabel(event.date||event.eventDate);
+    const message=[
+      `Bonjour${firstName?" "+firstName:""} 👋`,
+      "",
+      `Je me permets de revenir vers vous concernant le devis envoyé pour votre événement${eventDate?" du "+eventDate:""}.`,
+      "",
+      "La date de validité du devis étant maintenant dépassée, pourriez-vous simplement nous indiquer si votre projet est toujours d’actualité ? 😊",
+      "",
+      "👉 Vous pouvez consulter votre devis directement ici :",
+      consultationUrl,
+      "",
+      "Lorsque vous ouvrez votre devis, vous trouverez en haut de la page le bouton « Action ».",
+      "",
+      "Il vous permet de nous faire connaître votre décision très simplement :",
+      "",
+      "✅ Accepter le devis si vous souhaitez confirmer votre réservation",
+      "⏸️ Mettre en attente le devis si vous avez encore besoin d’un peu de temps",
+      "❌ Refuser le devis si vous ne souhaitez finalement pas donner suite",
+      "",
+      "Votre choix nous permettra de mettre à jour votre demande et, en cas de refus, de libérer la date pour une autre réservation.",
+      "",
+      "Et bien sûr, si votre projet est toujours d’actualité mais que vous avez une question ou souhaitez modifier quelque chose dans votre devis, n’hésitez pas à revenir vers nous. Nous restons à votre disposition avec plaisir 😊",
+      "",
+      "À bientôt,",
+      "",
+      "Johan",
+      "Location Photobooth 28"
+    ].join("\n");
+    return {message,consultationUrl};
+  }
+  async function markQuoteReminderSent(event){
+    const sentAt=new Date().toISOString();
+    const nextEvent={...event,preparation:{...(event.preparation||{}),quoteReminderSentAt:sentAt}};
+    const r=await fetch(`/api/events/${event.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(nextEvent)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.message||"Impossible d’enregistrer la relance.");
+    setEvents(list=>list.map(item=>item.id===event.id?{...item,preparation:{...(item.preparation||{}),quoteReminderSentAt:sentAt}}:item));
+    return sentAt;
+  }
+  async function copyQuoteReminder(event){
+    try{
+      const {message}=await quoteReminderContent(event);
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(message);
+      else window.prompt("Copie la relance :",message);
+      await markQuoteReminderSent(event);
+      alert("Relance copiée et enregistrée.");
+    }catch(err){alert(err.message||"Impossible de copier la relance.");}
+  }
+  async function sendQuoteReminderWhatsApp(event){
+    try{
+      let number=String(event?.organizerPhone||"").replace(/\D/g,"");
+      if(!number)throw new Error("Aucun numéro de téléphone client n’est renseigné.");
+      if(number.startsWith("0"))number="33"+number.slice(1);
+      const {message}=await quoteReminderContent(event);
+      window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`,"_blank","noopener,noreferrer");
+      await markQuoteReminderSent(event);
+    }catch(err){alert(err.message||"Impossible d’ouvrir WhatsApp.");}
+  }
+  async function openQuoteConsultation(event){
+    try{
+      const {consultationUrl}=await quoteReminderContent(event);
+      window.open(consultationUrl,"_blank","noopener,noreferrer");
+    }catch(err){alert(err.message||"Impossible d’ouvrir le devis.");}
+  }
   const [documentEvent,setDocumentEvent]=useState(null);
   const [viewEvent,setViewEvent]=useState(null);
   const [search,setSearch]=useState("");
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
+  const [showMonthBilledAmount,setShowMonthBilledAmount]=useState(true);
+  const [showFutureBilledAmount,setShowFutureBilledAmount]=useState(true);
+  const [showMonthGiftAmount,setShowMonthGiftAmount]=useState(true);
+  const [showFutureGiftAmount,setShowFutureGiftAmount]=useState(true);
+  const [dashboardLocked,setDashboardLocked]=useState(()=>localStorage.getItem("lp28.dashboard.locked")!=="false");
+  const DASHBOARD_DEFAULT_ORDER=["events","quoteSent","inProgress","upcoming","contracts","weekEvents","liveBooths","weekBilled","monthBilled","futureBilled","weekGift","monthGift","futureGift"];
+  const readDashboardOrder=()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem("lp28.dashboard.order")||"[]");
+      if(!Array.isArray(saved)||!saved.length)return [...DASHBOARD_DEFAULT_ORDER];
+      const validSaved=saved.filter(id=>DASHBOARD_DEFAULT_ORDER.includes(id));
+      return validSaved.concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!validSaved.includes(id)));
+    }catch{return [...DASHBOARD_DEFAULT_ORDER];}
+  };
+  const [dashboardOrder,setDashboardOrder]=useState(readDashboardOrder);
+  const [dashboardDragId,setDashboardDragId]=useState(null);
   const isAdmin=user?.role==="ADMIN";
   const [opsSav,setOpsSav]=useState([]);
   const [opsBooths,setOpsBooths]=useState([]);
@@ -6221,6 +6874,13 @@ function Dashboard({onLogout,user}) {
   const unreadInfoSav=opsSav.filter(i=>i.level===1&&i.status==="RESOLVED"&&!i.adminReadAt);
   const latestInfoSav=unreadInfoSav[0];
   const boothOnlineCount=Math.min(3,opsBooths.filter(b=>b.online).length);
+  const boothProblems=opsBooths.filter(b=>{
+    if(!b?.online)return false;
+    const severity=String(b?.printer?.statusSeverity||"").toUpperCase();
+    return ["WARNING","ERROR","OFFLINE"].includes(severity) || b?.printer?.statusFresh===false || b?.lumaActive===false;
+  });
+  const boothProblemCount=boothProblems.length;
+  const boothProblemTitle=boothProblems.map(b=>String(b.boothName||"Borne").toUpperCase()+" : "+(b?.printer?.statusLabel||(!b?.lumaActive?"LumaBooth inactif":"anomalie détectée"))).join(" · ");
   const defaultEventActions=user?.role==="INTERVENANT"?["view","navigate","share","start","complete"]:user?.role==="VIEWER"?["view"]:[];
   const eventActions=Array.isArray(user?.permissions?.eventActions)?user.permissions.eventActions:defaultEventActions;
   const canEventAction=id=>isAdmin||eventActions.includes(id);
@@ -6422,11 +7082,157 @@ function Dashboard({onLogout,user}) {
       billedCount:billedEvents.length,
       giftCount:giftedEvents.length,
       billedAmount:sumRemaining(billedEvents),
-      giftAmount:sumTotal(giftedEvents)
+      giftAmount:0
     };
   },[events,isAdmin]);
 
+  /* LP28_BOOTH_USAGE_DASHBOARD_V4 */
+  const boothUsageDashboard=useMemo(()=>{
+    const now=new Date();now.setHours(12,0,0,0);
+    const monday=new Date(now);const day=(monday.getDay()+6)%7;monday.setDate(monday.getDate()-day);
+    const weekEnd=new Date(monday);weekEnd.setDate(weekEnd.getDate()+7);
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1,12,0,0,0);
+    const monthEnd=new Date(now.getFullYear(),now.getMonth()+1,1,12,0,0,0);
+    const yearStart=new Date(now.getFullYear(),0,1,12,0,0,0);
+    const yearEnd=new Date(now.getFullYear()+1,0,1,12,0,0,0);
+    const rows={
+      LOLA:{id:"LOLA",label:"Lola",icon:"🪞",type:"Miroir",format:"1080 × 1920",week:0,month:0,year:0,total:0,color:"#c084fc",last:null,next:null},
+      NINA:{id:"NINA",label:"Nina",icon:"📸",type:"Classique",format:"1920 × 1080",week:0,month:0,year:0,total:0,color:"#38bdf8",last:null,next:null},
+      GABIN:{id:"GABIN",label:"Gabin",icon:"✨",type:"Classique",format:"",week:0,month:0,year:0,total:0,color:"#fb923c",last:null,next:null}
+    };
+    (events||[]).forEach(event=>{
+      const booking=String(event?.bookingStatus||"").toUpperCase();
+      if(booking==="CANCELLED"||booking==="DECLINED")return;
+      const match=String(event?.date||"").match(/^(\d{4})-(\d{2})-(\d{2})/);if(!match)return;
+      const date=new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),12,0,0,0);
+      const materials=Array.isArray(event?.materials)?event.materials:[];const selected=[];
+      if(materials.includes("Borne Photobooth Miroir Lola"))selected.push("LOLA");
+      if(materials.includes("Borne Photobooth Nina"))selected.push("NINA");
+      if(materials.includes("Borne Photobooth Gabin"))selected.push("GABIN");
+      selected.forEach(id=>{
+        const row=rows[id];row.total+=1;
+        if(date>=monday&&date<weekEnd)row.week+=1;
+        if(date>=monthStart&&date<monthEnd)row.month+=1;
+        if(date>=yearStart&&date<yearEnd)row.year+=1;
+        const eventName=event.name||event.organizerName||"Événement";
+        if(date<=now&&(!row.last||date>row.last.date))row.last={date,name:eventName};
+        if(date>now&&(!row.next||date<row.next.date))row.next={date,name:eventName};
+      });
+    });
+    const list=[rows.LOLA,rows.NINA,rows.GABIN];
+    const total=list.reduce((acc,row)=>({week:acc.week+row.week,month:acc.month+row.month,year:acc.year+row.year,total:acc.total+row.total}),{week:0,month:0,year:0,total:0});
+    const formatDate=date=>date?date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+    return {list,total,formatDate};
+  },[events]);
+
   const dashboardMoney=value=>Number(value||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+  const lp28FinanceConfirmed=event=>["CONFIRMED","COMPLETED"].includes(String(event?.bookingStatus||"").toUpperCase());
+  const quoteSentDashboard=useMemo(()=>{
+    const dayMs=24*60*60*1000;
+    const today=new Date();today.setHours(12,0,0,0);
+    const parseDate=value=>{if(!value)return null;const raw=String(value);const d=/^\d{4}-\d{2}-\d{2}$/.test(raw)?new Date(raw+"T12:00:00"):new Date(value);return Number.isNaN(d.getTime())?null:d;};
+    const formatDate=value=>{const d=parseDate(value);return d?d.toLocaleDateString("fr-FR"):"—";};
+    const items=(events||[]).filter(event=>!event?.archived&&String(event?.bookingStatus||"").toUpperCase()==="QUOTE_SENT").map(event=>{
+      const sentAt=parseDate(event?.preparation?.quoteSentAt||event?.quoteSentAt||event?.updatedAt||event?.createdAt);
+      const expiresAt=sentAt?new Date(sentAt.getTime()+15*dayMs):null;
+      if(expiresAt)expiresAt.setHours(12,0,0,0);
+      const daysLeft=expiresAt?Math.ceil((expiresAt-today)/dayMs):null;
+      const urgent=daysLeft!==null&&daysLeft<=3;
+      const overdue=daysLeft!==null&&daysLeft<0;
+      const reminderSentAt=event?.preparation?.quoteReminderSentAt||null;
+      const needsReminder=overdue&&!reminderSentAt;
+      const statusLabel=daysLeft===null?"Date d’envoi inconnue":overdue?("Expiré depuis "+Math.abs(daysLeft)+" j"):daysLeft===0?"Expire aujourd’hui":daysLeft===1?"Expire demain":("Valide encore "+daysLeft+" j");
+      return {...event,_quoteSentAt:sentAt,_quoteExpiresAt:expiresAt,_quoteDaysLeft:daysLeft,_quoteUrgent:urgent,_quoteOverdue:overdue,_quoteReminderSentAt:reminderSentAt,_quoteNeedsReminder:needsReminder,_quoteStatusLabel:statusLabel};
+    }).sort((a,b)=>{const av=a._quoteDaysLeft??9999,bv=b._quoteDaysLeft??9999;return av-bv;});
+    return {items,count:items.length,warningCount:items.filter(event=>event._quoteUrgent).length,formatDate};
+  },[events]);
+  const quoteSentCount=quoteSentDashboard.count;
+  const confirmedFinanceDashboard=useMemo(()=>{
+    const now=new Date();now.setHours(12,0,0,0);
+    const monday=new Date(now);const day=(monday.getDay()+6)%7;monday.setDate(monday.getDate()-day);monday.setHours(0,0,0,0);
+    const weekEnd=new Date(monday);weekEnd.setDate(weekEnd.getDate()+7);
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0);
+    const nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1,0,0,0,0);
+    const parseDate=event=>{const m=String(event?.date||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0):null;};
+    const active=(events||[]).filter(event=>!event?.archived&&lp28FinanceConfirmed(event));
+    const remaining=event=>{if(event?.payments?.balancePaid===true)return 0;const b=Number(event?.balance);if(Number.isFinite(b))return Math.max(b,0);return Math.max(Number(event?.totalPrice||0)-Number(event?.deposit||0),0);};
+    const summarize=(items,period)=>{const billed=items.filter(event=>!event?.preparation?.gifted);const gifted=items.filter(event=>!!event?.preparation?.gifted);let giftAmount=0;if(period!=="week"){giftAmount=gifted.reduce((sum,event)=>{const d=parseDate(event);if(period==="month"&&d&&d>=monday&&d<weekEnd)return sum;return sum+Math.max(Number(event?.totalPrice||0),0);},0);}return {billedCount:billed.length,billedAmount:billed.reduce((sum,event)=>sum+remaining(event),0),giftCount:gifted.length,giftAmount};};
+    const week=active.filter(event=>{const d=parseDate(event);return d&&d>=monday&&d<weekEnd;});
+    const month=active.filter(event=>{const d=parseDate(event);return d&&d>=monthStart&&d<nextMonth;});
+    const future=active.filter(event=>{const d=parseDate(event);return d&&d>=nextMonth;});
+    return {week:summarize(week,"week"),month:summarize(month,"month"),future:summarize(future,"future")};
+  },[events]);
+
+  const dashboardPeriods=useMemo(()=>{
+    const now=new Date();
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1,0,0,0,0);
+    const nextMonth=new Date(now.getFullYear(),now.getMonth()+1,1,0,0,0,0);
+    const parseEventDate=event=>{
+      const match=String(event?.date||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(!match)return null;
+      return new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),12,0,0,0);
+    };
+    const valid=(event)=>!event?.archived&&parseEventDate(event);
+    const monthEvents=(events||[]).filter(event=>{const d=valid(event);return d&&d>=monthStart&&d<nextMonth;});
+    const futureEvents=(events||[]).filter(event=>{const d=valid(event);return d&&d>=nextMonth;});
+    const remainingForEvent=event=>{
+      if(event?.payments?.balancePaid===true)return 0;
+      const balance=Number(event?.balance);
+      if(Number.isFinite(balance))return Math.max(balance,0);
+      const total=Math.max(Number(event?.totalPrice||0),0);
+      const deposit=Math.max(Number(event?.deposit||0),0);
+      return Math.max(total-deposit,0);
+    };
+    const summarize=items=>{
+      const billed=items.filter(event=>!event?.preparation?.gifted);
+      const gifted=items.filter(event=>!!event?.preparation?.gifted);
+      return {
+        billedCount:billed.length,
+        billedAmount:billed.reduce((sum,event)=>sum+remainingForEvent(event),0),
+        giftCount:gifted.length,
+        giftAmount:gifted.reduce((sum,event)=>{const d=parseEventDate(event);const ref=new Date();const monday=new Date(ref);const day=(monday.getDay()+6)%7;monday.setHours(0,0,0,0);monday.setDate(monday.getDate()-day);const weekEnd=new Date(monday);weekEnd.setDate(weekEnd.getDate()+7);const amount=d&&d>=monday&&d<weekEnd?0:Math.max(Number(event?.totalPrice||0),0);return sum+amount;},0)
+      };
+    };
+    return {month:summarize(monthEvents),future:summarize(futureEvents)};
+  },[events]);
+
+  function saveDashboardOrder(next){
+    const clean=[...new Set((next||[]).filter(id=>DASHBOARD_DEFAULT_ORDER.includes(id)))];
+    const finalOrder=clean.concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!clean.includes(id)));
+    setDashboardOrder(finalOrder);
+    try{localStorage.setItem("lp28.dashboard.order",JSON.stringify(finalOrder));}catch{}
+  }
+  function dropDashboardCard(targetId){
+    if(dashboardLocked||!dashboardDragId||dashboardDragId===targetId)return setDashboardDragId(null);
+    const next=[...dashboardOrder];
+    const from=next.indexOf(dashboardDragId),to=next.indexOf(targetId);
+    if(from<0||to<0)return setDashboardDragId(null);
+    next.splice(from,1);
+    next.splice(to,0,dashboardDragId);
+    saveDashboardOrder(next);
+    setDashboardDragId(null);
+  }
+  function dropDashboardCardToEnd(){
+    if(dashboardLocked||!dashboardDragId)return setDashboardDragId(null);
+    const next=dashboardOrder.filter(id=>id!==dashboardDragId);
+    next.push(dashboardDragId);
+    saveDashboardOrder(next);
+    setDashboardDragId(null);
+  }
+  function toggleDashboardLock(){
+    const next=!dashboardLocked;
+    if(next){
+      // Au verrouillage, persiste une dernière fois l'ordre affiché avant tout changement de vue.
+      saveDashboardOrder(dashboardOrder);
+    }
+    setDashboardLocked(next);
+    try{localStorage.setItem("lp28.dashboard.locked",String(next));}catch{}
+  }
+  useEffect(()=>{
+    // Le composant Admin reste monté lors des changements de page : recharge l'ordre sauvegardé
+    // quand on revient au tableau de bord afin d'éviter qu'un état ancien réécrase la disposition.
+    if(view==="dashboard")setDashboardOrder(readDashboardOrder());
+  },[view]);
 
   const [eventTab,setEventTab]=useState("upcoming");
 
@@ -6516,7 +7322,7 @@ function Dashboard({onLogout,user}) {
       className:"week-current",
       start:lp28WeekStart,
       end:addLp28Days(lp28WeekStart,7),
-      label:`📅 ÉVÉNEMENTS DE LA SEMAINE — ${formatLp28WeekRange(
+      label:`📅 ÉVÉNEMENTS CETTE SEMAINE — ${formatLp28WeekRange(
         lp28WeekStart,
         addLp28Days(lp28WeekStart,6)
       )}`
@@ -6526,7 +7332,7 @@ function Dashboard({onLogout,user}) {
       className:"week-1",
       start:addLp28Days(lp28WeekStart,7),
       end:addLp28Days(lp28WeekStart,14),
-      label:`📅 SEMAINE +1 — ${formatLp28WeekRange(
+      label:`📅 ÉVÉNEMENTS SEMAINE PROCHAINE — ${formatLp28WeekRange(
         addLp28Days(lp28WeekStart,7),
         addLp28Days(lp28WeekStart,13)
       )}`
@@ -6536,7 +7342,7 @@ function Dashboard({onLogout,user}) {
       className:"week-2",
       start:addLp28Days(lp28WeekStart,14),
       end:addLp28Days(lp28WeekStart,21),
-      label:`📅 SEMAINE +2 — ${formatLp28WeekRange(
+      label:`📅 ÉVÉNEMENTS DANS 2 SEMAINES — ${formatLp28WeekRange(
         addLp28Days(lp28WeekStart,14),
         addLp28Days(lp28WeekStart,20)
       )}`
@@ -6546,7 +7352,7 @@ function Dashboard({onLogout,user}) {
       className:"week-3",
       start:addLp28Days(lp28WeekStart,21),
       end:addLp28Days(lp28WeekStart,28),
-      label:`📅 SEMAINE +3 — ${formatLp28WeekRange(
+      label:`📅 ÉVÉNEMENTS DANS 3 SEMAINES — ${formatLp28WeekRange(
         addLp28Days(lp28WeekStart,21),
         addLp28Days(lp28WeekStart,27)
       )}`
@@ -6831,6 +7637,27 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-1{--week-text:#93c5f
 html[data-lp28-theme="dark"] .event-list-section-title.week-2{--week-text:#d8b4fe}
 html[data-lp28-theme="dark"] .event-list-section-title.week-3{--week-text:#fcd34d}
 html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#cbd5e1}
+      /* Correctif sécurité affichage LP28 : liste hebdomadaire lisible pleine largeur */
+      .lp28-week-columns{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:14px!important;align-items:start!important;overflow:visible!important;padding-bottom:10px!important;}
+      .lp28-week-columns .event-list-section-title{grid-column:1!important;grid-row:auto!important;position:static!important;width:auto!important;min-width:0!important;min-height:0!important;display:block!important;margin-top:8px!important;}
+      .lp28-week-columns .event-list-section-title.week-current,
+      .lp28-week-columns .event-list-section-title.week-1,
+      .lp28-week-columns .event-list-section-title.week-2,
+      .lp28-week-columns .event-list-section-title.week-3,
+      .lp28-week-columns .event-list-section-title.week-later,
+      .lp28-week-columns .event-week-card.week-current,
+      .lp28-week-columns .event-week-card.week-1,
+      .lp28-week-columns .event-week-card.week-2,
+      .lp28-week-columns .event-week-card.week-3,
+      .lp28-week-columns .event-week-card.week-later{grid-column:1!important;grid-row:auto!important;}
+      .lp28-week-columns .event-card{grid-template-columns:250px minmax(0,1fr)!important;width:100%!important;max-width:none!important;min-width:0!important;}
+      .lp28-week-columns .event-date{border-right:1px solid rgba(148,163,184,.18)!important;border-bottom:0!important;}
+      .lp28-week-columns .event-content{min-width:0!important;}
+      .lp28-week-columns .event-actions{display:flex!important;flex-wrap:wrap!important;gap:7px!important;}
+      @media(max-width:760px){
+        .lp28-week-columns .event-card{grid-template-columns:1fr!important;}
+        .lp28-week-columns .event-date{border-right:0!important;border-bottom:1px solid rgba(148,163,184,.18)!important;}
+      }
       @media(max-width:760px){.booth-live-pill{font-size:.62rem;padding:2px 6px}.lp28-ops-banner{height:38px;border-radius:9px;font-size:.78rem}.event-list-section-title{font-size:.74rem}}
     `}</style>
 
@@ -6850,8 +7677,8 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           const allowed=Array.isArray(user?.permissions?.allowedModules)?user.permissions.allowedModules:(user?.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
           return allowed.includes(m.id);
         }).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""} ${m.id==="assistance"&&activeSavOps.length?"nav-assistance-alert":""}`} onClick={()=>navigate(m.id)}>
-          <span className="nav-main-label">{m.icon} {m.label}</span>
-          {m.id==="booths"&&isAdmin&&<span className={`booth-live-pill ${boothOnlineCount?"online":"offline"}`}>● LIVE {boothOnlineCount}/3</span>}
+          <span className="nav-main-label">{m.id==="booths"&&isAdmin&&boothProblemCount>0?<span className="lp28-booth-gyro" title={boothProblemTitle||"Anomalie détectée sur une borne"}>🚨</span>:m.icon} {m.label}</span>
+          {m.id==="booths"&&isAdmin&&<span title={boothProblemTitle||undefined} className={`booth-live-pill ${boothProblemCount>0?"alert":boothOnlineCount?"online":"offline"}`}>{boothProblemCount>0?`● ALERTE ${boothProblemCount}`:`● LIVE ${boothOnlineCount}/3`}</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length>0&&<span className="nav-assistance-triangle" title={`${activeSavOps.length} demande(s) d'assistance`}>⚠️</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length===0&&latestInfoSav&&view!=="assistance"&&<span className="nav-assistance-info" title={`${unreadInfoSav.length} information(s) N1 non lue(s)`}>ⓘ</span>}
         </button>)}
@@ -6876,47 +7703,116 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
       })()}
 
       {view==="dashboard" ? <>
-        <section className="stats-grid">
-          <article className="stat-card"><span>Événements</span><strong>{stats.events}</strong></article>
-          <article className="stat-card" style={{border:"1px solid rgba(245,158,11,.45)",background:"linear-gradient(135deg,rgba(120,72,18,.32),rgba(69,44,16,.24))"}}>
-            <span>🟠 Événements en cours</span>
-            <strong>{stats.inProgress||0}</strong>
-            <small className="muted">Jusqu'à « Prestation terminée »</small>
-          </article>
-          <article className="stat-card">
-            <span>Événements à venir</span>
-            <strong>{stats.upcoming}</strong>
-            <small className="muted">Aujourd'hui → dimanche 23h59</small>
-            {Number(stats.unsignedUpcomingContracts||0)>0
-              ? <div style={{marginTop:8,color:"#f59e0b",fontWeight:900}}>⚠️ {stats.unsignedUpcomingContracts} contrat{Number(stats.unsignedUpcomingContracts)>1?"s":""} non signé{Number(stats.unsignedUpcomingContracts)>1?"s":""}</div>
-              : <div style={{marginTop:8,color:"#16a34a",fontWeight:800}}>✅ Contrats à jour</div>}
-          </article>
-          <article className="stat-card"><span>Galeries actives</span><strong>{stats.activeGalleries}</strong></article>
-          <article className="stat-card"><span>Contrats signés</span><strong>{stats.signedContracts}</strong></article>
-
-          <article className="stat-card" style={{border:"1px solid rgba(59,130,246,.55)",background:"linear-gradient(135deg,rgba(37,99,235,.15),rgba(15,23,42,.32))"}}>
-            <span>🗓️ Événements cette semaine</span>
-            <strong style={{color:"#60a5fa"}}>{weeklyDashboard.count}</strong>
-            <small className="muted">Du lundi au dimanche</small>
-          </article>
-
-          {(isAdmin||user?.role==="INTERVENANT")&&<>
-          <article className="stat-card" style={{position:"relative",border:"1px solid rgba(168,85,247,.58)",background:"linear-gradient(135deg,rgba(126,34,206,.16),rgba(31,20,43,.32))"}}>
-            <button type="button" aria-label={showWeeklyBilledAmount?"Masquer le montant facturé":"Afficher le montant facturé"} title={showWeeklyBilledAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
-            <span>{isAdmin?"💶 Reste à encaisser cette semaine":"💶 Règlement à récupérer cette semaine"}</span>
-            <strong style={{color:"#c084fc",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyBilledAmount?dashboardMoney(weeklyDashboard.billedAmount):"****.** €"}</strong>
-            <small className="muted">{isAdmin?`${weeklyDashboard.billedCount} prestation${weeklyDashboard.billedCount>1?"s":""} · après déduction des règlements reçus`:`${weeklyDashboard.billedCount} mission${weeklyDashboard.billedCount>1?"s":""} avec règlement autorisé`}</small>
-          </article>
-
-          </>}
-          {isAdmin&&<>
-          <article className="stat-card" style={{position:"relative",border:"1px solid rgba(34,197,94,.55)",background:"linear-gradient(135deg,rgba(22,101,52,.18),rgba(13,36,25,.34))"}}>
-            <button type="button" aria-label={showWeeklyGiftAmount?"Masquer le montant des dons":"Afficher le montant des dons"} title={showWeeklyGiftAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",color:"#fff",fontSize:22,cursor:"pointer",padding:4}}>👁️</button>
-            <span>🎁 Don / prestation offerte</span>
-            <strong style={{color:"#4ade80",fontSize:"clamp(1.65rem,3vw,2.35rem)",paddingRight:42}}>{showWeeklyGiftAmount?dashboardMoney(weeklyDashboard.giftAmount):"****.** €"}</strong>
-            <small className="muted">{weeklyDashboard.giftCount} prestation{weeklyDashboard.giftCount>1?"s":""} offerte{weeklyDashboard.giftCount>1?"s":""}</small>
-          </article>          </>}
+        {isAdmin&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+          <button type="button" onClick={toggleDashboardLock} title={dashboardLocked?"Déverrouiller la disposition":"Verrouiller la disposition"} style={{display:"inline-flex",alignItems:"center",gap:8,border:"1px solid rgba(234,179,8,.45)",borderRadius:12,padding:"9px 13px",fontWeight:800,cursor:"pointer"}}>
+            {dashboardLocked?"🔒 Disposition verrouillée":"🔓 Déplacer les blocs"}
+          </button>
+        </div>}
+        <style>{`
+          .lp28-dashboard-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;margin-bottom:16px;}
+          .lp28-dashboard-item{min-width:0;}
+          .lp28-dashboard-item.summary{grid-column:span 3;}
+          .lp28-dashboard-item.finance{grid-column:span 4;}
+          .lp28-dashboard-item.live{grid-column:span 3;}
+          .lp28-dashboard-item.is-draggable{cursor:grab;outline:1px dashed rgba(234,179,8,.28);outline-offset:3px;}
+          .lp28-dashboard-item.is-dragging{opacity:.48;}
+          .lp28-dashboard-end-drop{grid-column:span 4;min-height:108px;border:1px dashed rgba(234,179,8,.5);border-radius:16px;display:flex;align-items:center;justify-content:center;text-align:center;color:#eab308;font-weight:800;background:rgba(234,179,8,.04);transition:.18s ease;}
+          .lp28-dashboard-end-drop:hover{background:rgba(234,179,8,.10);border-color:rgba(234,179,8,.85);}
+          .lp28-dashboard-item>.stat-card{height:100%;box-sizing:border-box;}
+          @media(max-width:1100px){.lp28-dashboard-item.summary,.lp28-dashboard-item.finance,.lp28-dashboard-item.live,.lp28-dashboard-end-drop{grid-column:span 6;}}
+          @media(max-width:700px){.lp28-dashboard-grid{grid-template-columns:1fr;}.lp28-dashboard-item.summary,.lp28-dashboard-item.finance,.lp28-dashboard-item.live,.lp28-dashboard-end-drop{grid-column:1;}}
+        `}</style>
+        <section className="lp28-dashboard-grid">
+          {dashboardOrder.map(id=>{
+            if(!isAdmin&&["quoteSent","liveBooths","monthBilled","futureBilled","weekGift","monthGift","futureGift"].includes(id))return null;
+            if(user?.role!=="ADMIN"&&user?.role!=="INTERVENANT"&&id==="weekBilled")return null;
+            const itemClass=["weekBilled","monthBilled","futureBilled","weekGift","monthGift","futureGift"].includes(id)?"finance":id==="liveBooths"?"live":"summary";
+            let card=null;
+            if(id==="events")card=<article className="stat-card"><span>Événements</span><strong>{stats.events}</strong></article>;
+            if(id==="quoteSent")card=<article className="stat-card" style={{position:"relative",border:quoteSentDashboard.warningCount>0?"1px solid rgba(239,68,68,.78)":"1px solid rgba(59,130,246,.58)",background:quoteSentDashboard.warningCount>0?"linear-gradient(135deg,rgba(127,29,29,.22),rgba(45,17,17,.30))":"linear-gradient(135deg,rgba(30,64,175,.18),rgba(15,23,42,.30))"}}><style>{"@keyframes lp28QuoteBlink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.28;transform:scale(1.16)}}"}</style>{quoteSentDashboard.warningCount>0&&<div title="Devis arrivant à échéance" style={{position:"absolute",right:12,top:10,display:"flex",alignItems:"center",gap:6,padding:"5px 8px",borderRadius:999,background:"#b91c1c",color:"#fff",fontWeight:950,fontSize:12,animation:"lp28QuoteBlink 1s ease-in-out infinite"}}>⚠️ {quoteSentDashboard.warningCount}</div>}<span>📤 Devis envoyés</span><strong style={{color:quoteSentDashboard.warningCount>0?"#f87171":"#60a5fa"}}>{quoteSentCount}</strong><small className="muted">Valables 15 jours · non comptabilisés dans les finances avant confirmation</small></article>;
+            if(id==="inProgress")card=<article className="stat-card" style={{border:"1px solid rgba(245,158,11,.45)",background:"linear-gradient(135deg,rgba(120,72,18,.32),rgba(69,44,16,.24))"}}><span>🟠 Événements en cours</span><strong>{stats.inProgress||0}</strong><small className="muted">Jusqu'à « Prestation terminée »</small></article>;
+            if(id==="upcoming")card=<article className="stat-card"><span>Événements à venir</span><strong>{stats.upcoming}</strong><small className="muted">Aujourd'hui → dimanche 23h59</small>{Number(stats.unsignedUpcomingContracts||0)>0?<div style={{marginTop:8,color:"#f59e0b",fontWeight:900}}>⚠️ {stats.unsignedUpcomingContracts} contrat{Number(stats.unsignedUpcomingContracts)>1?"s":""} non signé{Number(stats.unsignedUpcomingContracts)>1?"s":""}</div>:<div style={{marginTop:8,color:"#16a34a",fontWeight:800}}>✅ Contrats à jour</div>}</article>;
+            if(id==="contracts")card=<article className="stat-card"><span>📄 Contrats signés</span><strong>{stats.signedContracts||0} / {stats.events||0}</strong><small className="muted">contrats signés / événements</small></article>;
+            if(id==="weekEvents")card=<article className="stat-card" style={{border:"1px solid rgba(59,130,246,.55)",background:"linear-gradient(135deg,rgba(37,99,235,.15),rgba(15,23,42,.32))"}}><span>🗓️ Événements cette semaine</span><strong style={{color:"#60a5fa"}}>{weeklyDashboard.count}</strong><small className="muted">Du lundi au dimanche</small></article>;
+            if(id==="liveBooths")card=<article className="stat-card" style={{border:`1px solid ${boothOnlineCount>0?"rgba(34,197,94,.6)":"rgba(239,68,68,.65)"}`,background:boothOnlineCount>0?"linear-gradient(135deg,rgba(22,101,52,.16),rgba(13,36,25,.28))":"linear-gradient(135deg,rgba(127,29,29,.16),rgba(45,17,17,.28))"}}><span>📸 Bornes en live</span><div style={{display:"flex",alignItems:"center",gap:12}}><strong>{boothOnlineCount} / 3</strong><span title={boothOnlineCount>0?`${boothOnlineCount} borne${boothOnlineCount>1?"s":""} en ligne`:"Aucune borne en ligne"} style={{width:15,height:15,borderRadius:"50%",display:"inline-block",background:boothOnlineCount>0?"#22c55e":"#ef4444",boxShadow:boothOnlineCount>0?"0 0 12px rgba(34,197,94,.8)":"0 0 12px rgba(239,68,68,.8)"}}/></div><small className="muted">Statut direct des agents LP28</small></article>;
+            if(id==="weekBilled")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(168,85,247,.58)",background:"linear-gradient(135deg,rgba(126,34,206,.16),rgba(31,20,43,.32))"}}><button type="button" aria-label={showWeeklyBilledAmount?"Masquer le montant":"Afficher le montant"} onClick={()=>setShowWeeklyBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>{isAdmin?"💶 Reste à encaisser cette semaine":"💶 Règlement à récupérer cette semaine"}</span><strong style={{color:"#c084fc",paddingRight:42}}>{showWeeklyBilledAmount?dashboardMoney(confirmedFinanceDashboard.week.billedAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.week.billedCount} prestation{confirmedFinanceDashboard.week.billedCount>1?"s":""} · après déduction des règlements reçus</small></article>;
+            if(id==="monthBilled")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(244,63,94,.58)",background:"linear-gradient(135deg,rgba(159,18,57,.15),rgba(48,18,28,.30))"}}><button type="button" onClick={()=>setShowMonthBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>💶 Reste à encaisser ce mois-ci</span><strong style={{color:"#fb7185",paddingRight:42}}>{showMonthBilledAmount?dashboardMoney(confirmedFinanceDashboard.month.billedAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.month.billedCount} prestation{confirmedFinanceDashboard.month.billedCount>1?"s":""} · après déduction des règlements reçus</small></article>;
+            if(id==="futureBilled")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(20,184,166,.58)",background:"linear-gradient(135deg,rgba(13,148,136,.14),rgba(15,50,48,.28))"}}><button type="button" onClick={()=>setShowFutureBilledAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>💶 Reste à encaisser à venir</span><strong style={{color:"#2dd4bf",paddingRight:42}}>{showFutureBilledAmount?dashboardMoney(confirmedFinanceDashboard.future.billedAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.future.billedCount} prestation{confirmedFinanceDashboard.future.billedCount>1?"s":""} · à partir du mois prochain</small></article>;
+            if(id==="weekGift")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(34,197,94,.55)",background:"linear-gradient(135deg,rgba(22,101,52,.18),rgba(13,36,25,.34))"}}><button type="button" onClick={()=>setShowWeeklyGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>🎁 Don / prestation offerte cette semaine</span><strong style={{color:"#4ade80",paddingRight:42}}>{showWeeklyGiftAmount?dashboardMoney(confirmedFinanceDashboard.week.giftAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.week.giftCount} prestation{confirmedFinanceDashboard.week.giftCount>1?"s":""} offerte{confirmedFinanceDashboard.week.giftCount>1?"s":""}</small></article>;
+            if(id==="monthGift")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(249,115,22,.58)",background:"linear-gradient(135deg,rgba(194,65,12,.16),rgba(56,28,15,.30))"}}><button type="button" onClick={()=>setShowMonthGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>🎁 Don / prestation offerte ce mois-ci</span><strong style={{color:"#fb923c",paddingRight:42}}>{showMonthGiftAmount?dashboardMoney(confirmedFinanceDashboard.month.giftAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.month.giftCount} prestation{confirmedFinanceDashboard.month.giftCount>1?"s":""} offerte{confirmedFinanceDashboard.month.giftCount>1?"s":""}</small></article>;
+            if(id==="futureGift")card=<article className="stat-card" style={{position:"relative",border:"1px solid rgba(234,179,8,.58)",background:"linear-gradient(135deg,rgba(161,98,7,.16),rgba(52,38,10,.30))"}}><button type="button" onClick={()=>setShowFutureGiftAmount(v=>!v)} style={{position:"absolute",right:14,top:12,border:0,background:"transparent",fontSize:22,cursor:"pointer",padding:4}}>👁️</button><span>🎁 Don / prestation offerte à venir</span><strong style={{color:"#facc15",paddingRight:42}}>{showFutureGiftAmount?dashboardMoney(confirmedFinanceDashboard.future.giftAmount):"****.** €"}</strong><small className="muted">{confirmedFinanceDashboard.future.giftCount} prestation{confirmedFinanceDashboard.future.giftCount>1?"s":""} offerte{confirmedFinanceDashboard.future.giftCount>1?"s":""} · à partir du mois prochain</small></article>;
+            if(!card)return null;
+            return <div key={id} className={`lp28-dashboard-item ${itemClass} ${!dashboardLocked&&isAdmin?"is-draggable":""} ${dashboardDragId===id?"is-dragging":""}`} draggable={!dashboardLocked&&isAdmin} onDragStart={()=>setDashboardDragId(id)} onDragEnd={()=>setDashboardDragId(null)} onDragOver={e=>{if(!dashboardLocked&&isAdmin)e.preventDefault();}} onDrop={e=>{e.preventDefault();dropDashboardCard(id);}}>{card}</div>;
+          })}
+          {!dashboardLocked&&isAdmin&&<div className="lp28-dashboard-end-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();dropDashboardCardToEnd();}}>⬇️ Déposer ici pour placer le bloc à la fin</div>}
         </section>
+{isAdmin&&<section style={{margin:"18px 0",border:"1px solid rgba(59,130,246,.38)",borderRadius:18,overflow:"hidden",background:"rgba(15,23,42,.22)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,padding:"16px 18px",borderBottom:"1px solid rgba(148,163,184,.15)",flexWrap:"wrap"}}>
+            <div><div className="panel-kicker">SUIVI COMMERCIAL</div><h2 style={{margin:"3px 0"}}>📤 Devis envoyés</h2><p className="muted" style={{margin:0}}>Récapitulatif des devis en attente de confirmation · validité 15 jours.</p></div>
+            {quoteSentDashboard.warningCount>0&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderRadius:999,background:"rgba(185,28,28,.92)",color:"#fff",fontWeight:950,animation:"lp28QuoteBlink 1s ease-in-out infinite"}}>⚠️ {quoteSentDashboard.warningCount} devis à surveiller</div>}
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:1080}}>
+              <thead><tr style={{background:"rgba(148,163,184,.07)"}}><th style={{padding:"11px 14px",textAlign:"left"}}>Nom / client</th><th style={{padding:"11px 14px",textAlign:"left"}}>Date événement</th><th style={{padding:"11px 14px",textAlign:"left"}}>Statut</th><th style={{padding:"11px 14px",textAlign:"left"}}>Devis envoyé</th><th style={{padding:"11px 14px",textAlign:"left"}}>Échéance</th><th style={{padding:"11px 14px",textAlign:"left"}}>Validité</th><th style={{padding:"11px 14px",textAlign:"left"}}>Relance</th></tr></thead>
+              <tbody>{quoteSentDashboard.items.length===0?<tr><td colSpan={7} style={{padding:"18px 14px",textAlign:"center",color:"#94a3b8",fontWeight:700}}>Aucun devis envoyé actuellement.</td></tr>:quoteSentDashboard.items.map(event=><tr key={event.id} style={{borderTop:"1px solid rgba(148,163,184,.12)",background:event._quoteNeedsReminder?"rgba(245,158,11,.18)":event._quoteUrgent&&!event._quoteOverdue?"rgba(245,158,11,.08)":"transparent",boxShadow:event._quoteNeedsReminder?"inset 4px 0 0 #f59e0b":"none"}}><td style={{padding:"12px 14px"}}><strong>{event.name||event.organizerName||"Événement"}</strong>{event.organizerName&&event.name&&<div className="muted" style={{fontSize:12,marginTop:2}}>{event.organizerName}</div>}</td><td style={{padding:"12px 14px",fontWeight:800}}>{quoteSentDashboard.formatDate(event.date)}</td><td style={{padding:"12px 14px"}}><span style={{padding:"5px 9px",borderRadius:999,background:"rgba(59,130,246,.13)",color:"#60a5fa",fontWeight:900}}>📤 Devis envoyé</span></td><td style={{padding:"12px 14px"}}>{quoteSentDashboard.formatDate(event._quoteSentAt)}</td><td style={{padding:"12px 14px",fontWeight:800}}>{quoteSentDashboard.formatDate(event._quoteExpiresAt)}</td><td style={{padding:"12px 14px"}}><span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 9px",borderRadius:999,background:event._quoteOverdue?"rgba(239,68,68,.16)":event._quoteUrgent?"rgba(245,158,11,.15)":"rgba(34,197,94,.12)",color:event._quoteOverdue?"#f87171":event._quoteUrgent?"#fbbf24":"#4ade80",fontWeight:950}}>{event._quoteUrgent?"⚠️":"✅"} {event._quoteStatusLabel}</span></td><td style={{padding:"12px 14px",minWidth:230}}>{event._quoteReminderSentAt?<div><div style={{fontWeight:900,color:"#4ade80"}}>✅ Relancé</div><div className="muted" style={{fontSize:12,marginTop:3}}>{new Date(event._quoteReminderSentAt).toLocaleString("fr-FR")}</div></div>:event._quoteOverdue?<div style={{display:"flex",gap:7,flexWrap:"wrap"}}><button type="button" onClick={()=>sendQuoteReminderWhatsApp(event)} disabled={!event.organizerPhone||!quoteManualUrl(event)} title={!event.organizerPhone?"Téléphone client manquant":!quoteManualUrl(event)?"Lien du devis manquant":"Relancer le client par WhatsApp"}>🟢 WhatsApp</button><button type="button" onClick={()=>copyQuoteReminder(event)} disabled={!quoteManualUrl(event)} title={!quoteManualUrl(event)?"Lien du devis manquant":"Copier le message de relance"}>📋 Copier</button>{!quoteManualUrl(event)&&<div style={{width:"100%",fontSize:11,color:"#fbbf24",fontWeight:800}}>🔗 Lien devis à renseigner</div>}</div>:<span className="muted">Pas encore à relancer</span>}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>}
+                {isAdmin&&<section className="lp28-booth-usage-v4" style={{margin:"18px 0",padding:0,overflow:"hidden",border:"1px solid rgba(214,185,79,.38)",borderRadius:22,background:"linear-gradient(135deg,#1b1710,#101012)",width:"100%",display:"block"}}>
+          <style>{`
+            .lp28-booth-usage-v4{box-sizing:border-box;}
+            .lp28-booth-usage-v4 .booth-head{width:100%;padding:18px 20px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid rgba(148,163,184,.16);box-sizing:border-box}
+            .lp28-booth-usage-v4 .booth-table-wrap{width:100%;overflow:hidden}
+            .lp28-booth-usage-v4 .booth-table{width:100%;border-collapse:collapse;table-layout:fixed}
+            .lp28-booth-usage-v4 .booth-table th{padding:11px 8px;font-size:11px;line-height:1.15;text-align:center;background:rgba(148,163,184,.06);white-space:normal}
+            .lp28-booth-usage-v4 .booth-table th:first-child,.lp28-booth-usage-v4 .booth-table th:nth-child(2),.lp28-booth-usage-v4 .booth-table th:nth-child(8),.lp28-booth-usage-v4 .booth-table th:nth-child(9){text-align:left}
+            .lp28-booth-usage-v4 .booth-table td{padding:13px 8px;border-top:1px solid rgba(148,163,184,.12);font-size:12px;vertical-align:middle;overflow:hidden}
+            .lp28-booth-usage-v4 .booth-name{font-size:15px;font-weight:950;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-type{font-weight:900;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-format{font-size:10px;margin-top:2px;white-space:nowrap}
+            .lp28-booth-usage-v4 .booth-status{display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap;max-width:100%;box-sizing:border-box}
+            .lp28-booth-usage-v4 .booth-number{text-align:center;font-size:14px;font-weight:950}
+            .lp28-booth-usage-v4 .booth-total-badge{display:inline-block;min-width:34px;padding:6px 7px;border-radius:9px;font-size:15px;font-weight:950;text-align:center}
+            .lp28-booth-usage-v4 .booth-event-date{font-weight:900;white-space:nowrap;font-size:11px}
+            .lp28-booth-usage-v4 .booth-event-name{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .lp28-booth-usage-v4 .booth-footer{width:100%;padding:11px 16px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(148,163,184,.12);font-size:11px;box-sizing:border-box}
+            @media(max-width:1180px){
+              .lp28-booth-usage-v4 .booth-table th{font-size:9px;padding:8px 4px}
+              .lp28-booth-usage-v4 .booth-table td{font-size:10px;padding:10px 4px}
+              .lp28-booth-usage-v4 .booth-name{font-size:12px}
+              .lp28-booth-usage-v4 .booth-status{font-size:9px;padding:4px 5px}
+              .lp28-booth-usage-v4 .booth-event-date{font-size:10px}
+              .lp28-booth-usage-v4 .booth-event-name{font-size:9px}
+            }
+          `}</style>
+          <div className="booth-head">
+            <div><div className="panel-kicker">SUIVI DU MATÉRIEL</div><h2 style={{margin:"4px 0"}}>📸 Utilisation des bornes</h2><p className="muted" style={{margin:0}}>Nombre de prestations réservées avec chaque borne.</p></div>
+            <div style={{padding:"8px 12px",borderRadius:999,border:"1px solid rgba(96,165,250,.28)",background:"rgba(59,130,246,.08)",fontSize:11,fontWeight:800}}>Hors événements annulés / refusés</div>
+          </div>
+          <div className="booth-table-wrap">
+            <table className="booth-table">
+              <colgroup><col style={{width:"9%"}}/><col style={{width:"10%"}}/><col style={{width:"11%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"9%"}}/><col style={{width:"7%"}}/><col style={{width:"18%"}}/><col style={{width:"18%"}}/></colgroup>
+              <thead><tr><th>Borne</th><th>Type</th><th>Statut</th><th>Cette semaine</th><th>Ce mois-ci</th><th>Cette année</th><th>Total</th><th>Dernière utilisation</th><th>Prochain événement</th></tr></thead>
+              <tbody>
+                {boothUsageDashboard.list.map(row=>{
+                  const live=opsBooths.find(b=>Object.values(b||{}).some(v=>typeof v==="string"&&v.toUpperCase().includes(row.id)));
+                  const online=!!live?.online;
+                  return <tr key={row.label}>
+                    <td><div className="booth-name" style={{color:row.color}}>{row.icon} {row.label}</div></td>
+                    <td><div className="booth-type">{row.type}</div>{row.format&&<div className="muted booth-format">{row.format}</div>}</td>
+                    <td><span className="booth-status" style={{background:online?"rgba(34,197,94,.14)":"rgba(148,163,184,.12)",color:online?"#4ade80":"#cbd5e1"}}><span style={{width:8,height:8,borderRadius:"50%",background:online?"#22c55e":"#94a3b8",flex:"0 0 auto"}}/>{online?"En ligne":"Disponible"}</span></td>
+                    <td className="booth-number">{row.week}</td><td className="booth-number">{row.month}</td><td className="booth-number">{row.year}</td>
+                    <td className="booth-number"><span className="booth-total-badge" style={{background:row.color+"22",color:row.color}}>{row.total}</span></td>
+                    <td><div className="booth-event-date">{boothUsageDashboard.formatDate(row.last?.date)}</div><div className="muted booth-event-name" title={row.last?.name||""}>{row.last?.name||"Aucune utilisation enregistrée"}</div></td>
+                    <td><div className="booth-event-date">{boothUsageDashboard.formatDate(row.next?.date)}</div><div className="muted booth-event-name" title={row.next?.name||""}>{row.next?.name||"Aucun événement prévu"}</div></td>
+                  </tr>;
+                })}
+                <tr style={{background:"rgba(214,185,79,.07)"}}><td colSpan={3} style={{fontWeight:950,color:"#f4c542",fontSize:13}}>📊 Total utilisations</td><td className="booth-number">{boothUsageDashboard.total.week}</td><td className="booth-number">{boothUsageDashboard.total.month}</td><td className="booth-number">{boothUsageDashboard.total.year}</td><td className="booth-number" style={{color:"#f4c542",fontSize:16}}>{boothUsageDashboard.total.total}</td><td>—</td><td>—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="booth-footer"><span><b style={{color:"#22c55e"}}>●</b> En ligne : agent LP28 connecté</span><span><b style={{color:"#94a3b8"}}>●</b> Disponible : borne hors ligne / prête</span><span className="muted">Compteurs calculés automatiquement depuis les événements LP28.</span></div>
+        </section>}
         <section className="panel dashboard-panel"><div><div className="panel-kicker">GESTION DES ÉVÉNEMENTS</div><h2>Prépare tes prestations en quelques clics</h2><p>Crée un événement, sélectionne le matériel réservé et récupère immédiatement les liens organisateur et invités ainsi que le QR Code.</p><button className="primary" onClick={()=>setView("events")}>Voir mes événements</button></div><img src="/logo-hd.png"/></section>
       </> : view==="events" ? <>
         <div className="event-tabs" style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
@@ -6938,7 +7834,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           >📦 Archivées <strong style={{marginLeft:6}}>{eventTabCounts.archived}</strong></button>
         </div>
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
-        <div className="events-list">
+        <div className={eventTab==="upcoming"?"events-list lp28-week-columns":"events-list"}>
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
           {filtered.map((event,eventIndex)=>{
             const weekSection=eventTab==="upcoming"
@@ -6983,6 +7879,19 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                   {event.bookingStatus==="OPTION"?"🟠 Option":event.bookingStatus==="QUOTE_SENT"?"📤 Devis envoyé":event.bookingStatus==="QUOTE_DRAFT"?"📝 Devis":event.bookingStatus==="CONFIRMED"?"🟢 Confirmé":event.bookingStatus==="COMPLETED"?"🔵 Terminé":event.bookingStatus==="DECLINED"?"⚪ Refusé":event.bookingStatus==="CANCELLED"?"🔴 Annulé":"Statut"}
                 </span>
               </div>
+              {quoteIsExpired(event)&&<div style={{margin:"10px 0 12px",padding:"12px 14px",borderRadius:14,border:"1px solid #f59e0b",background:"rgba(245,158,11,.10)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <strong>⚠️ Devis expiré — relance disponible</strong>
+                  <span className="muted" style={{fontSize:12}}>Valable jusqu’au {quoteDateLabel(quoteExpiryDate(event)?.toISOString().slice(0,10))}</span>
+                </div>
+                {!quoteManualUrl(event)&&<div style={{marginTop:8,fontSize:12,color:"#f59e0b"}}>🔗 Lien du devis manquant : ouvre la fiche événement pour le renseigner.</div>}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+                  <button type="button" onClick={()=>sendQuoteReminderWhatsApp(event)} disabled={!event.organizerPhone||!quoteManualUrl(event)} title={!event.organizerPhone?"Ajoute le téléphone du client":!quoteManualUrl(event)?"Renseigne le lien du devis":"Ouvrir WhatsApp avec la relance préremplie"}>🟢 WhatsApp</button>
+                  <button type="button" onClick={()=>copyQuoteReminder(event)} disabled={!quoteManualUrl(event)}>📋 Copier la relance</button>
+                  <button type="button" onClick={()=>openQuoteConsultation(event)} disabled={!quoteManualUrl(event)}>🔗 Voir le devis</button>
+                </div>
+                {event.preparation?.quoteReminderSentAt&&<div className="muted" style={{fontSize:12,marginTop:8}}>🔔 Dernière relance : {new Date(event.preparation.quoteReminderSentAt).toLocaleString("fr-FR")}</div>}
+              </div>}
               <div style={{display:"flex",gap:12,flexWrap:"wrap",margin:"14px 0 10px"}}>
                 <div style={{
                   flex:"1 1 250px",minWidth:220,maxWidth:390,padding:"16px 20px",borderRadius:18,
@@ -7021,7 +7930,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
               </div>}
 
               <div className="event-meta">
-                <span>{event.type}{event.organizerName?` · ${event.organizerName}`:""}{event.archived?" · Archivé":""}</span>
+                <span>{event.type}{event.organizerName?` · ${event.organizerName}${event.preparation?.clientFirstName?` ${event.preparation.clientFirstName}`:""}`:""}{event.archived?" · Archivé":""}</span>
                 <span>📍 {event.address||"Adresse non renseignée"}</span>
                 <span>📦 {event.materials?.length||0} sélection(s)</span>
                 {event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}
@@ -7086,6 +7995,10 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           setDocumentEvent(event);
           setViewEvent(null);
         }}
+        onShare={event=>{
+          setShareEvent(event);
+          setViewEvent(null);
+        }}
         isAdmin={isAdmin}
         canEventAction={canEventAction}
       />
@@ -7098,6 +8011,53 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
 function CollaboratorPortalPage({token}){
   const [data,setData]=useState(null);
   const [error,setError]=useState("");
+  const [prepSaving,setPrepSaving]=useState(false);
+
+  /* LP28_COLLAB_PREPARATION_V1 */
+  const collabMaterialNames=(data?.mission?.materials||[]).map(m=>String(m?.name||m||"")).filter(Boolean);
+  const collabBooths=collabMaterialNames.filter(m=>/borne photobooth/i.test(m));
+  const collabHasPrint=collabMaterialNames.some(m=>/forfait (100|200|300|400|700)|impressions personnalisé/i.test(m));
+  const collabPrepItems=[];
+  collabBooths.forEach(b=>collabPrepItems.push({id:"booth-"+b,label:b,icon:"📸"}));
+  if(collabBooths.length){
+    collabPrepItems.push({id:"camera",label:"Appareil photo",icon:"📷"});
+    collabPrepItems.push({id:"umbrella",label:"Parapluie pour flash",icon:"☂️"});
+    collabPrepItems.push({id:"flash-ms300",label:"Flash Godox MS300",icon:"💡"});
+    collabPrepItems.push({id:"extension",label:"Rallonge électrique",icon:"🔌"});
+    collabPrepItems.push({id:"support",label:"Mange-debout ou tonneau",icon:"🪵"});
+  }
+  if(collabHasPrint){
+    collabPrepItems.push({id:"printer",label:"Imprimante",icon:"🖨️"});
+    collabPrepItems.push({id:"paper",label:"Papier photo / consommables",icon:"🧻"});
+  }
+  collabMaterialNames
+    .filter(m=>/livre d.or|karaok|enceinte|micro|fontaine|jet d.|poteaux|toile|clé usb/i.test(m))
+    .forEach((m,i)=>collabPrepItems.push({
+      id:"option-"+(String(m).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||i),
+      label:m,
+      icon:/livre d.or/i.test(m)?"☎️":/karaok/i.test(m)?"🎤":/enceinte|micro/i.test(m)?"🔊":/fontaine/i.test(m)?"🍹":/jet d./i.test(m)?"✨":"📦"
+    }));
+  const collabPrepChecks=(data?.preparation?.checklist&&typeof data.preparation.checklist==="object")?data.preparation.checklist:{};
+  const collabPrepDone=collabPrepItems.filter(i=>collabPrepChecks[i.id]===true).length;
+  const collabPrepTotal=collabPrepItems.length;
+  const collabPrepPercent=collabPrepTotal?Math.round(collabPrepDone*100/collabPrepTotal):0;
+  async function saveCollabPrep(id,checked){
+    const previous={...collabPrepChecks};
+    const next={...previous,[id]:checked};
+    setData(d=>({...d,preparation:{...(d?.preparation||{}),checklist:next}}));
+    setPrepSaving(true);
+    try{
+      const r=await fetch(`/api/collaborator-portal/${encodeURIComponent(token)}/preparation-checklist`,{
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checklist:next})
+      });
+      const result=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(result.message||"Enregistrement impossible.");
+      setData(d=>({...d,preparation:{...(d?.preparation||{}),checklist:result.checklist||next}}));
+    }catch(err){
+      setData(d=>({...d,preparation:{...(d?.preparation||{}),checklist:previous}}));
+      alert(err.message||"Impossible d'enregistrer la préparation.");
+    }finally{setPrepSaving(false);}
+  }
 
   useEffect(()=>{
     fetch(`/api/collaborator-portal/${encodeURIComponent(token)}`)
@@ -7227,12 +8187,22 @@ function CollaboratorPortalPage({token}){
           </section>
         )}
 
+        <section className="portal-section" id="preparation-collaborateur">
+          <style>{`
+            .collab-prep-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.collab-prep-badge{padding:6px 10px;border-radius:999px;border:1px solid rgba(34,201,139,.35);background:rgba(34,201,139,.09);color:#8df0cb;font-size:12px;font-weight:900}.collab-prep-progress{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:10px 0 14px}.collab-prep-progress span{display:block;height:100%;background:linear-gradient(90deg,#2e8cff,#22c98b);border-radius:inherit}.collab-prep-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.collab-prep-item{display:flex!important;align-items:center;gap:9px;padding:11px 12px;margin:0!important;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:rgba(255,255,255,.025);cursor:pointer}.collab-prep-item.done{border-color:rgba(34,201,139,.35);background:rgba(34,201,139,.08)}.collab-prep-item input{width:21px!important;height:21px!important;margin:0!important;accent-color:#22c98b}.collab-prep-ready{margin-top:12px;padding:10px 12px;border:1px solid rgba(34,201,139,.38);border-radius:11px;background:rgba(34,201,139,.1);color:#91f2d0;font-weight:900;text-align:center}.collab-prep-empty{color:#aeb8c7;font-size:13px;padding:10px 0}@media(max-width:700px){.collab-prep-grid{grid-template-columns:1fr}}
+          `}</style>
+          <div className="collab-prep-head"><h2 style={{margin:0}}>✅ Préparation</h2><span className="collab-prep-badge">{collabPrepDone}/{collabPrepTotal} · {collabPrepPercent}%{prepSaving?" · sauvegarde…":""}</span></div>
+          <div className="collab-prep-progress"><span style={{width:collabPrepPercent+"%"}}/></div>
+          {collabPrepTotal>0?<div className="collab-prep-grid">{collabPrepItems.map(item=><label key={item.id} className={collabPrepChecks[item.id]?"collab-prep-item done":"collab-prep-item"}><input type="checkbox" checked={collabPrepChecks[item.id]===true} onChange={e=>saveCollabPrep(item.id,e.target.checked)}/><span>{item.icon}</span><strong>{item.label}</strong></label>)}</div>:<div className="collab-prep-empty">Aucun matériel de préparation détecté pour cette prestation.</div>}
+          {collabPrepTotal>0&&collabPrepDone===collabPrepTotal&&<div className="collab-prep-ready">✅ Matériel prêt pour l’événement</div>}
+        </section>
+
         {data.client && (
           <section className="portal-section">
             <h2>👤 Contact client</h2>
 
             {data.client.name && (
-              <p><strong>{data.client.name}</strong></p>
+              <p><strong>{[data.client.name,data.client.firstName].filter(Boolean).join(" ")}</strong></p>
             )}
 
             {data.client.phone && (
