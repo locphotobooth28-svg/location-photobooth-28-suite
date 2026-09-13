@@ -40,6 +40,11 @@ function applyAppearance(pref){
 
 function LP28ThemeStyles(){
   return <style>{`
+    @keyframes lp28PrinterBlink{0%,100%{opacity:1;filter:none}50%{opacity:.25;filter:brightness(1.8)}}
+    .lp28-printer-blink{display:inline-block;animation:lp28PrinterBlink 1s steps(2,end) infinite;}
+    .lp28-printer-warning{color:#d97706;font-weight:600;}
+    .lp28-printer-error{color:#dc2626;font-weight:700;}
+
     html[data-lp28-theme="light"],html[data-lp28-theme="light"] body,
     html[data-lp28-theme="light"] #root{background:#f5f3ee !important;color:#151515 !important;}
     html[data-lp28-theme="light"] .app-shell,
@@ -4597,6 +4602,17 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
 
 
+function lp28PrinterUiState(p){
+  if(!p?.present)return {dot:"⚪",blink:false,tone:"offline",label:"Aucune",showCode:false};
+  const severity=String(p.statusSeverity||"").toUpperCase();
+  const raw=String(p.rawStatus||"").toUpperCase();
+  if(severity==="ERROR")return {dot:"🔴",blink:true,tone:"error",label:p.statusLabel||"Erreur imprimante",showCode:true};
+  if(severity==="WARNING")return {dot:"🟠",blink:true,tone:"warning",label:p.statusLabel||"Avertissement",showCode:true};
+  if(severity==="OFFLINE"||p.statusFresh===false)return {dot:"⚪",blink:false,tone:"offline",label:p.statusLabel||"Supervision indisponible",showCode:Boolean(raw)};
+  if(severity==="PRINTING"||severity==="INFO")return {dot:"🔵",blink:false,tone:"info",label:p.statusLabel||"En cours",showCode:false};
+  return {dot:"🟢",blink:false,tone:"ok",label:p.statusLabel||"Prête",showCode:false};
+}
+
 function AdminBooths(){
   const [booths,setBooths]=useState([]),[error,setError]=useState(""),[busy,setBusy]=useState("");
   async function load(){try{const r=await fetch("/api/admin/booths");const d=await r.json();if(!r.ok)throw new Error(d.message||"Supervision indisponible.");setBooths(d.booths||[]);setError("")}catch(e){setError(e.message)}}
@@ -4624,10 +4640,14 @@ function AdminBooths(){
           <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"} <span className="muted">— {b.lumaVersion?`v${String(b.lumaVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
           <div>🤖 Agent LP28 : {b.online?"🟢 Connecté":"⚪ Hors ligne"} <span className="muted">— {b.agentVersion?`v${String(b.agentVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
           <div>📡 Supervision : {b.syncStatus||"—"}</div>
-          <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
-          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&<div><b>📄 Papier :</b> {b.printer.mediaRemaining}{b.printer.mediaCapacity?` / ${b.printer.mediaCapacity}`:""}</div>}
-          {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
-          {b.printer?.printCount&&<div>🔢 Compteur imprimante : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
+          {(()=>{const ps=lp28PrinterUiState(b.printer);return <>
+            <div>🖨️ Imprimante : <span className={ps.blink?"lp28-printer-blink":""}>{ps.dot}</span> {b.printer?.model||ps.label}</div>
+            {ps.showCode&&b.printer?.rawStatus&&<div className={ps.tone==="error"?"lp28-printer-error":"lp28-printer-warning"}>{ps.tone==="error"?"⛔":"⚠️"} <b>{b.printer.rawStatus}</b> — {ps.label}</div>}
+            {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&<div><b>📄 Papier :</b> {b.printer.mediaRemaining}{b.printer.mediaCapacity?` / ${b.printer.mediaCapacity}`:""}</div>}
+            {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
+            {b.printer?.lifeCounter!=null&&<div className="muted">🔢 Compteur : {Number(b.printer.lifeCounter).toLocaleString("fr-FR")}</div>}
+            {b.printer?.firmwareVersion&&<div className="muted">⚙️ Firmware : {b.printer.firmwareVersion}</div>}
+          </>})()}
           <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
         </div>
         <div className="booth-control-panel">
