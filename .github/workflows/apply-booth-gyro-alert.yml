@@ -1,0 +1,44 @@
+name: Apply booth gyro alert patch
+
+on:
+  push:
+    branches:
+      - feature/booth-gyro-alert-clean
+    paths:
+      - scripts/apply-booth-gyro-alert.mjs
+      - .github/workflows/apply-booth-gyro-alert.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/booth-gyro-alert-clean
+          fetch-depth: 0
+
+      - name: Apply LP28 booth alert patch
+        run: node scripts/apply-booth-gyro-alert.mjs
+
+      - name: Verify generated diff
+        run: |
+          git diff --check
+          grep -q "lp28-booth-gyro" client/src/App.jsx
+          grep -q "boothProblemCount" client/src/App.jsx
+
+      - name: Commit generated application change
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git config user.name "LP28 Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add client/src/App.jsx
+          git commit -m "feat: add gyro alert to booth navigation"
+          git push origin HEAD:feature/booth-gyro-alert-clean
