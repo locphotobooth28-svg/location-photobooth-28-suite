@@ -44,6 +44,9 @@ function LP28ThemeStyles(){
     .lp28-printer-blink{display:inline-block;animation:lp28PrinterBlink 1s steps(2,end) infinite;}
     .lp28-printer-warning{color:#d97706;font-weight:600;}
     .lp28-printer-error{color:#dc2626;font-weight:700;}
+    @keyframes lp28BoothGyro{0%,100%{transform:scale(1);filter:drop-shadow(0 0 2px rgba(239,68,68,.45))}50%{transform:scale(1.18);filter:drop-shadow(0 0 10px rgba(239,68,68,1))}}
+    .lp28-booth-gyro{display:inline-block;animation:lp28BoothGyro .8s ease-in-out infinite;transform-origin:center;}
+    .booth-live-pill.alert{background:rgba(127,29,29,.72)!important;color:#fecaca!important;border-color:#ef4444!important;box-shadow:0 0 14px rgba(239,68,68,.5)!important;}
 
     html[data-lp28-theme="light"],html[data-lp28-theme="light"] body,
     html[data-lp28-theme="light"] #root{background:#f5f3ee !important;color:#151515 !important;}
@@ -6221,6 +6224,13 @@ function Dashboard({onLogout,user}) {
   const unreadInfoSav=opsSav.filter(i=>i.level===1&&i.status==="RESOLVED"&&!i.adminReadAt);
   const latestInfoSav=unreadInfoSav[0];
   const boothOnlineCount=Math.min(3,opsBooths.filter(b=>b.online).length);
+  const boothProblems=opsBooths.filter(b=>{
+    if(!b?.online)return false;
+    const severity=String(b?.printer?.statusSeverity||"").toUpperCase();
+    return ["WARNING","ERROR","OFFLINE"].includes(severity) || b?.printer?.statusFresh===false || b?.lumaActive===false;
+  });
+  const boothProblemCount=boothProblems.length;
+  const boothProblemTitle=boothProblems.map(b=>String(b.boothName||"Borne").toUpperCase()+" : "+(b?.printer?.statusLabel||(!b?.lumaActive?"LumaBooth inactif":"anomalie détectée"))).join(" · ");
   const defaultEventActions=user?.role==="INTERVENANT"?["view","navigate","share","start","complete"]:user?.role==="VIEWER"?["view"]:[];
   const eventActions=Array.isArray(user?.permissions?.eventActions)?user.permissions.eventActions:defaultEventActions;
   const canEventAction=id=>isAdmin||eventActions.includes(id);
@@ -6850,8 +6860,8 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           const allowed=Array.isArray(user?.permissions?.allowedModules)?user.permissions.allowedModules:(user?.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
           return allowed.includes(m.id);
         }).map(m=><button key={m.id} className={`nav-item ${view===m.id?"active":""} ${m.id==="assistance"&&activeSavOps.length?"nav-assistance-alert":""}`} onClick={()=>navigate(m.id)}>
-          <span className="nav-main-label">{m.icon} {m.label}</span>
-          {m.id==="booths"&&isAdmin&&<span className={`booth-live-pill ${boothOnlineCount?"online":"offline"}`}>● LIVE {boothOnlineCount}/3</span>}
+          <span className="nav-main-label">{m.id==="booths"&&isAdmin&&boothProblemCount>0?<span className="lp28-booth-gyro" title={boothProblemTitle||"Anomalie détectée sur une borne"}>🚨</span>:m.icon} {m.label}</span>
+          {m.id==="booths"&&isAdmin&&<span title={boothProblemTitle||undefined} className={`booth-live-pill ${boothProblemCount>0?"alert":boothOnlineCount?"online":"offline"}`}>{boothProblemCount>0?`● ALERTE ${boothProblemCount}`:`● LIVE ${boothOnlineCount}/3`}</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length>0&&<span className="nav-assistance-triangle" title={`${activeSavOps.length} demande(s) d'assistance`}>⚠️</span>}
           {m.id==="assistance"&&isAdmin&&activeSavOps.length===0&&latestInfoSav&&view!=="assistance"&&<span className="nav-assistance-info" title={`${unreadInfoSav.length} information(s) N1 non lue(s)`}>ⓘ</span>}
         </button>)}
