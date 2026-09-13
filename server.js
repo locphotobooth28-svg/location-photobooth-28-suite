@@ -1101,6 +1101,45 @@ function boothStatusKey(boothName){
 }
 
 
+function normalizeLp28PrinterStatus(p){
+  if(!p||typeof p!=="object")return null;
+  const severity=String(p.statusSeverity||"").trim().toUpperCase();
+  const color=String(p.statusColor||"").trim().toUpperCase();
+  return {
+    model:String(p.model||"").slice(0,100),
+    name:String(p.name||"").slice(0,100)||null,
+    serialNumber:String(p.serialNumber||"").slice(0,150),
+    portName:String(p.portName||"").slice(0,50),
+    queueName:String(p.queueName||"").slice(0,150),
+    pnpStatus:String(p.pnpStatus||"").slice(0,50),
+    workOffline:p.workOffline===null||typeof p.workOffline==="undefined"?null:Boolean(p.workOffline),
+    present:Boolean(p.present),
+    rawStatus:String(p.rawStatus||"").slice(0,100)||null,
+    statusSeverity:["OK","INFO","PRINTING","WARNING","ERROR","OFFLINE"].includes(severity)?severity:null,
+    statusLabel:String(p.statusLabel||"").slice(0,160)||null,
+    statusColor:["GREEN","BLUE","ORANGE","RED","GRAY"].includes(color)?color:null,
+    statusFresh:p.statusFresh===null||typeof p.statusFresh==="undefined"?null:Boolean(p.statusFresh),
+    statusAgeSeconds:Number.isFinite(Number(p.statusAgeSeconds))?Math.max(0,Number(p.statusAgeSeconds)):null,
+    source:String(p.source||p.mediaSource||"").slice(0,50)||null,
+    hfpRunning:p.hfpRunning===null||typeof p.hfpRunning==="undefined"?null:Boolean(p.hfpRunning),
+    firmwareVersion:String(p.firmwareVersion||"").slice(0,80)||null,
+    colorDataVersion:String(p.colorDataVersion||"").slice(0,120)||null,
+    lifeCounter:Number.isFinite(Number(p.lifeCounter))?Number(p.lifeCounter):null,
+    mediaFormat:String(p.mediaFormat||"").slice(0,50)||null,
+    mediaRemaining:Number.isFinite(Number(p.mediaRemaining))?Number(p.mediaRemaining):null,
+    mediaCapacity:Number.isFinite(Number(p.mediaCapacity))?Number(p.mediaCapacity):null,
+    mediaPercent:Number.isFinite(Number(p.mediaPercent))?Math.max(0,Math.min(100,Number(p.mediaPercent))):null,
+    mediaSource:String(p.mediaSource||p.source||"").slice(0,50)||null,
+    mediaReadAt:p.mediaReadAt?String(p.mediaReadAt).slice(0,80):null,
+    statusReadAt:p.statusReadAt?String(p.statusReadAt).slice(0,80):null
+  };
+}
+function lp28PrinterIsNormal(p){
+  const raw=String(p?.rawStatus||"").toUpperCase();
+  const sev=String(p?.statusSeverity||"").toUpperCase();
+  return raw==="STATUS_OK" || raw==="WINDOWS_PRESENT" || sev==="OK" || sev==="PRINTING" || sev==="INFO";
+}
+
 function boothControlKey(boothName){
   const safe=String(boothName||"").trim().toUpperCase().replace(/[^A-Z0-9_-]+/g,"_").slice(0,50);
   return `boothControl:${safe}`;
@@ -1116,6 +1155,60 @@ app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothNa
 app.post("/api/booth-agent/control/ack",boothAgentOnly,async(req,res)=>{const boothName=String(req.body?.boothName||"").trim().toUpperCase();const commandId=String(req.body?.commandId||"").trim();const status=String(req.body?.status||"ACK").trim().slice(0,40);if(!["LOLA","NINA","GABIN"].includes(boothName)||!commandId)return res.status(400).json({ok:false,message:"Accusé invalide."});const control=await readBoothControl(boothName);if(control.command?.id===commandId){control.command={...control.command,status,ackAt:new Date().toISOString()};await writeBoothControl(boothName,control)}res.json({ok:true});});
 app.post("/api/admin/booths/:boothName/command",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();const command=String(req.body?.command||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});if(!["RESTART","SHUTDOWN"].includes(command))return res.status(400).json({ok:false,message:"Commande invalide."});const control=await readBoothControl(boothName);control.command={id:crypto.randomUUID(),type:command,status:"PENDING",createdAt:new Date().toISOString()};await writeBoothControl(boothName,control);res.json({ok:true,command:control.command});});
 app.post("/api/admin/booths/:boothName/display",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);control.display={enabled:Boolean(req.body?.enabled),locked:Boolean(req.body?.locked),opacity:Math.max(20,Math.min(100,Number(req.body?.opacity)||80))};await writeBoothControl(boothName,control);res.json({ok:true,display:control.display});});
+app.post("/api/booth-agent/printer-status",boothAgentOnly,async(req,res)=>{
+  try{
+    const boothName=String(req.body?.boothName||"").trim().toUpperCase();
+    if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});
+    const printer=normalizeLp28PrinterStatus(req.body?.printer);
+    if(!printer)return res.status(400).json({ok:false,message:"Télémetrie imprimante manquante."});
+
+    const key=boothStatusKey(boothName);
+    const previousRow=await prisma.appSetting.findUnique({where:{key}}).catch(()=>null);
+    let previous={boothName};
+    try{if(previousRow?.value)previous=JSON.parse(previousRow.value||"{}")}catch{}
+    const previousPrinter=previous?.printer||null;
+    const nowIso=new Date().toISOString();
+    const payload={
+      ...previous,
+      boothName,
+      eventId:previous?.eventId||String(req.body?.eventId||"").trim()||null,
+      eventName:previous?.eventName||String(req.body?.eventName||"").trim().slice(0,200)||null,
+      printer,
+      printerAgentVersion:String(req.body?.agentVersion||"").slice(0,40)||null,
+      printerLastSeen:nowIso
+    };
+    await prisma.appSetting.upsert({where:{key},update:{value:JSON.stringify(payload)},create:{key,value:JSON.stringify(payload)}});
+
+    const oldRaw=String(previousPrinter?.rawStatus||"").toUpperCase();
+    const newRaw=String(printer.rawStatus||"").toUpperCase();
+    const changed=oldRaw!==newRaw || String(previousPrinter?.statusSeverity||"")!==String(printer.statusSeverity||"");
+    const fresh=printer.statusFresh!==false;
+    if(changed&&fresh&&newRaw){
+      if(!lp28PrinterIsNormal(printer)){
+        const type=printer.statusSeverity==="ERROR"?"URGENT":"WARNING";
+        const icon=printer.statusSeverity==="ERROR"?"🔴":"🟠";
+        const remaining=printer.mediaRemaining!=null?" · "+printer.mediaRemaining+" tirage(s) restant(s)":"";
+        await addNotification({
+          title:icon+" Imprimante "+boothName+" — "+(printer.statusLabel||newRaw),
+          message:boothName+" · "+(printer.model||"Imprimante")+" · "+newRaw+remaining,
+          type,source:"PRINTER_SUPERVISION",audience:"ADMIN",eventId:payload.eventId||null
+        }).catch(err=>console.error("PRINTER ALERT NOTIFICATION :",err));
+      }else if(oldRaw&&!lp28PrinterIsNormal(previousPrinter)){
+        await addNotification({
+          title:"🟢 Imprimante "+boothName+" rétablie",
+          message:boothName+" · "+(printer.model||"Imprimante")+" · "+newRaw,
+          type:"SUCCESS",source:"PRINTER_RECOVERED",audience:"ADMIN",eventId:payload.eventId||null
+        }).catch(err=>console.error("PRINTER RECOVERY NOTIFICATION :",err));
+      }
+    }
+    res.json({ok:true,boothName,printerLastSeen:nowIso});
+  }catch(err){
+    if(isDatabaseUnavailable(err))return sendTemporaryDatabaseUnavailable(res,"PRINTER STATUS",err);
+    console.error("PRINTER STATUS ERROR :",err);
+    res.status(500).json({ok:false,message:"Supervision imprimante impossible."});
+  }
+});
+
 app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
   try{
     const boothName=String(req.body?.boothName||"").trim().slice(0,100);
@@ -1139,6 +1232,16 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
         pnpStatus:String(p.pnpStatus||"").slice(0,50),
         workOffline:p.workOffline===null||typeof p.workOffline==="undefined"?null:Boolean(p.workOffline),
         present:Boolean(p.present),
+        rawStatus:String(p.rawStatus||"").slice(0,100)||null,
+        statusSeverity:String(p.statusSeverity||"").slice(0,20)||null,
+        statusLabel:String(p.statusLabel||"").slice(0,160)||null,
+        statusColor:String(p.statusColor||"").slice(0,20)||null,
+        statusFresh:p.statusFresh===null||typeof p.statusFresh==="undefined"?null:Boolean(p.statusFresh),
+        statusAgeSeconds:Number.isFinite(Number(p.statusAgeSeconds))?Math.max(0,Number(p.statusAgeSeconds)):null,
+        hfpRunning:p.hfpRunning===null||typeof p.hfpRunning==="undefined"?null:Boolean(p.hfpRunning),
+        firmwareVersion:String(p.firmwareVersion||"").slice(0,80)||null,
+        colorDataVersion:String(p.colorDataVersion||"").slice(0,120)||null,
+        lifeCounter:Number.isFinite(Number(p.lifeCounter))?Number(p.lifeCounter):null,
         mediaFormat:String(p.mediaFormat||"").slice(0,50)||null,
         mediaRemaining:Number.isFinite(Number(p.mediaRemaining))?Number(p.mediaRemaining):null,
         mediaCapacity:Number.isFinite(Number(p.mediaCapacity))?Number(p.mediaCapacity):null,
