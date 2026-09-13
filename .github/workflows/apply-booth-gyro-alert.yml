@@ -27,7 +27,7 @@ jobs:
 
       - name: Verify client build
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm run build
 
       - name: Commit generated application change
@@ -38,6 +38,6 @@ jobs:
           fi
           git config user.name "LP28 Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add client/src/App.jsx
+          git add client/src/App.jsx package-lock.json
           git commit -m "feat: add gyro alert to booth navigation"
           git push origin HEAD:feature/booth-gyro-alert
