@@ -1209,12 +1209,74 @@ app.post("/api/booth-agent/printer-status",boothAgentOnly,async(req,res)=>{
   }
 });
 
+
+// V8.6.1 - Historique imprimante par borne/evenement + derniere mesure persistante
+function boothPrinterHistoryKey(boothName){return `boothPrinterHistory:${String(boothName||"").trim().toUpperCase()}`;}
+async function readBoothPrinterHistory(boothName){
+  const row=await prisma.appSetting.findUnique({where:{key:boothPrinterHistoryKey(boothName)}}).catch(()=>null);
+  if(!row?.value)return [];
+  try{const v=JSON.parse(row.value);return Array.isArray(v)?v:[]}catch{return []}
+}
+async function writeBoothPrinterHistory(boothName,items){
+  const key=boothPrinterHistoryKey(boothName); const value=JSON.stringify((items||[]).slice(0,150));
+  await prisma.appSetting.upsert({where:{key},update:{value},create:{key,value}});
+}
+async function updateBoothPrinterHistory(boothName,payload,previous){
+  const printer=payload?.printer; if(!printer || printer.mediaRemaining==null)return;
+  const history=await readBoothPrinterHistory(boothName);
+  const nowIso=new Date().toISOString();
+  const eventId=payload.eventId||null; const eventName=payload.eventName||"Sans evenement";
+  let event=null;
+  if(eventId){event=await prisma.event.findUnique({where:{id:eventId},select:{eventDate:true,installTime:true,pickupDate:true,pickupTime:true}}).catch(()=>null)}
+  const serial=String(printer.serialNumber||"");
+  let current=history.find(x=>x.open===true);
+  const changed=current && (String(current.eventId||"")!==String(eventId||"") || String(current.serialNumber||"")!==serial);
+  if(changed){current.open=false;current.endedAt=previous?.lastSeen||nowIso;current= null;}
+  if(!current){
+    current={id:crypto.randomUUID(),open:true,boothName:String(boothName).toUpperCase(),eventId,eventName,
+      eventDate:event?.eventDate||null,eventTime:event?.installTime||null,pickupDate:event?.pickupDate||null,pickupTime:event?.pickupTime||null,
+      printerModel:printer.model||null,serialNumber:serial||null,startedAt:nowIso,endedAt:null,
+      startRemaining:Number(printer.mediaRemaining),endRemaining:Number(printer.mediaRemaining),capacity:printer.mediaCapacity??null,
+      used:0,lastStatus:printer.rawStatus||null,lastStatusLabel:printer.statusLabel||null,incidents:[]};
+    history.unshift(current);
+  }
+  current.eventName=eventName; current.eventDate=event?.eventDate||current.eventDate||null; current.eventTime=event?.installTime||current.eventTime||null;
+  current.pickupDate=event?.pickupDate||current.pickupDate||null; current.pickupTime=event?.pickupTime||current.pickupTime||null;
+  current.endRemaining=Number(printer.mediaRemaining); current.capacity=printer.mediaCapacity??current.capacity??null;
+  current.used=Math.max(0,Number(current.startRemaining)-Number(current.endRemaining)); current.endedAt=nowIso;
+  current.lastStatus=printer.rawStatus||current.lastStatus||null; current.lastStatusLabel=printer.statusLabel||current.lastStatusLabel||null;
+  const raw=String(printer.rawStatus||"");
+  if(raw && raw!=="00000" && raw!=="00001"){
+    current.incidents=current.incidents||[];
+    if(!current.incidents.some(i=>i.code===raw))current.incidents.push({code:raw,label:printer.statusLabel||raw,at:nowIso});
+  }
+  await writeBoothPrinterHistory(boothName,history);
+}
+app.get("/api/admin/booths/:boothName/printer-history",moduleViewOnly("booths"),async(req,res)=>{
+  const boothName=String(req.params.boothName||"").trim().toUpperCase();
+  if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});
+  res.json({ok:true,history:await readBoothPrinterHistory(boothName)});
+});
+app.delete("/api/admin/booths/:boothName/printer-history/:historyId",adminOnly,async(req,res)=>{
+  const boothName=String(req.params.boothName||"").trim().toUpperCase(); const id=String(req.params.historyId||"");
+  const history=(await readBoothPrinterHistory(boothName)).filter(x=>String(x.id)!==id); await writeBoothPrinterHistory(boothName,history); res.json({ok:true});
+});
+app.delete("/api/admin/booths/:boothName/printer-history",adminOnly,async(req,res)=>{
+  const boothName=String(req.params.boothName||"").trim().toUpperCase(); await writeBoothPrinterHistory(boothName,[]); res.json({ok:true});
+});
+
 app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
   try{
     const boothName=String(req.body?.boothName||"").trim().slice(0,100);
     if(!boothName)return res.status(400).json({ok:false,message:"Nom de borne manquant."});
 
     const p=req.body?.printer && typeof req.body.printer==="object" ? req.body.printer : null;
+    const previousRow=await prisma.appSetting.findUnique({where:{key:boothStatusKey(boothName)}}).catch(()=>null);
+    let previousPayload={};
+    try{if(previousRow?.value)previousPayload=JSON.parse(previousRow.value||"{}")}catch{}
+    // Si la borne/imprimante s'eteint, conserver la derniere mesure papier connue.
+    const lastPrinter=previousPayload?.printer||null;
+    const effectivePrinter=p || (lastPrinter?{...lastPrinter,present:false,lastKnown:true}:null);
     const payload={
       boothName,
       agentVersion:String(req.body?.agentVersion||"").slice(0,40),
@@ -1224,30 +1286,30 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       lumaActive:Boolean(req.body?.lumaActive),
       syncStatus:String(req.body?.syncStatus||"").slice(0,100),
       counts:req.body?.counts||null,
-      printer:p?{
-        model:String(p.model||"").slice(0,100),
-        serialNumber:String(p.serialNumber||"").slice(0,150),
-        portName:String(p.portName||"").slice(0,50),
-        queueName:String(p.queueName||"").slice(0,150),
-        pnpStatus:String(p.pnpStatus||"").slice(0,50),
-        workOffline:p.workOffline===null||typeof p.workOffline==="undefined"?null:Boolean(p.workOffline),
-        present:Boolean(p.present),
-        rawStatus:String(p.rawStatus||"").slice(0,100)||null,
-        statusSeverity:String(p.statusSeverity||"").slice(0,20)||null,
-        statusLabel:String(p.statusLabel||"").slice(0,160)||null,
-        statusColor:String(p.statusColor||"").slice(0,20)||null,
-        statusFresh:p.statusFresh===null||typeof p.statusFresh==="undefined"?null:Boolean(p.statusFresh),
-        statusAgeSeconds:Number.isFinite(Number(p.statusAgeSeconds))?Math.max(0,Number(p.statusAgeSeconds)):null,
-        hfpRunning:p.hfpRunning===null||typeof p.hfpRunning==="undefined"?null:Boolean(p.hfpRunning),
-        firmwareVersion:String(p.firmwareVersion||"").slice(0,80)||null,
-        colorDataVersion:String(p.colorDataVersion||"").slice(0,120)||null,
-        lifeCounter:Number.isFinite(Number(p.lifeCounter))?Number(p.lifeCounter):null,
-        mediaFormat:String(p.mediaFormat||"").slice(0,50)||null,
-        mediaRemaining:Number.isFinite(Number(p.mediaRemaining))?Number(p.mediaRemaining):null,
-        mediaCapacity:Number.isFinite(Number(p.mediaCapacity))?Number(p.mediaCapacity):null,
-        mediaPercent:Number.isFinite(Number(p.mediaPercent))?Math.max(0,Math.min(100,Number(p.mediaPercent))):null,
-        mediaSource:String(p.mediaSource||"").slice(0,50)||null,
-        mediaReadAt:p.mediaReadAt?String(p.mediaReadAt).slice(0,80):null
+      printer:effectivePrinter?{
+        model:String(effectivePrinter.model||"").slice(0,100),
+        serialNumber:String(effectivePrinter.serialNumber||"").slice(0,150),
+        portName:String(effectivePrinter.portName||"").slice(0,50),
+        queueName:String(effectivePrinter.queueName||"").slice(0,150),
+        pnpStatus:String(effectivePrinter.pnpStatus||"").slice(0,50),
+        workOffline:effectivePrinter.workOffline===null||typeof effectivePrinter.workOffline==="undefined"?null:Boolean(effectivePrinter.workOffline),
+        present:Boolean(effectivePrinter.present),
+        rawStatus:String(effectivePrinter.rawStatus||"").slice(0,100)||null,
+        statusSeverity:String(effectivePrinter.statusSeverity||"").slice(0,20)||null,
+        statusLabel:String(effectivePrinter.statusLabel||"").slice(0,160)||null,
+        statusColor:String(effectivePrinter.statusColor||"").slice(0,20)||null,
+        statusFresh:effectivePrinter.statusFresh===null||typeof effectivePrinter.statusFresh==="undefined"?null:Boolean(effectivePrinter.statusFresh),
+        statusAgeSeconds:Number.isFinite(Number(effectivePrinter.statusAgeSeconds))?Math.max(0,Number(effectivePrinter.statusAgeSeconds)):null,
+        hfpRunning:effectivePrinter.hfpRunning===null||typeof effectivePrinter.hfpRunning==="undefined"?null:Boolean(effectivePrinter.hfpRunning),
+        firmwareVersion:String(effectivePrinter.firmwareVersion||"").slice(0,80)||null,
+        colorDataVersion:String(effectivePrinter.colorDataVersion||"").slice(0,120)||null,
+        lifeCounter:Number.isFinite(Number(effectivePrinter.lifeCounter))?Number(effectivePrinter.lifeCounter):null,
+        mediaFormat:String(effectivePrinter.mediaFormat||"").slice(0,50)||null,
+        mediaRemaining:Number.isFinite(Number(effectivePrinter.mediaRemaining))?Number(effectivePrinter.mediaRemaining):null,
+        mediaCapacity:Number.isFinite(Number(effectivePrinter.mediaCapacity))?Number(effectivePrinter.mediaCapacity):null,
+        mediaPercent:Number.isFinite(Number(effectivePrinter.mediaPercent))?Math.max(0,Math.min(100,Number(effectivePrinter.mediaPercent))):null,
+        mediaSource:String(effectivePrinter.mediaSource||"").slice(0,50)||null,
+        mediaReadAt:effectivePrinter.mediaReadAt?String(effectivePrinter.mediaReadAt).slice(0,80):null
       }:null,
       lastSeen:new Date().toISOString()
     };
@@ -1255,7 +1317,6 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
     // Une coupure de heartbeat >= 45 s est consideree comme une vraie reconnexion.
     // Ce seuil est volontairement inferieur au seuil d'affichage "hors ligne" (60 s)
     // afin que toute borne vue hors ligne dans l'Admin declenche bien une notification au retour.
-    const previousRow=await prisma.appSetting.findUnique({where:{key:boothStatusKey(boothName)}}).catch(()=>null);
     let previousSeenMs=NaN;
     if(previousRow?.value){
       try{
@@ -1272,6 +1333,10 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       update:{value:JSON.stringify(payload)},
       create:{key:boothStatusKey(boothName),value:JSON.stringify(payload)}
     });
+
+    if(p && p.mediaRemaining!==null && typeof p.mediaRemaining!=="undefined"){
+      await updateBoothPrinterHistory(boothName,payload,previousPayload).catch(err=>console.error("PRINTER HISTORY ERROR :",err));
+    }
 
     if(isConnectionTransition){
       const eventPart=payload.eventName?`\nÉvénement : ${payload.eventName}`:"";

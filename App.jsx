@@ -4632,69 +4632,44 @@ const clientDocuments=organizerDocuments?.files||organizerDocuments?.invoices||[
 
 function AdminBooths(){
   const [booths,setBooths]=useState([]),[error,setError]=useState("");
-  async function load(){
-    try{
-      const r=await fetch("/api/admin/booths");
-      const d=await r.json();
-      if(!r.ok)throw new Error(d.message||"Supervision indisponible.");
-      setBooths(d.booths||[]);setError("");
-    }catch(e){setError(e.message)}
-  }
+  const [historyBooth,setHistoryBooth]=useState(null),[history,setHistory]=useState([]),[historyBusy,setHistoryBusy]=useState(false);
+  async function load(){try{const r=await fetch("/api/admin/booths");const d=await r.json();if(!r.ok)throw new Error(d.message||"Supervision indisponible.");setBooths(d.booths||[]);setError("")}catch(e){setError(e.message)}}
   useEffect(()=>{load();const t=setInterval(load,15000);return()=>clearInterval(t)},[]);
-  const ago=s=>{
-    if(s===null||typeof s==="undefined")return "Jamais";
-    if(s<60)return `il y a ${s} s`;
-    if(s<3600)return `il y a ${Math.floor(s/60)} min`;
-    return `il y a ${Math.floor(s/3600)} h`;
-  };
+  const ago=s=>{if(s===null||typeof s==="undefined")return "Jamais";if(s<60)return `il y a ${s} s`;if(s<3600)return `il y a ${Math.floor(s/60)} min`;return `il y a ${Math.floor(s/3600)} h`;};
+  const frDate=v=>v?new Date(v).toLocaleDateString("fr-FR"):"—";
+  const frTime=v=>v?new Date(v).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
+  async function openHistory(name){setHistoryBooth(name);setHistoryBusy(true);try{const r=await fetch(`/api/admin/booths/${encodeURIComponent(name)}/printer-history`);const d=await r.json();setHistory(d.history||[])}finally{setHistoryBusy(false)}}
+  function historyText(h){return `LP28 — Historique imprimante\nBorne : ${h.boothName||historyBooth}\nÉvénement : ${h.eventName||"—"}\nDate événement : ${frDate(h.eventDate)}\nHoraire événement : ${h.eventTime||"—"}${h.pickupTime?` → ${h.pickupTime}`:""}\nImprimante : ${h.printerModel||"—"}${h.serialNumber?` · S/N ${h.serialNumber}`:""}\nImprimante active : ${frTime(h.startedAt)} → ${frTime(h.endedAt)}\nPapier départ : ${h.startRemaining??"—"}\nPapier fin : ${h.endRemaining??"—"}\nTirages consommés : ${h.used??0}\nIncidents : ${h.incidents?.length?h.incidents.map(i=>`${i.code} ${i.label||""}`).join(", "):"Aucun"}`;}
+  async function copyHistory(h){await navigator.clipboard.writeText(historyText(h));alert("Historique copié.")}
+  async function shareHistory(h){const text=historyText(h);if(navigator.share){try{await navigator.share({title:`LP28 - ${h.eventName||"Historique imprimante"}`,text});return}catch(e){if(e?.name==="AbortError")return}}await navigator.clipboard.writeText(text);alert("Partage non disponible : historique copié.")}
+  async function deleteHistory(id){if(!confirm("Supprimer définitivement cet historique imprimante ?"))return;await fetch(`/api/admin/booths/${encodeURIComponent(historyBooth)}/printer-history/${encodeURIComponent(id)}`,{method:"DELETE"});openHistory(historyBooth)}
+  async function clearHistory(){if(!confirm(`Effacer TOUT l'historique imprimante de ${historyBooth} ? Cette action est définitive.`))return;await fetch(`/api/admin/booths/${encodeURIComponent(historyBooth)}/printer-history`,{method:"DELETE"});setHistory([])}
   return <section>
-    <div className="calendar-toolbar">
-      <div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Lola, Nina et Gabin.</p></div>
-      <button className="ghost" onClick={load}>↻ Actualiser</button>
-    </div>
+    <div className="calendar-toolbar"><div><div className="eyebrow">SUPERVISION LP28</div><h2>🖥️ Mes bornes</h2><p className="muted">État en direct de Lola, Nina et Gabin.</p></div><button className="ghost" onClick={load}>↻ Actualiser</button></div>
     {error&&<div className="notice error">{error}</div>}
     <div className="stats-grid">
       {[...booths].sort((a,b)=>{const order={LOLA:0,NINA:1,GABIN:2};return (order[String(a.boothName||"").toUpperCase()]??99)-(order[String(b.boothName||"").toUpperCase()]??99)}).map(b=><article className="stat-card" key={b.boothName} style={{textAlign:"left"}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}>
-          <strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong>
-          <span>{b.online?"En ligne":"Hors ligne"}</span>
-        </div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center"}}><strong style={{fontSize:22}}>{b.online?"🟢":"🔴"} {b.boothName}</strong><span>{b.online?"En ligne":"Hors ligne"}</span></div>
         <div style={{marginTop:14,lineHeight:1.8}}>
           <div><b>Événement :</b> {b.eventName||"Aucun"}</div>
           <div>📸 LumaBooth : {b.lumaActive?"🟢 Actif":"⚪ Inactif"} <span className="muted">— {b.lumaVersion?`v${String(b.lumaVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
           <div>🤖 Agent LP28 : {b.online?"🟢 Connecté":"⚪ Hors ligne"} <span className="muted">— {b.agentVersion?`v${String(b.agentVersion).replace(/^v/i,"")}`:"version non détectée"}</span></div>
-          <div>☁️ Galerie : {b.syncStatus||"—"}</div>
-          {b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
-          <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:"⚪ Aucune"}</div>
-          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&(()=>{
-            const isCitizen=String(b.printer.model||"").toUpperCase().includes("CITIZEN")||String(b.printer.model||"").toUpperCase().includes("CY-02");
-            const reportedCapacity=Number(b.printer.mediaCapacity);
-            const capacity=Number.isFinite(reportedCapacity)&&reportedCapacity>0?reportedCapacity:(isCitizen?700:null);
-            const reportedPct=Number(b.printer.mediaPercent);
-            const calculatedPct=capacity?Number(b.printer.mediaRemaining)*100/capacity:NaN;
-            const pct=Number.isFinite(reportedPct)&&reportedPct>0?reportedPct:calculatedPct;
-            const validPct=Number.isFinite(pct);
-            const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";
-            const barValue=validPct?Math.max(0,Math.min(100,pct)):0;
-            return <div style={{marginTop:8,marginBottom:8}}>
-              <div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining}{capacity?` / ${capacity}`:""}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>
-              {validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}>
-                <div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/>
-              </div>}
-              <div className="muted" style={{fontSize:12,marginTop:4}}>
-                {b.printer.mediaFresh?"🟢 Lecture récente":"🟠 Dernière lecture connue"}
-                {b.printer.mediaAgeSeconds!==null&&typeof b.printer.mediaAgeSeconds!=="undefined"?` · ${ago(b.printer.mediaAgeSeconds)}`:""}
-              </div>
-            </div>;
-          })()}
-          {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}
-          {b.printer?.printCount&&<div>🔢 Compteur : {Number(b.printer.printCount).toLocaleString("fr-FR")}</div>}
-          {b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}
-          {b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}
-          <div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
+          <div>☁️ Galerie : {b.syncStatus||"—"}</div>{b.counts&&<div>🖼️ Originaux : {b.counts.originals||0} · Tirages : {b.counts.prints||0} · GIF : {b.counts.animated||0}</div>}
+          <div>🖨️ Imprimante : {b.printer?.present?`🟢 ${b.printer.model||"Détectée"}`:b.printer?.mediaRemaining!=null?`⚫ ${b.printer.model||"Hors ligne"} — dernière mesure connue`:"⚪ Aucune"}</div>
+          {b.printer?.mediaRemaining!==null&&typeof b.printer?.mediaRemaining!=="undefined"&&(()=>{const isCitizen=String(b.printer.model||"").toUpperCase().includes("CITIZEN")||String(b.printer.model||"").toUpperCase().includes("CY-02");const reportedCapacity=Number(b.printer.mediaCapacity);const capacity=Number.isFinite(reportedCapacity)&&reportedCapacity>0?reportedCapacity:(isCitizen?700:null);const reportedPct=Number(b.printer.mediaPercent);const calculatedPct=capacity?Number(b.printer.mediaRemaining)*100/capacity:NaN;const pct=Number.isFinite(reportedPct)&&reportedPct>0?reportedPct:calculatedPct;const validPct=Number.isFinite(pct);const level=validPct?(pct<10?"🔴":pct<=25?"🟠":"🟢"):"⚪";const barValue=validPct?Math.max(0,Math.min(100,pct)):0;return <div style={{marginTop:8,marginBottom:8}}><div><b>📄 Papier :</b> {level} {b.printer.mediaRemaining}{capacity?` / ${capacity}`:""}{validPct?` — ${pct.toFixed(1).replace(".0","")} %`:""}</div>{validPct&&<div style={{height:10,background:"#e5e7eb",borderRadius:999,overflow:"hidden",marginTop:5}}><div style={{height:"100%",width:`${barValue}%`,background:pct<10?"#dc2626":pct<=25?"#f59e0b":"#16a34a",transition:"width .25s ease"}}/></div>}<div className="muted" style={{fontSize:12,marginTop:4}}>{b.online&&b.printer.mediaFresh?"🟢 Lecture récente":"🟠 Dernière lecture connue"}{b.printer.mediaAgeSeconds!==null&&typeof b.printer.mediaAgeSeconds!=="undefined"?` · ${ago(b.printer.mediaAgeSeconds)}`:""}</div></div>})()}
+          {b.printer?.mediaFormat&&<div>📐 Média : {b.printer.mediaFormat}</div>}{b.printer?.serialNumber&&<div>🔢 S/N : {b.printer.serialNumber}</div>}{b.printer?.portName&&<div>🔌 {b.printer.portName}{b.printer.queueName?` · ${b.printer.queueName}`:""}</div>}<div>🕐 Dernière communication : {ago(b.ageSeconds)}</div>
+          <button className="ghost" style={{marginTop:10}} onClick={()=>openHistory(b.boothName)}>🧾 Historique imprimante</button>
         </div>
       </article>)}
     </div>
+    {historyBooth&&<div className="modal-backdrop" onMouseDown={()=>setHistoryBooth(null)}><div className="modal-card" style={{maxWidth:1050,width:"94vw"}} onMouseDown={e=>e.stopPropagation()}>
+      <div className="calendar-toolbar"><div><div className="eyebrow">{historyBooth}</div><h2>🧾 Historique imprimante</h2></div><div style={{display:"flex",gap:8}}><button className="danger" onClick={clearHistory}>🗑️ Tout supprimer</button><button className="ghost" onClick={()=>setHistoryBooth(null)}>✕ Fermer</button></div></div>
+      {historyBusy?<p>Chargement…</p>:history.length===0?<div className="notice">Aucun historique enregistré pour cette borne.</div>:<div style={{display:"grid",gap:12,maxHeight:"68vh",overflow:"auto"}}>{history.map(h=><article className="stat-card" key={h.id} style={{textAlign:"left"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><strong>{h.eventName||"Sans événement"}</strong><div className="muted">📅 {frDate(h.eventDate)} · 🕒 {h.eventTime||"Horaire non renseigné"}{h.pickupTime?` → ${h.pickupTime}`:""}</div></div><span>{h.open?"🟢 En cours":"⚪ Terminé"}</span></div>
+        <div style={{marginTop:8}}>🖨️ {h.printerModel||"Imprimante"}{h.serialNumber?` · S/N ${h.serialNumber}`:""}</div><div>⏱️ Activité imprimante : {frTime(h.startedAt)} → {frTime(h.endedAt)}</div><div>📄 Départ : <b>{h.startRemaining??"—"}</b> · Fin : <b>{h.endRemaining??"—"}</b> · Consommés : <b>{h.used??0}</b></div><div>⚠️ Incidents : {h.incidents?.length?h.incidents.map(i=>`${i.code} ${i.label||""}`).join(" · "):"Aucun"}</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}><button className="ghost" onClick={()=>copyHistory(h)}>📋 Copier</button><button className="ghost" onClick={()=>shareHistory(h)}>📤 Partager</button><button className="danger" onClick={()=>deleteHistory(h.id)}>🗑️ Supprimer</button></div>
+      </article>)}</div>}
+    </div></div>}
   </section>;
 }
 
