@@ -2,8 +2,21 @@ const fs=require('fs');
 const path=require('path');
 const file=path.join(process.cwd(),'server.js');
 let src=fs.readFileSync(file,'utf8');
-const anchor='app.use(express.static(distDir));\napp.get("*", (req, res) => {';
-if(!src.includes(anchor)){console.error('[share-link-titles] server fallback anchor missing');process.exit(1);}
+
+// Idempotent: current server may already contain the social-preview routes.
+if(src.includes('LP28 — titres dédiés pour les aperçus WhatsApp / Messenger / SMS.') ||
+   (src.includes('app.get(["/signature/:token","/portal/:token","/guest/:token"]') && src.includes('og:site_name'))){
+  console.log('[share-link-titles] déjà appliqué, aucune modification nécessaire');
+  process.exit(0);
+}
+
+// Accept CRLF/LF and harmless spacing changes around the SPA fallback.
+const re=/app\.use\(express\.static\(distDir\)\);\s*app\.get\("\*",\s*\(req,\s*res\)\s*=>\s*\{/m;
+if(!re.test(src)){
+  console.error('[share-link-titles] server fallback anchor missing');
+  process.exit(1);
+}
+
 const block=`app.use(express.static(distDir));
 
 // LP28 — titres dédiés pour les aperçus WhatsApp / Messenger / SMS.
@@ -49,6 +62,7 @@ app.get(["/signature/:token","/portal/:token","/guest/:token"], (req,res,next)=>
 });
 
 app.get("*", (req, res) => {`;
-src=src.replace(anchor,block);
+
+src=src.replace(re,block);
 fs.writeFileSync(file,src,'utf8');
 console.log('[share-link-titles] OK: Signature / Organisateur / Invités identified in social previews');
