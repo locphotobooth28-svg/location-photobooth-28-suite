@@ -43,14 +43,19 @@ const documentUpload = multer({
     files:1
   },
   fileFilter:(req,file,cb)=>{
-    const isPdf =
-      file.mimetype==="application/pdf" ||
-      /\.pdf$/i.test(file.originalname||"");
-
-    cb(
-      isPdf ? null : new Error("Seuls les fichiers PDF sont autorisés."),
-      isPdf
-    );
+    const name=String(file.originalname||"").toLowerCase();
+    const mime=String(file.mimetype||"").toLowerCase();
+    const okExt=/\.(pdf|doc|docx|xls|xlsx|jpg|jpeg|png)$/i.test(name);
+    const okMime=[
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "image/jpeg","image/png"
+    ].includes(mime);
+    const ok=okExt||okMime;
+    cb(ok?null:new Error("Formats autorisés : PDF, Word, Excel, JPG et PNG."),ok);
   }
 });
 
@@ -1144,16 +1149,36 @@ function boothControlKey(boothName){
   const safe=String(boothName||"").trim().toUpperCase().replace(/[^A-Z0-9_-]+/g,"_").slice(0,50);
   return `boothControl:${safe}`;
 }
-function defaultBoothControl(){return {display:{enabled:false,locked:false,opacity:80},command:null};}
+function defaultBoothControl(){return {display:{enabled:false,locked:false,opacity:80},powerClient:{enabled:false,powerAt:null,visible:false,locked:false,opacity:90,updatedAt:null},lockScreen:{enabled:false,lockAt:"",unlockAt:"",pin:"2828",locked:false,updatedAt:null},command:null};}
 async function readBoothControl(boothName){
   const row=await prisma.appSetting.findUnique({where:{key:boothControlKey(boothName)}}).catch(()=>null);
   if(!row)return defaultBoothControl();
-  try{const p=JSON.parse(row.value||"{}");return {display:{enabled:Boolean(p?.display?.enabled),locked:Boolean(p?.display?.locked),opacity:Math.max(20,Math.min(100,Number(p?.display?.opacity)||80))},command:p?.command||null};}catch{return defaultBoothControl()}
+  try{const p=JSON.parse(row.value||"{}");return {display:{enabled:Boolean(p?.display?.enabled),locked:Boolean(p?.display?.locked),opacity:Math.max(20,Math.min(100,Number(p?.display?.opacity)||80))},powerClient:{enabled:Boolean(p?.powerClient?.enabled),powerAt:p?.powerClient?.powerAt||null,visible:Boolean(p?.powerClient?.visible),locked:Boolean(p?.powerClient?.locked),opacity:Math.max(25,Math.min(100,Number(p?.powerClient?.opacity)||90)),updatedAt:p?.powerClient?.updatedAt||null},lockScreen:{enabled:Boolean(p?.lockScreen?.enabled),lockAt:String(p?.lockScreen?.lockAt||""),unlockAt:String(p?.lockScreen?.unlockAt||""),pin:/^\d{4}$/.test(String(p?.lockScreen?.pin||""))?String(p.lockScreen.pin):"2828",locked:Boolean(p?.lockScreen?.locked),updatedAt:p?.lockScreen?.updatedAt||null},command:p?.command||null};}catch{return defaultBoothControl()}
 }
 async function writeBoothControl(boothName,value){await prisma.appSetting.upsert({where:{key:boothControlKey(boothName)},update:{value:JSON.stringify(value)},create:{key:boothControlKey(boothName),value:JSON.stringify(value)}});}
 app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);res.json({ok:true,...control});});
 app.post("/api/booth-agent/control/ack",boothAgentOnly,async(req,res)=>{const boothName=String(req.body?.boothName||"").trim().toUpperCase();const commandId=String(req.body?.commandId||"").trim();const status=String(req.body?.status||"ACK").trim().slice(0,40);if(!["LOLA","NINA","GABIN"].includes(boothName)||!commandId)return res.status(400).json({ok:false,message:"Accusé invalide."});const control=await readBoothControl(boothName);if(control.command?.id===commandId){control.command={...control.command,status,ackAt:new Date().toISOString()};await writeBoothControl(boothName,control)}res.json({ok:true});});
-app.post("/api/admin/booths/:boothName/command",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();const command=String(req.body?.command||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});if(!["RESTART","SHUTDOWN"].includes(command))return res.status(400).json({ok:false,message:"Commande invalide."});const control=await readBoothControl(boothName);control.command={id:crypto.randomUUID(),type:command,status:"PENDING",createdAt:new Date().toISOString()};await writeBoothControl(boothName,control);res.json({ok:true,command:control.command});});
+app.post("/api/admin/booths/:boothName/command",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();const command=String(req.body?.command||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});if(!["RESTART","SHUTDOWN","POWER_SCHEDULE","POWER_SHOW","POWER_HIDE","POWER_SETTINGS"].includes(command))return res.status(400).json({ok:false,message:"Commande invalide."});const control=await readBoothControl(boothName);control.powerClient=control.powerClient||{enabled:false,powerAt:null,visible:false,locked:false,opacity:90,updatedAt:null};let powerAt=null;if(command==="POWER_SCHEDULE"){const parsed=new Date(String(req.body?.powerAt||""));if(Number.isNaN(parsed.getTime()))return res.status(400).json({ok:false,message:"Date/heure Power invalide."});powerAt=parsed.toISOString();control.powerClient={...control.powerClient,enabled:true,powerAt,visible:false,updatedAt:new Date().toISOString()};}else if(command==="POWER_SHOW"){control.powerClient={...control.powerClient,enabled:true,visible:true,updatedAt:new Date().toISOString()};}else if(command==="POWER_HIDE"){control.powerClient={...control.powerClient,enabled:false,powerAt:null,visible:false,updatedAt:new Date().toISOString()};}else if(command==="POWER_SETTINGS"){if(req.body?.locked!==undefined)control.powerClient.locked=Boolean(req.body.locked);if(req.body?.opacity!==undefined)control.powerClient.opacity=Math.max(25,Math.min(100,Number(req.body.opacity)||90));control.powerClient.updatedAt=new Date().toISOString();}control.command={id:crypto.randomUUID(),type:command,status:"PENDING",createdAt:new Date().toISOString(),...(powerAt?{powerAt}:{})};await writeBoothControl(boothName,control);res.json({ok:true,command:control.command});});
+
+app.post("/api/admin/booths/:boothName/lock",adminOnly,async(req,res)=>{
+  const boothName=String(req.params.boothName||"").trim().toUpperCase();
+  if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});
+  const control=await readBoothControl(boothName);
+  control.lockScreen=control.lockScreen||{enabled:false,lockAt:"",unlockAt:"",pin:"2828",locked:false,updatedAt:null};
+  const action=String(req.body?.action||"SETTINGS").toUpperCase();
+  const validTime=v=>v===""||/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v);
+  if(action==="SETTINGS"){
+    const lockAt=String(req.body?.lockAt||"").trim(),unlockAt=String(req.body?.unlockAt||"").trim(),pin=String(req.body?.pin||"").trim();
+    if(!validTime(lockAt)||!validTime(unlockAt))return res.status(400).json({ok:false,message:"Horaire invalide (HH:mm)."});
+    if(pin && !/^\d{4}$/.test(pin))return res.status(400).json({ok:false,message:"Le PIN doit contenir exactement 4 chiffres."});
+    control.lockScreen={...control.lockScreen,enabled:Boolean(lockAt||unlockAt),lockAt,unlockAt,...(pin?{pin}:{}),updatedAt:new Date().toISOString()};
+  }else if(action==="LOCK_NOW"||action==="UNLOCK_NOW"){
+    const locked=action==="LOCK_NOW";control.lockScreen={...control.lockScreen,locked,updatedAt:new Date().toISOString()};
+    control.command={id:crypto.randomUUID(),type:action,status:"PENDING",createdAt:new Date().toISOString()};
+  }else return res.status(400).json({ok:false,message:"Action invalide."});
+  await writeBoothControl(boothName,control);
+  res.json({ok:true,lockScreen:{enabled:control.lockScreen.enabled,lockAt:control.lockScreen.lockAt,unlockAt:control.lockScreen.unlockAt,locked:control.lockScreen.locked,pinConfigured:Boolean(control.lockScreen.pin),updatedAt:control.lockScreen.updatedAt},command:control.command||null});
+});
 app.post("/api/admin/booths/:boothName/display",adminOnly,async(req,res)=>{const boothName=String(req.params.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);control.display={enabled:Boolean(req.body?.enabled),locked:Boolean(req.body?.locked),opacity:Math.max(20,Math.min(100,Number(req.body?.opacity)||80))};await writeBoothControl(boothName,control);res.json({ok:true,display:control.display});});
 app.post("/api/booth-agent/printer-status",boothAgentOnly,async(req,res)=>{
   try{
@@ -1265,6 +1290,64 @@ app.delete("/api/admin/booths/:boothName/printer-history",adminOnly,async(req,re
   const boothName=String(req.params.boothName||"").trim().toUpperCase(); await writeBoothPrinterHistory(boothName,[]); res.json({ok:true});
 });
 
+function printerFaultWatchKey(boothName){return `booth.printer-fault-watch.${String(boothName||"").toUpperCase()}`;}
+async function readPrinterFaultWatch(boothName){try{const row=await prisma.appSetting.findUnique({where:{key:printerFaultWatchKey(boothName)}});return row?.value?JSON.parse(row.value):null}catch{return null}}
+async function writePrinterFaultWatch(boothName,value){const key=printerFaultWatchKey(boothName);if(!value){await prisma.appSetting.delete({where:{key}}).catch(()=>{});return;}await prisma.appSetting.upsert({where:{key},update:{value:JSON.stringify(value)},create:{key,value:JSON.stringify(value)}});}
+async function markPrinterHistoryResolved(boothName,code,resolvedAt){
+  try{
+    const history=await readBoothPrinterHistory(boothName);
+    let changed=false;
+    for(const h of history){
+      const list=Array.isArray(h.incidents)?h.incidents:[];
+      for(let i=list.length-1;i>=0;i--){
+        const inc=list[i];
+        if(String(inc.code||"")===String(code||"")&&!inc.resolvedAt){inc.resolvedAt=resolvedAt;changed=true;break;}
+      }
+      if(changed)break;
+    }
+    if(changed)await writeBoothPrinterHistory(boothName,history);
+  }catch(err){console.error("PRINTER HISTORY RESOLVE ERROR :",err.message);}
+}
+async function processPrinterFaultWatch(boothName,payload){
+  const p=payload?.printer||{};
+  const raw=String(p.rawStatus||"").trim();
+  const severity=String(p.statusSeverity||"").toUpperCase();
+  const label=String(p.statusLabel||p.printerStatus||raw||"Défaut imprimante");
+  const normal=!raw||raw==="00000"||raw==="00001"||severity==="OK"||severity==="PRINTING"||severity==="INFO";
+  const now=new Date();
+  const previous=await readPrinterFaultWatch(boothName);
+  if(normal){
+    if(previous?.code){
+      const resolvedAt=now.toISOString();
+      await markPrinterHistoryResolved(boothName,previous.code,resolvedAt);
+      if(previous.incidentId){
+        await prisma.mathisIncident.update({where:{id:previous.incidentId},data:{status:"RESOLVED",resolvedAt:now,diagnostic:`${previous.label||previous.code} — défaut revenu à la normale automatiquement.`}}).catch(()=>{});
+      }
+      await writePrinterFaultWatch(boothName,null);
+    }
+    return;
+  }
+  let state=previous;
+  if(!state||String(state.code)!==raw){
+    state={code:raw,label,firstSeenAt:now.toISOString(),eventId:payload?.eventId||null,n1CreatedAt:null,incidentId:null};
+    await writePrinterFaultWatch(boothName,state);
+    return;
+  }
+  const first=new Date(state.firstSeenAt||now).getTime();
+  if(state.n1CreatedAt||Date.now()-first<15*60*1000)return;
+  if(!payload?.eventId)return;
+  const incident=await prisma.mathisIncident.create({data:{
+    eventId:payload.eventId,portalRole:"AGENT_AUTO",level:1,booth:String(boothName||"").slice(0,120),
+    printer:String(p.model||"Imprimante").slice(0,120),issue:label.slice(0,160),
+    diagnostic:`Défaut imprimante persistant depuis 15 minutes. Code ${raw}.`.slice(0,500),
+    led:raw.slice(0,180),contactFirstName:"Mathis",contactPhone:"",photosAvailable:false,
+    printsAvailable:Number(p.mediaRemaining||0)>0,status:"REQUESTED"
+  }});
+  await addNotification({title:`🖨️ N1 automatique — ${boothName}`,message:`${label} (code ${raw}) persiste depuis 15 minutes sur ${boothName}. Assistance N1 créée automatiquement.`,type:"WARNING",source:"MATHIS",audience:"ADMIN",eventId:payload.eventId});
+  state={...state,n1CreatedAt:now.toISOString(),incidentId:incident.id};
+  await writePrinterFaultWatch(boothName,state);
+}
+
 app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
   try{
     const boothName=String(req.body?.boothName||"").trim().slice(0,100);
@@ -1336,6 +1419,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
 
     if(p && p.mediaRemaining!==null && typeof p.mediaRemaining!=="undefined"){
       await updateBoothPrinterHistory(boothName,payload,previousPayload).catch(err=>console.error("PRINTER HISTORY ERROR :",err));
+      await processPrinterFaultWatch(boothName,payload).catch(err=>console.error("PRINTER FAULT WATCH ERROR :",err));
     }
 
     if(isConnectionTransition){
@@ -1369,7 +1453,7 @@ app.get("/api/admin/booths",moduleViewOnly("booths"),async(req,res)=>{
     const rows=await prisma.appSetting.findMany({where:{key:{startsWith:"boothStatus:"}}}); const now=Date.now(); const byName={};
     for(const row of rows){try{const s=JSON.parse(row.value||"{}");const ageMs=s.lastSeen?now-new Date(s.lastSeen).getTime():Number.MAX_SAFE_INTEGER;s.online=ageMs<=60000;s.ageSeconds=Math.max(0,Math.round(ageMs/1000));if(s.printer){const mt=s.printer.mediaReadAt?new Date(s.printer.mediaReadAt).getTime():NaN;if(Number.isFinite(mt)){const ma=Math.max(0,now-mt);s.printer.mediaAgeSeconds=Math.round(ma/1000);s.printer.mediaFresh=ma<=180000}else{s.printer.mediaAgeSeconds=null;s.printer.mediaFresh=false}}byName[String(s.boothName||"").trim().toUpperCase()]=s}catch{}}
     const names=["LOLA","NINA","GABIN"]; const controls=Object.fromEntries(await Promise.all(names.map(async name=>[name,await readBoothControl(name)])));
-    const configured=names.map(name=>{const s=byName[name]||{boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null};return {...s,display:controls[name].display,lastCommand:controls[name].command};});
+    const configured=names.map(name=>{const s=byName[name]||{boothName:name,online:false,lastSeen:null,eventId:null,eventName:null,lumaActive:false,syncStatus:"Aucune communication",counts:null,printer:null,ageSeconds:null};return {...s,display:controls[name].display,powerClient:controls[name].powerClient,lockScreen:{enabled:controls[name].lockScreen.enabled,lockAt:controls[name].lockScreen.lockAt,unlockAt:controls[name].lockScreen.unlockAt,locked:controls[name].lockScreen.locked,pinConfigured:Boolean(controls[name].lockScreen.pin),updatedAt:controls[name].lockScreen.updatedAt},lastCommand:controls[name].command};});
     const extras=Object.values(byName).filter(s=>!names.includes(String(s.boothName||"").toUpperCase())); res.json({ok:true,booths:[...configured,...extras]});
   }catch(err){console.error("ADMIN BOOTHS ERROR :",err);res.status(500).json({ok:false,message:"Lecture des bornes impossible."});}
 });
@@ -2916,6 +3000,17 @@ function contractHash(event) {
     framePrice: event.preparation?.framePrice != null
       ? String(event.preparation.framePrice)
       : null,
+    animatorJohan: event.preparation?.animatorJohan === true,
+    animatorJohanPrice: event.preparation?.animatorJohanPrice != null ? String(event.preparation.animatorJohanPrice) : null,
+
+    clientIdentity: {
+      firstName: event.preparation?.clientFirstName || null,
+      establishment: event.preparation?.clientEstablishment || null,
+      legalName: event.preparation?.clientLegalName || null,
+      siret: event.preparation?.clientSiret || null,
+      siren: event.preparation?.clientSiren || null,
+      establishmentAddress: event.preparation?.clientEstablishmentAddress || null
+    },
 
     client: event.client
       ? {
@@ -3702,6 +3797,25 @@ app.post(
 );
 
 
+function lp28DocumentLinksFromPrep(prep){
+  let p=prep; if(typeof p==="string"){try{p=JSON.parse(p)}catch{p={}}}
+  return Array.isArray(p?.documentLinks)?p.documentLinks:[];
+}
+function lp28DocumentLinkView(link){
+  const id=String(link.id||"");
+  return {id:"web-"+id,source:"WEB",name:link.displayName||documentTypeLabel(link.type),displayName:link.displayName||documentTypeLabel(link.type),type:link.type||"OTHER",typeLabel:documentTypeLabel(link.type||"OTHER"),visibleClient:link.visibleClient!==false,paymentStatus:String(link.paymentStatus||"NONE"),url:link.url,webViewLink:link.url,mimeType:"text/uri-list",createdTime:link.createdAt||null};
+}
+async function lp28ReadDocumentLinks(eventId){
+  const e=await prisma.event.findUnique({where:{id:eventId},select:{preparation:true}});
+  return lp28DocumentLinksFromPrep(e?.preparation);
+}
+async function lp28WriteDocumentLinks(eventId,links){
+  const e=await prisma.event.findUnique({where:{id:eventId},select:{preparation:true}});
+  let p=e?.preparation; if(typeof p==="string"){try{p=JSON.parse(p)}catch{p={}}} if(!p||typeof p!=="object"||Array.isArray(p))p={};
+  p.documentLinks=links; await prisma.event.update({where:{id:eventId},data:{preparation:p}});
+}
+async function lp28WebDocuments(eventId){return (await lp28ReadDocumentLinks(eventId)).map(lp28DocumentLinkView);}
+
 app.get("/api/events/:id/documents", adminOnly, async (req,res)=>{
   try{
     const event=await prisma.event.findUnique({
@@ -3727,7 +3841,7 @@ app.get("/api/events/:id/documents", adminOnly, async (req,res)=>{
         f.mimeType==="application/pdf" ||
         /\.pdf$/i.test(f.name||"")
       )
-      .map(normalizeDriveDocument)
+      .map(normalizeDriveDocument).concat(await lp28WebDocuments(event.id))
       .map(d=>({
         ...d,
         adminUrl:
@@ -3821,11 +3935,28 @@ app.post(
   }
 );
 
+app.post("/api/events/:id/documents/link",adminOnly,async(req,res)=>{
+  try{
+    const raw=String(req.body?.url||"").trim(); let u; try{u=new URL(raw)}catch{return res.status(400).json({ok:false,message:"Lien web invalide."})}
+    if(!["http:","https:"].includes(u.protocol))return res.status(400).json({ok:false,message:"Seuls les liens http/https sont autorisés."});
+    const allowed=["QUOTE","DEPOSIT_INVOICE","INVOICE","PURCHASE_ORDER","OTHER"]; const type=allowed.includes(String(req.body?.type||""))?String(req.body.type):"OTHER";
+    const links=await lp28ReadDocumentLinks(req.params.id); const item={id:crypto.randomUUID(),url:u.toString(),type,displayName:String(req.body?.displayName||"").trim()||documentTypeLabel(type),visibleClient:req.body?.visibleClient!==false,paymentStatus:["NONE","UPCOMING","PAID","PARTIAL","OVERDUE"].includes(String(req.body?.paymentStatus||""))?String(req.body.paymentStatus):"NONE",createdAt:new Date().toISOString()};
+    links.unshift(item); await lp28WriteDocumentLinks(req.params.id,links.slice(0,100)); res.json({ok:true,document:lp28DocumentLinkView(item)});
+  }catch(err){console.error("Document link create",err);res.status(500).json({ok:false,message:"Impossible d'ajouter le lien web."});}
+});
+
 app.patch(
   "/api/events/:id/documents/:fileId",
   adminOnly,
   async (req,res)=>{
     try{
+      if(String(req.params.fileId||"").startsWith("web-")){
+        const id=String(req.params.fileId).slice(4),links=await lp28ReadDocumentLinks(req.params.id),i=links.findIndex(x=>String(x.id)===id);
+        if(i<0)return res.status(404).json({ok:false,message:"Lien introuvable."});
+        if(req.body?.type)links[i].type=String(req.body.type); if(req.body?.displayName!=null)links[i].displayName=String(req.body.displayName).trim()||documentTypeLabel(links[i].type); if(req.body?.visibleClient!=null)links[i].visibleClient=Boolean(req.body.visibleClient); if(req.body?.paymentStatus!=null && ["NONE","UPCOMING","PAID","PARTIAL","OVERDUE"].includes(String(req.body.paymentStatus)))links[i].paymentStatus=String(req.body.paymentStatus);
+        await lp28WriteDocumentLinks(req.params.id,links); return res.json({ok:true,document:lp28DocumentLinkView(links[i])});
+      }
+
       const updated=
         await googleService.updateEventDocumentMetadata(
           req,
@@ -4643,7 +4774,9 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
     let prep=event.preparation;
     if(typeof prep==="string"){try{prep=JSON.parse(prep)}catch{prep={}}}
     const savedPortal=prep?.portalPermissions&&typeof prep.portalPermissions==="object"?prep.portalPermissions:{};
-    const portalPermissions={organizerContract:savedPortal.organizerContract!==false,organizerDocuments:savedPortal.organizerDocuments!==false,organizerShare:savedPortal.organizerShare!==false,organizerMathis:savedPortal.organizerMathis!==false,guestGallery:savedPortal.guestGallery!==false,guestMathis:savedPortal.guestMathis!==false};
+    const organizerGuestAccess=prep?.organizerGuestAccess&&typeof prep.organizerGuestAccess==="object"?prep.organizerGuestAccess:{};
+    /* LP28_PERSONALIZATION_GALLERY_COMPAT_V1 */
+    const portalPermissions={organizerContract:savedPortal.organizerContract!==false,organizerDocuments:savedPortal.organizerDocuments!==false,organizerShare:savedPortal.organizerShare!==false,organizerMathis:savedPortal.organizerMathis!==false,guestGallery:savedPortal.guestGallery!==false,guestMathis:savedPortal.guestMathis!==false,guestPhotoboothOpen:organizerGuestAccess.photoboothOpen!==false,guestQrGalleryOpen:organizerGuestAccess.qrGalleryOpen!==false,personalizationAccess:savedPortal.personalizationAccess===true,personalizationTemplatesBooth:savedPortal.personalizationTemplatesBooth!==false,personalizationBoothWidget:savedPortal.personalizationBoothWidget!==false};
 
     if(access.role==="ORGANIZER"){
 
@@ -4694,6 +4827,8 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
           err.message
         );
       }
+
+      clientDocuments=clientDocuments.concat((await lp28WebDocuments(event.id)).filter(d=>d.visibleClient!==false));
 
       organizerDocuments={
         contract:{
@@ -4793,6 +4928,135 @@ app.get("/api/guest/:token/portal", async (req,res)=>{
     });
   }
 });
+// LP28_ORGANIZER_GALLERY_LOCKS_API_V1
+app.post("/api/guest/:token/guest-gallery-access", async (req,res)=>{
+  try{
+    const access=await portalAccessRaw(req.params.token);
+    if(!access||access.role!=="ORGANIZER"||!access.event?.portalEnabled){
+      return res.status(403).json({ok:false,message:"Accès organisateur requis."});
+    }
+    const section=String(req.body?.section||"").toUpperCase();
+    if(!["PHOTOBOOTH","QR"].includes(section)){
+      return res.status(400).json({ok:false,message:"Section invalide."});
+    }
+    let prep=access.event.preparation;
+    if(typeof prep==="string"){try{prep=JSON.parse(prep)}catch{prep={}}}
+    if(!prep||typeof prep!=="object"||Array.isArray(prep))prep={};
+    const guestAccess=prep.organizerGuestAccess&&typeof prep.organizerGuestAccess==="object"?{...prep.organizerGuestAccess}:{};
+    const open=req.body?.open!==false;
+    if(section==="PHOTOBOOTH")guestAccess.photoboothOpen=open;
+    if(section==="QR")guestAccess.qrGalleryOpen=open;
+    const preparation={...prep,organizerGuestAccess:guestAccess};
+    await prisma.event.update({where:{id:access.event.id},data:{preparation}});
+    res.json({ok:true,guestPhotoboothOpen:guestAccess.photoboothOpen!==false,guestQrGalleryOpen:guestAccess.qrGalleryOpen!==false});
+  }catch(err){
+    console.error("Mise à jour accès galeries organisateur :",err);
+    res.status(500).json({ok:false,message:"Impossible de modifier l’accès des invités."});
+  }
+});
+
+
+
+// LP28_PERSONALIZATION_LINKS_V1
+function lp28PersonalizationSecret(){return String(process.env.SESSION_SECRET||process.env.ADMIN_PASSWORD||"lp28-personalization");}
+function lp28EncodePersonalizationToken(payload){
+  const body=Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig=crypto.createHmac("sha256",lp28PersonalizationSecret()).update(body).digest("base64url");
+  return body+"."+sig;
+}
+function lp28DecodePersonalizationToken(token){
+  try{
+    const parts=String(token||"").split(".");if(parts.length!==2)return null;
+    const expected=crypto.createHmac("sha256",lp28PersonalizationSecret()).update(parts[0]).digest("base64url");
+    const a=Buffer.from(parts[1]),b=Buffer.from(expected);if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return null;
+    const p=JSON.parse(Buffer.from(parts[0],"base64url").toString("utf8"));
+    if(!p?.eventId||!["templates","boothwidget"].includes(p.catalog)||!p.nonce)return null;
+    return p;
+  }catch{return null;}
+}
+function lp28Prep(event){let prep=event?.preparation;if(typeof prep==="string"){try{prep=JSON.parse(prep)}catch{prep={}}}return prep&&typeof prep==="object"&&!Array.isArray(prep)?prep:{};}
+function lp28PersonalizationPermission(prep,catalog){
+  const p=prep?.portalPermissions&&typeof prep.portalPermissions==="object"?prep.portalPermissions:{};
+  if(p.personalizationAccess!==true)return false;
+  if(catalog==="templates"&&p.personalizationTemplatesBooth===false)return false;
+  if(catalog==="boothwidget"&&p.personalizationBoothWidget===false)return false;
+  return true;
+}
+function lp28CatalogLabel(catalog){return catalog==="templates"?"TemplatesBooth":"BoothWidget";}
+function lp28CatalogUrl(catalog){return catalog==="templates"?"https://templatesbooth.com/widget-embed/?key=NDc4MQ%3D%3D":"https://locphotobooth28.boothwidget.com";}
+function lp28HtmlPage(title,body){return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+title+'</title><style>body{margin:0;background:#0b0b0d;color:#f7f7f7;font-family:Arial,sans-serif}.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#151518;border:1px solid #343438;border-radius:18px;padding:24px}.gold{color:#e6c84f}button{background:#e6c84f;color:#111;border:0;border-radius:12px;padding:13px 18px;font-weight:800;font-size:16px;cursor:pointer}.muted{color:#bbb;line-height:1.55}iframe{width:100%;border:0;background:#fff;border-radius:14px}</style></head><body><div class="wrap">'+body+'</div></body></html>';}
+
+app.post("/api/guest/:token/personalization-link/:catalog",async(req,res)=>{
+  try{
+    const catalog=String(req.params.catalog||"").toLowerCase();
+    if(!["templates","boothwidget"].includes(catalog))return res.status(400).json({ok:false,message:"Catalogue inconnu."});
+    const access=await portalAccess(req.params.token);
+    if(!access?.event||access.role!=="ORGANIZER"||!access.event.portalEnabled)return res.status(403).json({ok:false,message:"Accès réservé à l’organisateur."});
+    const prep=lp28Prep(access.event);
+    if(!lp28PersonalizationPermission(prep,catalog))return res.status(403).json({ok:false,message:"L’accès au catalogue n’a pas été validé par Johan."});
+    prep.personalizationLinks=prep.personalizationLinks&&typeof prep.personalizationLinks==="object"?prep.personalizationLinks:{};
+    let state=prep.personalizationLinks[catalog];
+    if(!state||!state.nonce){
+      state={nonce:randomToken(18),createdAt:new Date().toISOString(),firstUsedAt:null,expiresAt:null};
+      prep.personalizationLinks[catalog]=state;
+      await prisma.event.update({where:{id:access.event.id},data:{preparation:prep}});
+    }
+    if(state.expiresAt&&Date.now()>=new Date(state.expiresAt).getTime())return res.status(410).json({ok:false,message:"Ce lien a expiré. Merci de demander son renouvellement à Location Photobooth 28."});
+    const signed=lp28EncodePersonalizationToken({eventId:access.event.id,catalog,nonce:state.nonce});
+    const url=req.protocol+"://"+req.get("host")+"/personalization/"+encodeURIComponent(signed);
+    res.json({ok:true,url,activated:Boolean(state.firstUsedAt),firstUsedAt:state.firstUsedAt||null,expiresAt:state.expiresAt||null});
+  }catch(err){console.error("Lien personnalisation :",err);res.status(500).json({ok:false,message:"Impossible de créer le lien temporaire."});}
+});
+
+app.post("/api/events/:id/personalization-renew/:catalog",adminOnly,async(req,res)=>{
+  try{
+    const catalog=String(req.params.catalog||"").toLowerCase();
+    if(!["templates","boothwidget"].includes(catalog))return res.status(400).json({ok:false,message:"Catalogue inconnu."});
+    const event=await prisma.event.findUnique({where:{id:req.params.id}});if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    const prep=lp28Prep(event);prep.personalizationLinks=prep.personalizationLinks&&typeof prep.personalizationLinks==="object"?prep.personalizationLinks:{};
+    prep.personalizationLinks[catalog]={nonce:randomToken(18),createdAt:new Date().toISOString(),firstUsedAt:null,expiresAt:null};
+    await prisma.event.update({where:{id:event.id},data:{preparation:prep}});
+    res.json({ok:true,message:"Nouveau jeton créé.",catalog});
+  }catch(err){console.error("Renouvellement personnalisation :",err);res.status(500).json({ok:false,message:"Renouvellement impossible."});}
+});
+
+app.post("/api/personalization/:signed/activate",async(req,res)=>{
+  try{
+    const payload=lp28DecodePersonalizationToken(req.params.signed);if(!payload)return res.status(403).json({ok:false,message:"Lien invalide."});
+    const event=await prisma.event.findUnique({where:{id:payload.eventId}});if(!event)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    const prep=lp28Prep(event);if(!lp28PersonalizationPermission(prep,payload.catalog))return res.status(403).json({ok:false,message:"Accès désactivé."});
+    const state=prep?.personalizationLinks?.[payload.catalog];if(!state||state.nonce!==payload.nonce)return res.status(403).json({ok:false,message:"Ce lien a été remplacé. Merci d’utiliser le nouveau lien."});
+    if(state.expiresAt&&Date.now()>=new Date(state.expiresAt).getTime())return res.status(410).json({ok:false,message:"Ce lien a expiré. Merci de demander son renouvellement."});
+    if(!state.firstUsedAt){
+      const now=new Date(),expires=new Date(now.getTime()+7*24*60*60*1000);state.firstUsedAt=now.toISOString();state.expiresAt=expires.toISOString();
+      prep.personalizationLinks[payload.catalog]=state;await prisma.event.update({where:{id:event.id},data:{preparation:prep}});
+    }
+    res.json({ok:true,expiresAt:state.expiresAt});
+  }catch(err){console.error("Activation personnalisation :",err);res.status(500).json({ok:false,message:"Activation impossible."});}
+});
+
+app.get("/personalization/:signed",async(req,res)=>{
+  try{
+    res.setHeader("Cache-Control","no-store");
+    const payload=lp28DecodePersonalizationToken(req.params.signed);
+    if(!payload)return res.status(403).send(lp28HtmlPage("Lien invalide",'<div class="card"><h1>🔒 Lien invalide</h1><p class="muted">Ce lien de personnalisation n’est plus valide.</p></div>'));
+    const event=await prisma.event.findUnique({where:{id:payload.eventId}});if(!event)return res.status(404).send(lp28HtmlPage("Lien introuvable",'<div class="card"><h1>🔒 Lien introuvable</h1></div>'));
+    const prep=lp28Prep(event);if(!lp28PersonalizationPermission(prep,payload.catalog))return res.status(403).send(lp28HtmlPage("Accès désactivé",'<div class="card"><h1>🔒 Accès désactivé</h1><p class="muted">Merci de contacter Location Photobooth 28.</p></div>'));
+    const state=prep?.personalizationLinks?.[payload.catalog];if(!state||state.nonce!==payload.nonce)return res.status(403).send(lp28HtmlPage("Lien remplacé",'<div class="card"><h1>🔒 Ce lien a été remplacé</h1><p class="muted">Merci d’utiliser le nouveau lien transmis par Location Photobooth 28.</p></div>'));
+    if(state.expiresAt&&Date.now()>=new Date(state.expiresAt).getTime())return res.status(410).send(lp28HtmlPage("Lien expiré",'<div class="card"><h1>⏳ Accès expiré</h1><p class="muted">Votre accès de 7 jours est terminé. En cas de besoin, merci de demander le renouvellement à Location Photobooth 28.</p></div>'));
+    if(!state.firstUsedAt){
+      const safeToken=JSON.stringify(String(req.params.signed));
+      const body='<div class="card"><div class="gold">LOCATION PHOTOBOOTH 28</div><h1>🔐 Activation de votre accès '+lp28CatalogLabel(payload.catalog)+'</h1><p class="muted">À partir de votre première activation, votre accès au catalogue sera valable pendant <strong>7 jours</strong>. En cas de besoin après ce délai, merci de demander le renouvellement de votre accès à Location Photobooth 28.</p><button id="activate">Activer mon accès pendant 7 jours</button><p id="msg" class="muted"></p></div><script>document.getElementById("activate").onclick=async function(){this.disabled=true;document.getElementById("msg").textContent="Activation…";try{var r=await fetch("/api/personalization/"+encodeURIComponent('+safeToken+')+"/activate",{method:"POST"});var d=await r.json();if(!r.ok)throw new Error(d.message||"Activation impossible");location.reload();}catch(e){document.getElementById("msg").textContent=e.message;this.disabled=false;}};</script>';
+      return res.send(lp28HtmlPage("Activation catalogue",body));
+    }
+    const expiresText=new Date(state.expiresAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});
+    let extra='';
+    if(payload.catalog==="templates")extra='<script>window.addEventListener("message",function(event){var iframe=document.getElementById("tbtemp");if(!iframe||event.source!==iframe.contentWindow)return;if(event.origin!=="https://templatesbooth.com")return;var data=event.data||{};if(data.type!=="TB_WIDGET_REDIRECT"||!data.url)return;window.location.href=data.url;});</script>';
+    const body='<div class="card" style="margin-bottom:16px"><div class="gold">LOCATION PHOTOBOOTH 28</div><h2>🎨 '+lp28CatalogLabel(payload.catalog)+'</h2><p class="muted">Votre accès temporaire est actif jusqu’au <strong>'+expiresText+'</strong>.</p></div><iframe id="'+(payload.catalog==="templates"?'tbtemp':'bwtemp')+'" src="'+lp28CatalogUrl(payload.catalog)+'" scrolling="yes" style="height:'+(payload.catalog==="templates"?'2200px':'100vh')+';min-height:650px"></iframe>'+extra;
+    return res.send(lp28HtmlPage("Catalogue "+lp28CatalogLabel(payload.catalog),body));
+  }catch(err){console.error("Affichage personnalisation :",err);return res.status(500).send(lp28HtmlPage("Erreur",'<div class="card"><h1>Erreur</h1><p class="muted">Impossible d’ouvrir ce catalogue.</p></div>'));}
+});
+
 app.post("/api/guest/:token/gallery-originals-visibility", async (req,res)=>{
   const access=await portalAccess(req.params.token);
 
@@ -5849,6 +6113,10 @@ app.get("/api/collaborator-portal/:token", async (req, res) => {
   const event = access.event;
   const effectivePermissions=effectiveCollaboratorPermissions(event,access);
   const canSeeOperationalBalance=effectivePermissions.canSeeBalance;
+  /* LP28_COLLAB_PREPARATION_V1 */
+  let collaboratorPrep=event?.preparation;
+  if(typeof collaboratorPrep==="string"){try{collaboratorPrep=JSON.parse(collaboratorPrep)}catch{collaboratorPrep={}}}
+  if(!collaboratorPrep||typeof collaboratorPrep!=="object"||Array.isArray(collaboratorPrep))collaboratorPrep={};
 let driveDocuments = [];
 
 try {
@@ -5898,10 +6166,17 @@ try {
     client: effectivePermissions.canSeeClient
       ? {
           name: event.organizerName,
+          firstName: collaboratorPrep.clientFirstName || event.client?.firstName || null,
           phone: event.organizerPhone,
           email: event.organizerEmail
         }
       : null,
+
+    preparation: {
+      checklist: collaboratorPrep.checklist && typeof collaboratorPrep.checklist === "object"
+        ? collaboratorPrep.checklist
+        : {}
+    },
 
     balance: canSeeOperationalBalance
       ? eventOperationalRemaining(event)
@@ -5954,6 +6229,39 @@ documents: {
       instructions: effectivePermissions.canSeeInstructions
     }
   });
+});
+
+app.post("/api/collaborator-portal/:token/preparation-checklist", async (req,res)=>{
+  try{
+    const access=await prisma.collaboratorAccess.findUnique({
+      where:{token:req.params.token},
+      include:{event:true}
+    });
+    if(!access||!access.active||!access.event){
+      return res.status(404).json({ok:false,message:"Accès invalide ou expiré."});
+    }
+    const incoming=req.body?.checklist;
+    if(!incoming||typeof incoming!=="object"||Array.isArray(incoming)){
+      return res.status(400).json({ok:false,message:"Check-list invalide."});
+    }
+    let preparation=access.event.preparation;
+    if(typeof preparation==="string"){try{preparation=JSON.parse(preparation)}catch{preparation={}}}
+    if(!preparation||typeof preparation!=="object"||Array.isArray(preparation))preparation={};
+    const safeChecklist={};
+    for(const [rawKey,rawValue] of Object.entries(incoming).slice(0,120)){
+      const key=String(rawKey||"").trim().slice(0,180);
+      if(key)safeChecklist[key]=rawValue===true;
+    }
+    const nextPreparation={...preparation,checklist:safeChecklist};
+    await prisma.event.update({
+      where:{id:access.eventId},
+      data:{preparation:nextPreparation}
+    });
+    return res.json({ok:true,checklist:safeChecklist});
+  }catch(err){
+    console.error("Checklist préparation collaborateur :",err);
+    return res.status(500).json({ok:false,message:"Impossible d'enregistrer la préparation."});
+  }
 });
 
 app.get(
@@ -6233,6 +6541,49 @@ self.addEventListener("notificationclick",event=>{
 `);
 });
 app.use(express.static(distDir));
+
+// LP28 — titres dédiés pour les aperçus WhatsApp / Messenger / SMS.
+// Les routes SPA restent inchangées : seul le HTML initial reçoit les métadonnées adaptées.
+app.get(["/signature/:token","/portal/:token","/guest/:token"], (req,res,next)=>{
+  try{
+    const indexPath=path.join(distDir,"index.html");
+    if(!fs.existsSync(indexPath))return next();
+    const pathname=String(req.path||"");
+    let title="Location Photobooth 28";
+    let description="Application Location Photobooth 28";
+    if(pathname.startsWith("/signature/")){
+      title="Location Photobooth 28 – Signature du contrat";
+      description="Consultez et signez votre contrat Location Photobooth 28.";
+    }else if(pathname.startsWith("/portal/")){
+      title="Location Photobooth 28 – Espace Organisateur";
+      description="Accédez à votre espace Organisateur Location Photobooth 28.";
+    }else if(pathname.startsWith("/guest/")){
+      title="Location Photobooth 28 – Espace Invités";
+      description="Accédez à l’espace Invités Location Photobooth 28 et aux souvenirs de l’événement.";
+    }
+    const esc=s=>String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const absoluteUrl=(req.protocol+"://"+req.get("host")+req.originalUrl);
+    let html=fs.readFileSync(indexPath,"utf8");
+    html=html.replace(/<title>[\s\S]*?<\/title>/i,"<title>"+esc(title)+"</title>");
+    html=html.replace("</head>",
+      '<meta name="description" content="'+esc(description)+'" />'+
+      '<meta property="og:type" content="website" />'+
+      '<meta property="og:site_name" content="Location Photobooth 28" />'+
+      '<meta property="og:title" content="'+esc(title)+'" />'+
+      '<meta property="og:description" content="'+esc(description)+'" />'+
+      '<meta property="og:url" content="'+esc(absoluteUrl)+'" />'+
+      '<meta property="og:image" content="'+esc(req.protocol+"://"+req.get("host")+"/icons/lp28-192.png")+'" />'+
+      '<meta name="twitter:card" content="summary" />'+
+      '<meta name="twitter:title" content="'+esc(title)+'" />'+
+      '<meta name="twitter:description" content="'+esc(description)+'" />'+
+      '</head>');
+    res.type("html").set("Cache-Control","no-cache").send(html);
+  }catch(err){
+    console.error("Aperçu lien LP28 :",err.message);
+    next();
+  }
+});
+
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({ ok: false });
