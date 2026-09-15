@@ -26,11 +26,11 @@ if(!app.includes('LP28_EVENT_FORM_TABS_V1')){
       const t=String(text||"").toLowerCase();
       if(t.includes("organisateur")||t.includes("client"))return "client";
       if(t.includes("équipe")||t.includes("equipe")||t.includes("collaborateur"))return "team";
-      if(t.includes("frais")||t.includes("déplacement")||t.includes("deplacement")||t.includes("commercial")||t.includes("acompte")||t.includes("solde")||t.includes("tarif")||t.includes("paiement")||t.includes("payé")||t.includes("paye")||t.includes("caution")||t.includes("règlement")||t.includes("reglement"))return "finance";
+      if(t.includes("frais")||t.includes("déplacement")||t.includes("deplacement")||t.includes("commercial")||t.includes("acompte")||t.includes("solde")||t.includes("tarif")||t.includes("paiement")||t.includes("payé")||t.includes("paye")||t.includes("caution")||t.includes("règlement")||t.includes("reglement")||t.includes("cadre photo"))return "finance";
       if(t.includes("portail"))return "portal";
       if(t.includes("préparation")||t.includes("preparation")||t.includes("check")||t.includes("chargé")||t.includes("charge")||t.includes("départ")||t.includes("depart")||t.includes("retour"))return "prep";
       if(t.includes("matériel")||t.includes("materiel")||t.includes("impression")||t.includes("borne")||t.includes("jet")||t.includes("étincelle")||t.includes("etincelle")||t.includes("option"))return "material";
-      if(t.includes("google")||t.includes("agenda")||t.includes("cadre photo")||t.includes("notes")||t.includes("note")||t.includes("technique"))return "tech";
+      if(t.includes("google")||t.includes("agenda")||t.includes("notes")||t.includes("note")||t.includes("technique"))return "tech";
       return "event";
     };
     let group="event";
@@ -68,9 +68,9 @@ if(!app.includes('LP28_EVENT_FORM_TABS_V1')){
           ["event","📅 Événement"],
           ["client","👤 Client"],
           ["team","👷 Équipe"],
-          ["finance","💰 Finances"],
           ["material","📦 Matériel"],
           ["portal","🌐 Portail"],
+          ["finance","💰 Finances"],
           ["prep","✅ Préparation"],
           ["tech","⚙️ Technique & notes"]
         ].map(([key,label])=><button key={key} type="button" role="tab" aria-selected={eventTab===key} className={eventTab===key?"lp28-event-tab active":"lp28-event-tab"} onClick={()=>setEventTab(key)}>{label}</button>)}
