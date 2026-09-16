@@ -1,4 +1,4 @@
-﻿
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const SITE = "https://www.locationphotobooth28.fr";
@@ -6443,11 +6443,13 @@ function Dashboard({onLogout,user}) {
   const eventTabCounts=useMemo(()=>{
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
     const isInProgress=e=>e?.status==="IN_PROGRESS"&&!isCompleted(e);
+    const isQuoteSent=e=>e?.bookingStatus==="QUOTE_SENT"&&!isCompleted(e);
     return {
-      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)&&!isInProgress(e)).length,
+      upcoming:events.filter(e=>!e.archived&&!isCompleted(e)&&!isInProgress(e)&&!isQuoteSent(e)).length,
       inProgress:events.filter(e=>!e.archived&&isInProgress(e)).length,
       completed:events.filter(e=>!e.archived&&isCompleted(e)).length,
-      archived:events.filter(e=>e.archived).length
+      archived:events.filter(e=>e.archived).length,
+      quoteSent:events.filter(e=>!e.archived&&isQuoteSent(e)&&!isInProgress(e)).length
     };
   },[events]);
 
@@ -6455,13 +6457,15 @@ function Dashboard({onLogout,user}) {
     const q=search.trim().toLowerCase();
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
     const isInProgress=e=>e?.status==="IN_PROGRESS"&&!isCompleted(e);
+    const isQuoteSent=e=>e?.bookingStatus==="QUOTE_SENT"&&!isCompleted(e);
 
     return events
       .filter(e=>{
         if(eventTab==="inProgress")return !e.archived&&isInProgress(e);
         if(eventTab==="completed")return !e.archived&&isCompleted(e);
         if(eventTab==="archived")return !!e.archived;
-        return !e.archived&&!isCompleted(e)&&!isInProgress(e);
+        if(eventTab==="quoteSent")return !e.archived&&isQuoteSent(e)&&!isInProgress(e);
+        return !e.archived&&!isCompleted(e)&&!isInProgress(e)&&!isQuoteSent(e);
       })
       .filter(e=>(`${e.name||""} ${e.organizerName||""} ${e.type||""}`).toLowerCase().includes(q))
       .sort((a,b)=>{
@@ -6946,10 +6950,14 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
             onClick={()=>setEventTab("archived")}
             style={{border:`1px solid ${eventTab==="archived"?"#cbd5e1":"rgba(203,213,225,.48)"}`,background:eventTab==="archived"?"#475569":"rgba(148,163,184,.10)",color:eventTab==="archived"?"#ffffff":"#e2e8f0",fontWeight:900,boxShadow:eventTab==="archived"?"0 6px 18px rgba(148,163,184,.16)":"none"}}
           >📦 Archivées <strong style={{marginLeft:6}}>{eventTabCounts.archived}</strong></button>
+          <button
+            onClick={()=>setEventTab("quoteSent")}
+            style={{border:`1px solid ${eventTab==="quoteSent"?"#38bdf8":"rgba(56,189,248,.50)"}`,background:eventTab==="quoteSent"?"#075985":"rgba(56,189,248,.10)",color:eventTab==="quoteSent"?"#ffffff":"#7dd3fc",fontWeight:900,boxShadow:eventTab==="quoteSent"?"0 6px 18px rgba(56,189,248,.18)":"none"}}
+          >📤 Devis envoyés <strong style={{marginLeft:6}}>{eventTabCounts.quoteSent}</strong></button>
         </div>
         <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
-          {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":"Aucun dossier dans cet onglet."}</p></div>}
+          {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":eventTab==="quoteSent"?"📤":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":eventTab==="quoteSent"?"Aucun devis envoyé":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":eventTab==="quoteSent"?"Les devis envoyés en attente de confirmation apparaîtront ici.":"Aucun dossier dans cet onglet."}</p></div>}
           {filtered.map((event,eventIndex)=>{
             const weekSection=eventTab==="upcoming"
               ?getUpcomingWeekSection(event.date)
