@@ -3335,11 +3335,29 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   const [freeText,setFreeText]=useState("");
   const [supportPhoto,setSupportPhoto]=useState(null);
   const [supportPhotoConsent,setSupportPhotoConsent]=useState(false);
+  const [livePrinterStatus,setLivePrinterStatus]=useState(null);
   const isEventUser=userRole==="organizer"||userRole==="guest"||userRole==="organisateur"||userRole==="invite";
   const eventName=eventContext?.name||eventContext?.title||eventContext?.eventName||"";
   const boothInfo=MATHIS_BOOTHS[booth];
   const issueInfo=MATHIS_ISSUES.find(x=>x[0]===issue);
   const printerInfo=MATHIS_PRINTERS[printer];
+
+  useEffect(()=>{
+    if(issue!=="printer"||!booth||!portalToken){setLivePrinterStatus(null);return;}
+    let alive=true;
+    const loadPrinterFault=async()=>{
+      try{
+        const boothName=String(boothInfo?.name||booth||"").toUpperCase();
+        const r=await fetch(`/api/guest/${encodeURIComponent(portalToken)}/mathis/printer-status/${encodeURIComponent(boothName)}`);
+        if(!r.ok)return;
+        const d=await r.json();
+        if(alive)setLivePrinterStatus(d.printer||null);
+      }catch(e){}
+    };
+    loadPrinterFault();
+    const timer=setInterval(loadPrinterFault,5000);
+    return()=>{alive=false;clearInterval(timer)};
+  },[issue,booth,portalToken,boothInfo?.name]);
 
   useEffect(()=>{
     if(!isEventUser||!portalToken)return;
@@ -3650,7 +3668,17 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
   }
 
   function PrinterDiagnostic(){
-    if(printerStage==="led-first") return <>
+    const liveRaw=String(livePrinterStatus?.rawStatus||"").trim();
+    const liveSeverity=String(livePrinterStatus?.statusSeverity||"").toUpperCase();
+    const liveLabel=String(livePrinterStatus?.statusLabel||"").trim();
+    const liveFault=Boolean(livePrinterStatus?.present)&&Boolean(liveRaw)&&!["00000","00001"].includes(liveRaw)&&!["OK","INFO","PRINTING"].includes(liveSeverity);
+    const useLiveFault=()=>{
+      const text=(liveLabel+" "+liveRaw).toLowerCase();
+      const symptom=text.includes("bourrage")||text.includes("jam")?"jam":text.includes("papier")||text.includes("paper")?"paper":text.includes("ruban")||text.includes("ribbon")?"ribbon":text.includes("hors ligne")||text.includes("offline")?"offline":"error";
+      setPrinterSymptom(symptom);setPrinterStage("action");
+    };
+    const liveFaultBanner=liveFault?<div className="mathis-bubble mathis-bubble-bot" style={{border:"2px solid #ef4444"}}><b>🔴 Défaut lu automatiquement dans LP28 Admin</b><br/><b>Borne :</b> {boothInfo?.name||"—"}<br/><b>Code défaut :</b> {liveRaw}<br/><b>Référence LP28 :</b> {liveLabel||"Défaut imprimante"}<br/><small>Mathis utilise la remontée déjà enregistrée dans LP28 Admin. Aucune modification du LP28 Agent n'est effectuée.</small><div className="mathis-actions" style={{marginTop:10}}><button onClick={useLiveFault}>🤖 Analyser ce défaut avec Mathis</button></div></div>:null;
+    if(printerStage==="led-first") return <>{liveFaultBanner}
       <div className="mathis-bubble mathis-bubble-bot"><b>Avant toute manipulation, regardez l'imprimante.</b><br/><b>Un voyant clignote-t-il sur l'imprimante ?</b></div>
       <div className="mathis-actions mathis-led-first-actions">
         <button onClick={()=>{setLedCode("");setPrinterSymptom("error");setPrinterStage("action")}}>🔴 OUI, un voyant clignote</button>
@@ -3658,7 +3686,7 @@ function MathisAssistant({videos=[],eventContext=null,userRole="admin",supportPh
       </div>
     </>;
 
-    if(printerStage==="symptom") return <>
+    if(printerStage==="symptom") return <>{liveFaultBanner}
       <div className="mathis-bubble mathis-bubble-bot"><b>Très bien. Je dépanne {boothInfo?.name} avec {printerInfo?.name||"l'imprimante"}.</b><br/>Quel symptôme vois-tu maintenant ?</div>
       <div className="mathis-choice-grid mathis-printer-symptoms">
         <button onClick={()=>choosePrinterSymptom("not-printing")}><span>🖨️</span><b>Rien ne s'imprime</b><small>L'imprimante semble prête</small></button>

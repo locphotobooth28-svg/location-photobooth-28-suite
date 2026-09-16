@@ -4573,6 +4573,23 @@ app.post("/api/guest/:token/mathis/incidents/:id/photos", mathisSavPhotoUpload.s
   }catch(err){console.error("Mathis SAV photo",err);res.status(500).json({ok:false,message:"Impossible d'enregistrer la photo de contrôle SAV."});}
   finally{if(f?.path)fs.unlink(f.path,()=>{});}
 });
+app.get("/api/guest/:token/mathis/printer-status/:boothName", async (req,res)=>{
+  try{
+    const access=await portalAccess(req.params.token);
+    if(!access?.event)return res.status(404).json({ok:false});
+    const boothName=String(req.params.boothName||"").trim().toUpperCase();
+    if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});
+    const row=await prisma.appSetting.findUnique({where:{key:boothStatusKey(boothName)}}).catch(()=>null);
+    let payload={};
+    try{payload=row?.value&&typeof row.value==="object"?row.value:JSON.parse(String(row?.value||"{}"));}catch{payload={};}
+    const p=payload?.printer||{};
+    res.json({ok:true,printer:{
+      present:Boolean(p.present),model:String(p.model||"").slice(0,100)||null,rawStatus:String(p.rawStatus||"").slice(0,100)||null,
+      statusSeverity:String(p.statusSeverity||"").slice(0,20)||null,statusLabel:String(p.statusLabel||"").slice(0,160)||null,
+      statusFresh:p.statusFresh===null||typeof p.statusFresh==="undefined"?null:Boolean(p.statusFresh),statusAgeSeconds:Number.isFinite(Number(p.statusAgeSeconds))?Math.max(0,Number(p.statusAgeSeconds)):null
+    }});
+  }catch(err){console.error("Mathis printer status",err);res.status(500).json({ok:false,message:"Statut imprimante indisponible."});}
+});
 app.get("/api/guest/:token/mathis/incidents/active", async (req,res)=>{
   try{
     const access=await portalAccess(req.params.token);
