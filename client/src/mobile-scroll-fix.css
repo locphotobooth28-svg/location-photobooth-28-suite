@@ -1,0 +1,48 @@
+/* LP28 — correctif scroll mobile fiche événement (2026-09-16)
+   Empêche les actions basses (Accès client, Gestion, Plus…) d'être coupées
+   sur les navigateurs mobiles avec barre d'adresse/navigation dynamique. */
+@media (max-width: 700px) {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .app-shell {
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
+  }
+
+  .content {
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    padding-bottom: max(110px, calc(env(safe-area-inset-bottom) + 80px));
+  }
+
+  .events-list,
+  .event-card,
+  .event-content {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* La fiche peut dépasser l'écran : le document reste donc scrollable jusqu'au dernier bouton. */
+  .events-list .event-card {
+    padding-bottom: 24px !important;
+  }
+
+  .events-list .event-card .event-actions {
+    overflow: visible !important;
+  }
+
+  /* Marge de sécurité pour les derniers accordéons/actions sur Android. */
+  .events-list .event-card:last-child {
+    margin-bottom: max(90px, env(safe-area-inset-bottom));
+  }
+}
