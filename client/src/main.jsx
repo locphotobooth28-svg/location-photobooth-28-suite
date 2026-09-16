@@ -3,6 +3,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./styles.css";
+import "./mobile-scroll-fix.css";
 import { initOrganizerDocumentEnhancer } from "./organizerDocumentEnhancer";
 
 createRoot(document.getElementById("root")).render(
