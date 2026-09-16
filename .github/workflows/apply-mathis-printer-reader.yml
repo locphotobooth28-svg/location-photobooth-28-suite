@@ -1,0 +1,39 @@
+name: Apply Mathis printer reader
+
+on:
+  push:
+    paths:
+      - 'scripts/patch-mathis-printer-reader.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Apply Mathis-only printer reader patch
+        run: node scripts/patch-mathis-printer-reader.js
+      - name: Validate JavaScript syntax
+        run: |
+          node --check server.js
+          node --check scripts/patch-mathis-printer-reader.js
+      - name: Commit generated changes
+        run: |
+          if git diff --quiet -- client/src/App.jsx server.js; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/src/App.jsx server.js
+          git commit -m 'feat: Mathis reads LP28 Admin printer faults'
+          git push
