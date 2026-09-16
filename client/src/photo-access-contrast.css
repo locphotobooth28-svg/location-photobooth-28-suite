@@ -1,0 +1,38 @@
+/* LP28 — Accès photos : contraste renforcé des blocs d'accès invités.
+   Fond jaune + texte sombre pour rester lisible sur smartphone. */
+
+/* Cible les blocs/boutons verts de statut sur la page Accès photos. */
+.portal-card [style*="background:#0f2"],
+.portal-card [style*="background: #0f2"],
+.portal-card [style*="background:#103"],
+.portal-card [style*="background: #103"],
+.portal-card [style*="border:2px solid #2"],
+.portal-card [style*="border: 2px solid #2"] {
+  background: linear-gradient(135deg,#f2d16d,#d9b64b) !important;
+  color:#111 !important;
+}
+
+/* Sécurité : les deux cartes de contrôle d'accès restent lisibles même
+   lorsque leur style vert est construit dynamiquement dans React. */
+.portal-card button[style*="border-color: rgb(34"],
+.portal-card div[style*="border-color: rgb(34"],
+.portal-card button[style*="border: 2px solid rgb(34"],
+.portal-card div[style*="border: 2px solid rgb(34"] {
+  background:linear-gradient(135deg,#f2d16d,#d9b64b) !important;
+  color:#111 !important;
+}
+
+/* Tous les textes internes héritent du noir pour éviter le noir/vert peu lisible. */
+.portal-card [style*="background:#0f2"] *,
+.portal-card [style*="background: #0f2"] *,
+.portal-card [style*="background:#103"] *,
+.portal-card [style*="background: #103"] * {
+  color:#111 !important;
+}
+
+@media(max-width:700px){
+  .portal-card button,
+  .portal-card [role="button"]{
+    -webkit-tap-highlight-color:transparent;
+  }
+}
