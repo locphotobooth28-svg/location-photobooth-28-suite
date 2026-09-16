@@ -1,32 +1,45 @@
 /* LP28 — Accès photos : contraste renforcé des blocs d'accès invités.
-   Fond jaune + texte sombre pour rester lisible sur smartphone. */
+   Fond jaune/or LP28 + texte noir. Le voyant 🟢 reste vert dans le libellé. */
 
-/* Cible les blocs/boutons verts de statut sur la page Accès photos. */
+/* Les deux cartes de statut visibles sur la page Accès photos sont les
+   éléments verts bordés en #22c55e / rgb(34,197,94). On cible directement
+   leur style React, quelle que soit la notation générée par le navigateur. */
+.portal-card button[style*="#22c55e"],
+.portal-card div[style*="#22c55e"],
+.portal-card button[style*="34, 197, 94"],
+.portal-card div[style*="34, 197, 94"],
+.portal-card button[style*="34,197,94"],
+.portal-card div[style*="34,197,94"],
+.portal-card button[style*="#16a34a"],
+.portal-card div[style*="#16a34a"],
+.portal-card button[style*="#166534"],
+.portal-card div[style*="#166534"] {
+  background:linear-gradient(135deg,#f2d16d 0%,#d9b64b 100%) !important;
+  border-color:#f2d16d !important;
+  color:#111 !important;
+  box-shadow:0 8px 24px rgba(217,182,75,.16) !important;
+}
+
+.portal-card button[style*="#22c55e"] *,
+.portal-card div[style*="#22c55e"] *,
+.portal-card button[style*="34, 197, 94"] *,
+.portal-card div[style*="34, 197, 94"] *,
+.portal-card button[style*="34,197,94"] *,
+.portal-card div[style*="34,197,94"] *,
+.portal-card button[style*="#16a34a"] *,
+.portal-card div[style*="#16a34a"] *,
+.portal-card button[style*="#166534"] *,
+.portal-card div[style*="#166534"] * {
+  color:#111 !important;
+}
+
+/* Compatibilité avec les anciennes variantes inline. */
 .portal-card [style*="background:#0f2"],
 .portal-card [style*="background: #0f2"],
 .portal-card [style*="background:#103"],
-.portal-card [style*="background: #103"],
-.portal-card [style*="border:2px solid #2"],
-.portal-card [style*="border: 2px solid #2"] {
-  background: linear-gradient(135deg,#f2d16d,#d9b64b) !important;
-  color:#111 !important;
-}
-
-/* Sécurité : les deux cartes de contrôle d'accès restent lisibles même
-   lorsque leur style vert est construit dynamiquement dans React. */
-.portal-card button[style*="border-color: rgb(34"],
-.portal-card div[style*="border-color: rgb(34"],
-.portal-card button[style*="border: 2px solid rgb(34"],
-.portal-card div[style*="border: 2px solid rgb(34"] {
+.portal-card [style*="background: #103"] {
   background:linear-gradient(135deg,#f2d16d,#d9b64b) !important;
-  color:#111 !important;
-}
-
-/* Tous les textes internes héritent du noir pour éviter le noir/vert peu lisible. */
-.portal-card [style*="background:#0f2"] *,
-.portal-card [style*="background: #0f2"] *,
-.portal-card [style*="background:#103"] *,
-.portal-card [style*="background: #103"] * {
+  border-color:#f2d16d !important;
   color:#111 !important;
 }
 
