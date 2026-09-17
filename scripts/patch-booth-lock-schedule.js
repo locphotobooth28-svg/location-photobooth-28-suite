@@ -23,11 +23,11 @@ const agentControlOld='app.get("/api/booth-agent/control",boothAgentOnly,async(r
 const agentControlNew='app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);const lockScreen={...(control.lockScreen||{}),pin:/^\\d{4}$/.test(String(control.lockScreen?.pin||""))?String(control.lockScreen.pin):"2828"};res.json({ok:true,...control,lockScreen});});';
 if(s.includes(agentControlOld)){s=s.replace(agentControlOld,agentControlNew);changes++;}
 
-// Expose l'état dans Mes Bornes sans dépendre d'un ancrage exact. Le PIN lui-même reste hors de cette liste Admin.
+// Expose l'état dans Mes Bornes. Les créneaux sont nécessaires pour recharger l'éditeur V2 ; le PIN brut reste privé.
 if(!s.includes('pinConfigured:Boolean(controls[name].lockScreen.pin)')){
   const marker='lastCommand:controls[name].command';
   const i=s.indexOf(marker);
-  if(i>=0){s=s.slice(0,i)+'lockScreen:{enabled:controls[name].lockScreen?.enabled||false,lockAt:controls[name].lockScreen?.lockAt||"",unlockAt:controls[name].lockScreen?.unlockAt||"",locked:controls[name].lockScreen?.locked||false,pinConfigured:Boolean(controls[name].lockScreen?.pin),updatedAt:controls[name].lockScreen?.updatedAt||null},'+s.slice(i);changes++;}
+  if(i>=0){s=s.slice(0,i)+'lockScreen:{enabled:controls[name].lockScreen?.enabled||false,lockAt:controls[name].lockScreen?.lockAt||"",unlockAt:controls[name].lockScreen?.unlockAt||"",schedules:Array.isArray(controls[name].lockScreen?.schedules)?controls[name].lockScreen.schedules:[],locked:controls[name].lockScreen?.locked||false,pinConfigured:Boolean(controls[name].lockScreen?.pin),updatedAt:controls[name].lockScreen?.updatedAt||null},'+s.slice(i);changes++;}
 }
 
 // API de commande : c'est elle qui manquait au bouton LOCK_NOW / UNLOCK_NOW.
