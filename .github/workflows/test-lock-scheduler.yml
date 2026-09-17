@@ -22,7 +22,7 @@ on:
 
 jobs:
   simulation:
-    name: Simuler verrouillage LP28
+    name: Simuler verrouillage LP28 V3
     runs-on: ubuntu-latest
     steps:
       - name: Recuperer le code
@@ -33,8 +33,24 @@ jobs:
           node-version: '22'
       - name: Installer uniquement Luxon pour le moteur de simulation
         run: npm install --no-save --ignore-scripts luxon@3.7.2
-      - name: Executer les simulations
+      - name: Executer les simulations existantes
         run: node scripts/test-booth-lock-scheduler.js
+      - name: Tester ouverture obligatoire et fermeture facultative
+        run: |
+          node - <<'NODE'
+          const {normalizeSchedules,evaluateBoothLock}=require('./lib/boothLockScheduler');
+          const schedules=normalizeSchedules([{id:'event',kind:'once',startAt:'2026-09-19T19:00',endAt:null}]);
+          if(schedules.length!==1||schedules[0].endAt!==null) throw new Error('Fermeture facultative non normalisee');
+          const waiting=evaluateBoothLock({schedules,nowISO:'2026-09-19T18:59:00'});
+          if(waiting.state!=='WAITING'||!waiting.locked||!waiting.nextOpenAt) throw new Error('Attente avant ouverture invalide');
+          const open=evaluateBoothLock({schedules,nowISO:'2026-09-19T19:01:00'});
+          if(open.state!=='OPEN'||open.locked||open.currentCloseAt!==null) throw new Error('Ouverture sans fermeture invalide');
+          const later=evaluateBoothLock({schedules,nowISO:'2026-09-20T03:00:00'});
+          if(later.state!=='OPEN'||later.locked) throw new Error('La borne ne reste pas ouverte sans fermeture');
+          const power=evaluateBoothLock({schedules,manualOverride:'LOCK',nowISO:'2026-09-20T03:01:00'});
+          if(power.state!=='MANUAL_LOCK'||!power.locked) throw new Error('Fin Power/verrouillage invalide');
+          console.log('LP28 V3 fermeture facultative: OK');
+          NODE
       - name: Verifier le contrat PIN serveur vers Agent
         run: node scripts/test-lock-pin-server-contract.js
       - name: Verifier la syntaxe des patches verrouillage
@@ -66,6 +82,7 @@ jobs:
           node scripts/patch-booth-lock-ui-v2.js
           node scripts/patch-lock-schedule-save-confirm.js
           node scripts/patch-lock-sync-runtime.js
+          node --check server.js
           node - <<'NODE'
           const fs=require('fs');
           const server=fs.readFileSync('server.js','utf8');
@@ -76,10 +93,12 @@ jobs:
             [server.includes('schedules:Array.isArray(p?.lockScreen?.schedules)?p.lockScreen.schedules:[]'),'schedules non conserves'],
             [server.includes('LOCK CONFIG SAVED'),'trace sauvegarde absente'],
             [server.includes('SCHEDULE_SAVED'),'historique programmation absent'],
-            [app.includes('function LP28LockScheduleEditor('),'editeur V2 absent'],
-            [app.includes('Renseigne l’ouverture et la fermeture du créneau'),'validation formulaire absente'],
+            [server.includes('endAt:endAt||null'),'fermeture facultative non conservee'],
+            [app.includes('function LP28LockScheduleEditor('),'editeur verrouillage absent'],
+            [app.includes('Renseigne l’ouverture du créneau'),'ouverture obligatoire non validee'],
+            [app.includes('Fermeture automatique (facultative)'),'libelle fermeture facultative absent'],
             [app.includes('Créneaux enregistrés avec succès'),'confirmation sauvegarde absente']
           ];
           for(const [ok,msg] of checks) if(!ok) throw new Error(msg);
-          console.log('LP28 chaine verrouillage complete: OK');
+          console.log('LP28 chaine verrouillage V3 complete: OK');
           NODE
