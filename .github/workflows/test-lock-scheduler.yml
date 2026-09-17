@@ -1,0 +1,26 @@
+name: Test verrouillage LP28
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/boothLockScheduler.js'
+      - 'scripts/test-booth-lock-scheduler.js'
+      - '.github/workflows/test-lock-scheduler.yml'
+
+jobs:
+  simulation:
+    name: Simuler verrouillage LP28
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v4
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Installer les dependances
+        run: npm ci
+      - name: Executer les simulations
+        run: node scripts/test-booth-lock-scheduler.js
