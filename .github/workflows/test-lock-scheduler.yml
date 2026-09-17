@@ -9,6 +9,8 @@ on:
       - 'scripts/test-lock-pin-server-contract.js'
       - 'scripts/patch-booth-lock-schedule.js'
       - 'scripts/patch-booth-lock-ui-v2.js'
+      - 'scripts/patch-lock-schedule-save-confirm.js'
+      - 'scripts/patch-lock-sync-runtime.js'
       - 'scripts/patch-booth-status-fix.js'
       - 'scripts/patch-booth-power-client.js'
       - 'scripts/fix-booths-pro-dashboard-syntax.js'
@@ -35,9 +37,9 @@ jobs:
         run: node scripts/test-booth-lock-scheduler.js
       - name: Verifier le contrat PIN serveur vers Agent
         run: node scripts/test-lock-pin-server-contract.js
-      - name: Verifier la syntaxe du patch interface V2
-        run: node --check scripts/patch-booth-lock-ui-v2.js
-      - name: Verifier le raccordement du patch V2 au build
+      - name: Verifier la syntaxe des patches verrouillage
+        run: node --check scripts/patch-booth-lock-ui-v2.js && node --check scripts/patch-lock-schedule-save-confirm.js && node --check scripts/patch-lock-sync-runtime.js
+      - name: Verifier le raccordement au build
         shell: bash
         run: |
           node - <<'NODE'
@@ -46,9 +48,11 @@ jobs:
           const build=String(pkg.scripts?.build||'');
           const pro='node scripts/patch-booths-pro-dashboard.js';
           const v2='node scripts/patch-booth-lock-ui-v2.js';
-          if(!build.includes(v2)) throw new Error('patch-booth-lock-ui-v2.js absent du build');
-          if(build.indexOf(v2)<=build.indexOf(pro)) throw new Error('le patch V2 doit passer apres le dashboard Mes Bornes');
-          console.log('LP28 interface verrouillage V2: syntaxe et ordre build valides');
+          const save='node scripts/patch-lock-schedule-save-confirm.js';
+          const runtime='node scripts/patch-lock-sync-runtime.js';
+          for(const x of [v2,save,runtime]) if(!build.includes(x)) throw new Error(x+' absent du build');
+          if(!(build.indexOf(pro)<build.indexOf(v2)&&build.indexOf(v2)<build.indexOf(save)&&build.indexOf(save)<build.indexOf(runtime))) throw new Error('ordre patches verrouillage invalide');
+          console.log('LP28 ordre build verrouillage valide');
           NODE
       - name: Simuler la chaine reelle des patches Mes Bornes
         shell: bash
@@ -60,19 +64,22 @@ jobs:
           node scripts/fix-booths-pro-dashboard-syntax.js
           node scripts/patch-booths-pro-dashboard.js
           node scripts/patch-booth-lock-ui-v2.js
+          node scripts/patch-lock-schedule-save-confirm.js
+          node scripts/patch-lock-sync-runtime.js
           node - <<'NODE'
           const fs=require('fs');
           const server=fs.readFileSync('server.js','utf8');
           const app=fs.readFileSync('client/src/App.jsx','utf8');
           const checks=[
-            [server.includes('/api/admin/booths/:boothName/lock-schedules'),'API lock-schedules absente après patches'],
-            [server.includes('/api/booth-agent/control'),'endpoint Agent absent après patches'],
-            [server.includes('schedules:Array.isArray(p?.lockScreen?.schedules)?p.lockScreen.schedules:[]'),'schedules non conservés dans readBoothControl'],
-            [app.includes('function LP28LockScheduleEditor('),'éditeur V2 absent après patches'],
-            [app.includes("{boothTab==='LOCK'&&<LP28LockScheduleEditor"),'panneau Verrouillage non raccordé à V2'],
-            [app.includes('＋ Ajouter un créneau'),'bouton Ajouter un créneau absent'],
-            [app.includes('Récurrent chaque semaine'),'mode hebdomadaire absent']
+            [server.includes('/api/admin/booths/:boothName/lock-schedules'),'API lock-schedules absente'],
+            [server.includes('/api/admin/booths/:boothName/lock-history'),'API historique absente'],
+            [server.includes('schedules:Array.isArray(p?.lockScreen?.schedules)?p.lockScreen.schedules:[]'),'schedules non conserves'],
+            [server.includes('LOCK CONFIG SAVED'),'trace sauvegarde absente'],
+            [server.includes('SCHEDULE_SAVED'),'historique programmation absent'],
+            [app.includes('function LP28LockScheduleEditor('),'editeur V2 absent'],
+            [app.includes('Renseigne l’ouverture et la fermeture du créneau'),'validation formulaire absente'],
+            [app.includes('Créneaux enregistrés avec succès'),'confirmation sauvegarde absente']
           ];
           for(const [ok,msg] of checks) if(!ok) throw new Error(msg);
-          console.log('LP28 chaine réelle des patches Mes Bornes: OK');
+          console.log('LP28 chaine verrouillage complete: OK');
           NODE
