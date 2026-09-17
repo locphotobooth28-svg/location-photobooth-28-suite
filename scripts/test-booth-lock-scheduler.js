@@ -1,5 +1,5 @@
 const assert=require("assert");
-const {evaluateBoothLock}=require("../lib/boothLockScheduler");
+const {evaluateBoothLock,normalizeLockConfig,agentLockConfig,DEFAULT_PIN}=require("../lib/boothLockScheduler");
 
 function state(now,schedules,manualOverride=null){return evaluateBoothLock({nowISO:now,schedules,manualOverride});}
 const once=[{kind:"once",startAt:"2026-09-19T19:00:00+02:00",endAt:"2026-09-20T03:00:00+02:00"}];
@@ -27,4 +27,18 @@ assert.equal(state("2026-09-20T03:00:00+02:00",weekly).state,"WAITING");
 assert.equal(state("2026-09-19T12:00:00+02:00",once,"LOCK").state,"MANUAL_LOCK");
 assert.equal(state("2026-09-19T12:00:00+02:00",once,"UNLOCK").state,"MANUAL_UNLOCK");
 assert.equal(state("2026-09-19T12:00:00+02:00",[]).state,"OPEN");
-console.log("LP28 lock scheduler: toutes les simulations sont OK");
+
+// PIN : 2828 n'est qu'un secours initial. Dès qu'Admin enregistre un PIN,
+// le serveur le conserve et l'Agent reçoit exactement cette valeur.
+const initial=normalizeLockConfig({},{});
+assert.equal(initial.pin,DEFAULT_PIN);
+const changed=normalizeLockConfig({pin:"4587"},initial);
+assert.equal(changed.pin,"4587");
+assert.equal(agentLockConfig(changed).pin,"4587");
+const unchanged=normalizeLockConfig({},changed);
+assert.equal(unchanged.pin,"4587");
+assert.throws(()=>normalizeLockConfig({pin:"28"},changed),/4 chiffres/);
+assert.throws(()=>normalizeLockConfig({pin:"abcd"},changed),/4 chiffres/);
+assert.notEqual(agentLockConfig(changed).pin,DEFAULT_PIN);
+
+console.log("LP28 lock scheduler + synchronisation PIN: toutes les simulations sont OK");
