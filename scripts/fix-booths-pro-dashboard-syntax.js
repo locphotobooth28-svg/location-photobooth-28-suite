@@ -14,11 +14,14 @@ const fixes=[
 ];
 for(const [a,b] of fixes){if(s.includes(a)){s=s.split(a).join(b);n++;}}
 
-// Le contenu exact de printerIncidentBadges peut évoluer avec les patches précédents.
-// Le dashboard Pro doit retrouver l'état par son nom et non par une ligne figée.
-const oldState=`const stateAnchor='  const [printerIncidentBadges,setPrinterIncidentBadges]=useState({});';\nif(!seg.includes(stateAnchor))throw new Error('[booths-pro] état incident introuvable');\nseg=seg.replace(stateAnchor,stateAnchor+'\\n  const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');`;
-const newState=`const stateRe=/^(\\s*)const \\[printerIncidentBadges\\s*,\\s*setPrinterIncidentBadges\\]\\s*=\\s*useState\\([^\\n;]*\\);/m;\nconst stateMatch=seg.match(stateRe);\nif(!stateMatch)throw new Error('[booths-pro] état incident introuvable');\nseg=seg.replace(stateRe,m=>m+'\\n'+stateMatch[1]+'const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');`;
-if(s.includes(oldState)){s=s.replace(oldState,newState);n++;}
+// Le dashboard Pro ne doit pas dépendre obligatoirement de l'état d'incident imprimante.
+// S'il existe dans AdminBooths on conserve sa valeur. Sinon on crée un état local vide,
+// ce qui garde l'historique imprimante fonctionnel sans bloquer le build.
+const oldExact=`const stateAnchor='  const [printerIncidentBadges,setPrinterIncidentBadges]=useState({});';\nif(!seg.includes(stateAnchor))throw new Error('[booths-pro] état incident introuvable');\nseg=seg.replace(stateAnchor,stateAnchor+'\\n  const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');`;
+const oldRegex=`const stateRe=/^(\\s*)const \\[printerIncidentBadges\\s*,\\s*setPrinterIncidentBadges\\]\\s*=\\s*useState\\([^\\n;]*\\);/m;\nconst stateMatch=seg.match(stateRe);\nif(!stateMatch)throw new Error('[booths-pro] état incident introuvable');\nseg=seg.replace(stateRe,m=>m+'\\n'+stateMatch[1]+'const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');`;
+const tolerant=`const stateRe=/^(\\s*)const \\[printerIncidentBadges\\s*,\\s*setPrinterIncidentBadges\\]\\s*=\\s*useState\\([^\\n;]*\\);/m;\nconst stateMatch=seg.match(stateRe);\nif(stateMatch){\n  seg=seg.replace(stateRe,m=>m+'\\n'+stateMatch[1]+'const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');\n}else{\n  const firstState=/^(\\s*)const \\[[^\\n]+?\\]\\s*=\\s*useState\\([^\\n;]*\\);/m;\n  const firstMatch=seg.match(firstState);\n  if(!firstMatch)throw new Error('[booths-pro] aucun état React utilisable dans AdminBooths');\n  seg=seg.replace(firstState,m=>m+'\\n'+firstMatch[1]+'const [printerIncidentBadges]=useState({});\\n'+firstMatch[1]+'const [selectedBooth,setSelectedBooth]=useState(\"NINA\"),[boothTab,setBoothTab]=useState(\"STATUS\");');\n}`;
+if(s.includes(oldRegex)){s=s.replace(oldRegex,tolerant);n++;}
+else if(s.includes(oldExact)){s=s.replace(oldExact,tolerant);n++;}
 
 fs.writeFileSync(file,s,'utf8');
 console.log(`[booths-pro-syntax] ${n} correction(s) appliquée(s)`);
