@@ -6,6 +6,8 @@ on:
     paths:
       - 'lib/boothLockScheduler.js'
       - 'scripts/test-booth-lock-scheduler.js'
+      - 'scripts/test-lock-pin-server-contract.js'
+      - 'scripts/patch-booth-lock-schedule.js'
       - '.github/workflows/test-lock-scheduler.yml'
 
 jobs:
@@ -23,3 +25,5 @@ jobs:
         run: npm install --no-save --ignore-scripts luxon@3.7.2
       - name: Executer les simulations
         run: node scripts/test-booth-lock-scheduler.js
+      - name: Verifier le contrat PIN serveur vers Agent
+        run: node scripts/test-lock-pin-server-contract.js
