@@ -9,7 +9,7 @@ if(!s.includes(anchor))throw new Error('[lock-active] historique verrouillage in
 const helpers=`function lp28ParisLocalNowString(){
   const parts=new Intl.DateTimeFormat("fr-CA",{timeZone:"Europe/Paris",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
   const get=t=>parts.find(p=>p.type===t)?.value||"00";
-  return \`${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}\`;
+  return get("year")+"-"+get("month")+"-"+get("day")+"T"+get("hour")+":"+get("minute")+":"+get("second");
 }
 function lp28ActiveLockSchedules(rows){
   const now=lp28ParisLocalNowString();
