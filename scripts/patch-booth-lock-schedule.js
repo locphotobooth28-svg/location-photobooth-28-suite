@@ -17,7 +17,13 @@ if(!s.includes('lockScreen:{enabled:Boolean(p?.lockScreen?.enabled)')){
   const i=s.indexOf(anchor);if(i>=0){s=s.slice(0,i)+value+s.slice(i);changes++;}
 }
 
-// Expose l'état dans Mes Bornes sans dépendre d'un ancrage exact.
+// Le endpoint Agent doit toujours transmettre le PIN courant, sans jamais le journaliser.
+// 2828 reste uniquement le secours si aucune configuration valide n'a encore été synchronisée.
+const agentControlOld='app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);res.json({ok:true,...control});});';
+const agentControlNew='app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);const lockScreen={...(control.lockScreen||{}),pin:/^\\d{4}$/.test(String(control.lockScreen?.pin||""))?String(control.lockScreen.pin):"2828"};res.json({ok:true,...control,lockScreen});});';
+if(s.includes(agentControlOld)){s=s.replace(agentControlOld,agentControlNew);changes++;}
+
+// Expose l'état dans Mes Bornes sans dépendre d'un ancrage exact. Le PIN lui-même reste hors de cette liste Admin.
 if(!s.includes('pinConfigured:Boolean(controls[name].lockScreen.pin)')){
   const marker='lastCommand:controls[name].command';
   const i=s.indexOf(marker);
