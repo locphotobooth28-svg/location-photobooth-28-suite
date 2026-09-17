@@ -8,6 +8,9 @@ on:
       - 'scripts/test-booth-lock-scheduler.js'
       - 'scripts/test-lock-pin-server-contract.js'
       - 'scripts/patch-booth-lock-schedule.js'
+      - 'scripts/patch-booth-lock-ui-v2.js'
+      - 'scripts/patch-booths-pro-dashboard.js'
+      - 'package.json'
       - '.github/workflows/test-lock-scheduler.yml'
 
 jobs:
@@ -27,3 +30,22 @@ jobs:
         run: node scripts/test-booth-lock-scheduler.js
       - name: Verifier le contrat PIN serveur vers Agent
         run: node scripts/test-lock-pin-server-contract.js
+      - name: Verifier la syntaxe du patch interface V2
+        run: node --check scripts/patch-booth-lock-ui-v2.js
+      - name: Verifier le raccordement du patch V2 au build
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const build=String(pkg.scripts?.build||'');
+          const pro='node scripts/patch-booths-pro-dashboard.js';
+          const v2='node scripts/patch-booth-lock-ui-v2.js';
+          if(!build.includes(v2)) throw new Error('patch-booth-lock-ui-v2.js absent du build');
+          if(build.indexOf(v2)<=build.indexOf(pro)) throw new Error('le patch V2 doit passer apres le dashboard Mes Bornes');
+          const patch=fs.readFileSync('scripts/patch-booth-lock-ui-v2.js','utf8');
+          for(const required of ['LP28LockScheduleEditor','/api/admin/booths/:boothName/lock-schedules','＋ Ajouter un créneau','Récurrent chaque semaine']){
+            if(!patch.includes(required)) throw new Error('élément V2 manquant: '+required);
+          }
+          console.log('LP28 interface verrouillage V2: syntaxe et ordre build valides');
+          NODE
