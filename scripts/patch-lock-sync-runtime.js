@@ -9,10 +9,14 @@ const readSafe='lockScreen:{enabled:Boolean(p?.lockScreen?.enabled),lockAt:Strin
 if(readRe.test(s)){s=s.replace(readRe,readSafe);changes++;}
 if(!s.includes('schedules:Array.isArray(p?.lockScreen?.schedules)?p.lockScreen.schedules:[]'))throw new Error('[lock-sync-runtime] readBoothControl ne projette pas schedules');
 
-// L'endpoint Agent renvoie explicitement le contrat de verrouillage ; ne depend pas d'un spread implicite.
-const agentRe=/app\.get\("\/api\/booth-agent\/control",boothAgentOnly,async\(req,res\)=>\{[^\n]*?\}\);/;
-const agentSafe='app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);const ls=control.lockScreen||{};const lockScreen={enabled:Boolean(ls.enabled),lockAt:String(ls.lockAt||""),unlockAt:String(ls.unlockAt||""),schedules:Array.isArray(ls.schedules)?ls.schedules:[],pin:/^\\d{4}$/.test(String(ls.pin||""))?String(ls.pin):"2828",locked:Boolean(ls.locked),manualOverride:["LOCK","UNLOCK"].includes(String(ls.manualOverride||"").toUpperCase())?String(ls.manualOverride).toUpperCase():null,updatedAt:ls.updatedAt||null};res.json({ok:true,...control,lockScreen});});';
-if(agentRe.test(s)){s=s.replace(agentRe,agentSafe);changes++;}else throw new Error('[lock-sync-runtime] endpoint Agent control introuvable');
+// L'endpoint Agent renvoie explicitement le contrat de verrouillage.
+// IMPORTANT : remplacement par bornes exactes pour ne jamais laisser le corps de l'ancien endpoint derriere le nouveau.
+const agentStart='app.get("/api/booth-agent/control",boothAgentOnly,';
+const agentEnd='app.post("/api/booth-agent/control/ack",boothAgentOnly,';
+const ai=s.indexOf(agentStart),aj=s.indexOf(agentEnd,ai+agentStart.length);
+if(ai<0||aj<0||aj<=ai)throw new Error('[lock-sync-runtime] bornes endpoint Agent control introuvables');
+const agentSafe='app.get("/api/booth-agent/control",boothAgentOnly,async(req,res)=>{const boothName=String(req.query?.boothName||"").trim().toUpperCase();if(!["LOLA","NINA","GABIN"].includes(boothName))return res.status(400).json({ok:false,message:"Borne invalide."});const control=await readBoothControl(boothName);const ls=control.lockScreen||{};const lockScreen={enabled:Boolean(ls.enabled),lockAt:String(ls.lockAt||""),unlockAt:String(ls.unlockAt||""),schedules:Array.isArray(ls.schedules)?ls.schedules:[],pin:/^\\d{4}$/.test(String(ls.pin||""))?String(ls.pin):"2828",locked:Boolean(ls.locked),manualOverride:["LOCK","UNLOCK"].includes(String(ls.manualOverride||"").toUpperCase())?String(ls.manualOverride).toUpperCase():null,updatedAt:ls.updatedAt||null};res.json({ok:true,...control,lockScreen});});\n';
+s=s.slice(0,ai)+agentSafe+s.slice(aj);changes++;
 
 // Historique persistant, sans jamais stocker le PIN.
 const historyHelpers='\nfunction lp28LockHistoryKey(boothName){return `boothLockHistory:${String(boothName||"").trim().toUpperCase()}`;}\nasync function lp28AddLockHistory(boothName,type,details={}){try{const key=lp28LockHistoryKey(boothName);const row=await prisma.appSetting.findUnique({where:{key}}).catch(()=>null);let history=[];try{history=JSON.parse(row?.value||"[]")}catch{};if(!Array.isArray(history))history=[];history.push({id:crypto.randomUUID(),at:new Date().toISOString(),type,...details});history=history.slice(-100);await prisma.appSetting.upsert({where:{key},update:{value:JSON.stringify(history)},create:{key,value:JSON.stringify(history)}});}catch(err){console.warn("LOCK HISTORY:",err.message);}}\n';
