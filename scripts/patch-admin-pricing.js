@@ -90,7 +90,7 @@ if(!app.includes(MARK)){
  app=app.replace('<input value="0,50 € / km" readOnly />','<input value={`${Number(lp28Pricing?.travelRate??0.70).toFixed(2).replace(".",",")} € / km`} readOnly />');
  app=app.replace('travelRate:0.50','travelRate:Number(lp28Pricing?.travelRate??0.70)');
  // EventForm publishes current rate for existing helper without invasive refactor.
- app=app.replace('const [lp28Pricing,setLp28Pricing]=useState(null);','const [lp28Pricing,setLp28Pricing]=useState(null);\n  globalThis.__LP28_TRAVEL_RATE__=Number(lp28Pricing?.travelRate??0.70);');
+ app=app.replace('const [lp28Pricing,setLp28Pricing]=useState(null);','const [lp28Pricing,setLp28Pricing]=useState(null);\n  globalThis.__LP28_TRAVEL_RATE__=Number(lp28Pricing?.travelRate??0.70);\n  globalThis.__LP28_TRAVEL_FREE_KM__=Number(lp28Pricing?.travelFreeKm??15);');
  fs.writeFileSync(appPath,app,"utf8");
 }
 console.log("[pricing] OK: paramètres Admin tarifs et produits");
