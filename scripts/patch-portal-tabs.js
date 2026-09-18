@@ -40,7 +40,11 @@ const photoActionsStart='    <div className="portal-photo-actions">';
 replaceOnce(photoActionsStart,'    {portalTab==="photos"&&<>\n'+photoActionsStart,'début onglet photobooth');
 const photoActionsEnd='    {organizer&&<div className="portal-note" style={{marginTop:8}}>Les deux accès sont ouverts par défaut. Le verrouillage concerne uniquement les invités ; votre accès organisateur reste disponible.</div>}';
 replaceOnce(photoActionsEnd,photoActionsEnd+'\n    </>}','fin onglet photobooth');
-replaceOnce('{(organizer||(portalPermissions.guestGallery!==false&&guestQrGalleryOpen))&&<section className="portal-section" id="photos-partagees">','{portalTab==="gallery"&&(organizer||(portalPermissions.guestGallery!==false&&guestQrGalleryOpen))&&<section className="portal-section" id="photos-partagees">','onglet galerie QR');
+if(app.includes('{canQrGallery&&<section className="portal-section" id="photos-partagees">')){
+  replaceOnce('{canQrGallery&&<section className="portal-section" id="photos-partagees">','{portalTab==="gallery"&&canQrGallery&&<section className="portal-section" id="photos-partagees">','onglet galerie QR');
+}else{
+  replaceOnce('{(organizer||(portalPermissions.guestGallery!==false&&guestQrGalleryOpen))&&<section className="portal-section" id="photos-partagees">','{portalTab==="gallery"&&(organizer||(portalPermissions.guestGallery!==false&&guestQrGalleryOpen))&&<section className="portal-section" id="photos-partagees">','onglet galerie QR');
+}
 replaceOnce('{support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}','{portalTab==="home"&&support.googleReviewUrl&&<a className="portal-action" href={support.googleReviewUrl} target="_blank" rel="noreferrer">⭐ Donner un avis Google</a>}','avis Google sur accueil');
 replaceOnce('{canPortalMathis&&<section className="portal-section">','{portalTab==="support"&&canPortalMathis&&<section className="portal-section">','onglet assistance Mathis');
 
