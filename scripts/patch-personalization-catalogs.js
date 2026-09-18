@@ -12,13 +12,19 @@ function replaceOnce(source,from,to,label){
 
 let app=fs.readFileSync(appPath,"utf8");
 
-if(!app.includes("personalizationAccess:saved.personalizationAccess")){
-  app=replaceOnce(
-    app,
-    'return {organizerContract:saved.organizerContract!==false,organizerDocuments:saved.organizerDocuments!==false,organizerShare:saved.organizerShare!==false,organizerMathis:saved.organizerMathis!==false,guestGallery:saved.guestGallery!==false,guestMathis:saved.guestMathis!==false};',
-    'return {organizerContract:saved.organizerContract!==false,organizerDocuments:saved.organizerDocuments!==false,organizerShare:saved.organizerShare!==false,organizerMathis:saved.organizerMathis!==false,guestGallery:saved.guestGallery!==false,guestMathis:saved.guestMathis!==false,personalizationAccess:saved.personalizationAccess===true,personalizationTemplatesBooth:saved.personalizationTemplatesBooth!==false,personalizationBoothWidget:saved.personalizationBoothWidget!==false};',
-    "état des permissions portail"
+if(!app.includes("personalizationAccess:saved.personalizationAccess") && !app.includes("personalizationAccess:saved.personalizationAccess===true")){
+  const permissionsAnchor="const [portalPermissions,setPortalPermissions]=useState(()=>{";
+  const permissionsEnd="\n});";
+  const start=app.indexOf(permissionsAnchor);
+  const end=start>=0?app.indexOf(permissionsEnd,start):-1;
+  if(start<0||end<0)throw new Error("[personalization-catalogs] état des permissions portail: bloc introuvable");
+  const block=app.slice(start,end);
+  if(!block.includes("guestMathis:saved.guestMathis!==false"))throw new Error("[personalization-catalogs] état des permissions portail: ancre guestMathis introuvable");
+  const patched=block.replace(
+    "guestMathis:saved.guestMathis!==false",
+    "guestMathis:saved.guestMathis!==false,personalizationAccess:saved.personalizationAccess===true,personalizationTemplatesBooth:saved.personalizationTemplatesBooth!==false,personalizationBoothWidget:saved.personalizationBoothWidget!==false"
   );
+  app=app.slice(0,start)+patched+app.slice(end);
 }
 
 if(!app.includes("Organisateur : catalogues personnalisation")){
