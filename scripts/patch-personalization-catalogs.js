@@ -12,7 +12,7 @@ function replaceOnce(source,from,to,label){
 
 let app=fs.readFileSync(appPath,"utf8");
 
-if(!app.includes("personalizationAccess:saved.personalizationAccess")){
+if(!app.includes("personalizationAccess:saved.personalizationAccess") && !app.includes("personalizationAccess:saved.personalizationAccess===true")){
   const permissionsAnchor="const [portalPermissions,setPortalPermissions]=useState(()=>{";
   const permissionsEnd="\n});";
   const start=app.indexOf(permissionsAnchor);
