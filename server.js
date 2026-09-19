@@ -287,9 +287,11 @@ async function sendNativePushForNotification(n){
   source:String(n.source||"SYSTEM"),
   type:String(n.type||"INFO")
 },
+      // Data-only FCM : l'application Android construit elle-même la notification
+      // avec title/message (BigTextStyle). Ne pas ajouter android.notification ici :
+      // Android afficherait alors une notification système sans le contenu du payload data.
       android:{
-        priority:"high",
-        notification:{channelId:"lp28_native_push",sound:"default",clickAction:"LP28_NOTIFICATION_OPEN"}
+        priority:"high"
       }
     });
     await Promise.allSettled(result.responses.map(async(resp,idx)=>{
