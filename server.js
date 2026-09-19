@@ -1411,6 +1411,18 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
     const gapMs=Number.isFinite(previousSeenMs)?Math.max(0,nowMs-previousSeenMs):null;
     const isConnectionTransition=!Number.isFinite(previousSeenMs) || gapMs>=45000;
 
+    // LP28 : anti-spam de reconnexion. Un réseau instable peut provoquer des dizaines
+    // de transitions >=45 s ; on conserve l'état temps réel mais on limite la notification
+    // Admin à une par borne toutes les 10 heures.
+    const connectionNotifKey=`boothConnectedNotification:${boothName}`;
+    const previousNotifRow=isConnectionTransition
+      ? await prisma.appSetting.findUnique({where:{key:connectionNotifKey}}).catch(()=>null)
+      : null;
+    const previousNotifMs=previousNotifRow?.value?new Date(previousNotifRow.value).getTime():NaN;
+    const connectionNotifCooldownMs=10*60*60*1000;
+    const shouldNotifyConnection=isConnectionTransition &&
+      (!Number.isFinite(previousNotifMs) || nowMs-previousNotifMs>=connectionNotifCooldownMs);
+
     await prisma.appSetting.upsert({
       where:{key:boothStatusKey(boothName)},
       update:{value:JSON.stringify(payload)},
@@ -1422,7 +1434,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
       await processPrinterFaultWatch(boothName,payload).catch(err=>console.error("PRINTER FAULT WATCH ERROR :",err));
     }
 
-    if(isConnectionTransition){
+    if(shouldNotifyConnection){
       const eventPart=payload.eventName?`\nÉvénement : ${payload.eventName}`:"";
       const agentPart=payload.agentVersion?`\nAgent : V${String(payload.agentVersion).replace(/^v/i,"")}`:"";
       try{
@@ -1434,6 +1446,7 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
           audience:"ADMIN",
           eventId:payload.eventId||null
         });
+        await prisma.appSetting.upsert({where:{key:connectionNotifKey},update:{value:new Date(nowMs).toISOString()},create:{key:connectionNotifKey,value:new Date(nowMs).toISOString()}});
         console.log(`BOOTH CONNECTED NOTIFICATION OK : ${boothName} / ${n.id} / gap=${gapMs===null?"first":Math.round(gapMs/1000)+"s"}`);
       }catch(err){
         console.error("BOOTH CONNECTED NOTIFICATION ERROR :",err);
