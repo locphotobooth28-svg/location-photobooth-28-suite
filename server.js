@@ -1413,13 +1413,13 @@ app.post("/api/booth-agent/heartbeat",boothAgentOnly,async(req,res)=>{
 
     // LP28 : anti-spam de reconnexion. Un réseau instable peut provoquer des dizaines
     // de transitions >=45 s ; on conserve l'état temps réel mais on limite la notification
-    // Admin à une par borne toutes les 30 minutes.
+    // Admin à une par borne toutes les 10 heures.
     const connectionNotifKey=`boothConnectedNotification:${boothName}`;
     const previousNotifRow=isConnectionTransition
       ? await prisma.appSetting.findUnique({where:{key:connectionNotifKey}}).catch(()=>null)
       : null;
     const previousNotifMs=previousNotifRow?.value?new Date(previousNotifRow.value).getTime():NaN;
-    const connectionNotifCooldownMs=30*60*1000;
+    const connectionNotifCooldownMs=10*60*60*1000;
     const shouldNotifyConnection=isConnectionTransition &&
       (!Number.isFinite(previousNotifMs) || nowMs-previousNotifMs>=connectionNotifCooldownMs);
 
