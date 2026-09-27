@@ -92,12 +92,12 @@ const component=`function LP28PersonalizationCatalog({token,permissions={}}){
 
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
         <div style={buttonBox}>
-          <button type="button" className={templatesAllowed?"portal-action primary":"portal-action disabled"} disabled={!templatesAllowed} onClick={()=>setView(view==="templates"?"":"templates")}>🎨 Catalogue TemplatesBooth</button>
+          <button type="button" className={templatesAllowed?"portal-action primary":"portal-action disabled"} disabled={!templatesAllowed} onClick={()=>setView(view==="templates"?"":"templates")}>🎨 Catalogue N°1 (+22 000 modèles)</button>
           <button type="button" disabled={!templatesAllowed} onClick={()=>copyTemporaryLink("templates")} style={copyStyle}>🔗 Copier le lien pour tablette / PC</button>
           {copyState.templates&&<small className="muted">{copyState.templates}</small>}
         </div>
         <div style={buttonBox}>
-          <button type="button" className={boothWidgetAllowed?"portal-action primary":"portal-action disabled"} disabled={!boothWidgetAllowed} onClick={()=>setView(view==="boothwidget"?"":"boothwidget")}>🖼️ Catalogue BoothWidget</button>
+          <button type="button" className={boothWidgetAllowed?"portal-action primary":"portal-action disabled"} disabled={!boothWidgetAllowed} onClick={()=>setView(view==="boothwidget"?"":"boothwidget")}>🖼️ Catalogue N°2 (+15 000 modèles)</button>
           <button type="button" disabled={!boothWidgetAllowed} onClick={()=>copyTemporaryLink("boothwidget")} style={copyStyle}>🔗 Copier le lien pour tablette / PC</button>
           {copyState.boothwidget&&<small className="muted">{copyState.boothwidget}</small>}
         </div>
