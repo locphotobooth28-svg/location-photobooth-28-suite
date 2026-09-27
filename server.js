@@ -6576,7 +6576,7 @@ app.use(express.static(distDir));
 
 // LP28 — titres dédiés pour les aperçus WhatsApp / Messenger / SMS.
 // Les routes SPA restent inchangées : seul le HTML initial reçoit les métadonnées adaptées.
-app.get(["/signature/:token","/portal/:token","/guest/:token"], (req,res,next)=>{
+app.get(["/signature/:token","/portal/:token","/guest/:token"], async (req,res,next)=>{
   try{
     const indexPath=path.join(distDir,"index.html");
     if(!fs.existsSync(indexPath))return next();
@@ -6587,8 +6587,14 @@ app.get(["/signature/:token","/portal/:token","/guest/:token"], (req,res,next)=>
       title="Location Photobooth 28 – Signature du contrat";
       description="Consultez et signez votre contrat Location Photobooth 28.";
     }else if(pathname.startsWith("/portal/")){
-      title="Location Photobooth 28 – Espace Organisateur";
-      description="Accédez à votre espace Organisateur Location Photobooth 28.";
+      const access=await portalAccessRaw(String(req.params.token||""));
+      if(access?.role==="GUEST"){
+        title="Location Photobooth 28 – Espace Invité";
+        description="Accédez à votre espace Invité Location Photobooth 28.";
+      }else{
+        title="Location Photobooth 28 – Espace Organisateur";
+        description="Accédez à votre espace Organisateur Location Photobooth 28.";
+      }
     }else if(pathname.startsWith("/guest/")){
       title="Location Photobooth 28 – Espace Invités";
       description="Accédez à l’espace Invités Location Photobooth 28 et aux souvenirs de l’événement.";
