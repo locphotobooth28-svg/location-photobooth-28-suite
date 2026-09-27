@@ -5014,7 +5014,7 @@ function lp28PersonalizationPermission(prep,catalog){
   if(catalog==="boothwidget"&&p.personalizationBoothWidget===false)return false;
   return true;
 }
-function lp28CatalogLabel(catalog){return catalog==="templates"?"TemplatesBooth":"BoothWidget";}
+function lp28CatalogLabel(catalog){return catalog==="templates"?"Catalogue N°1 (+22 000 modèles)":"Catalogue N°2 (+15 000 modèles)";}
 function lp28CatalogUrl(catalog){return catalog==="templates"?"https://templatesbooth.com/widget-embed/?key=NDc4MQ%3D%3D":"https://locphotobooth28.boothwidget.com";}
 function lp28HtmlPage(title,body){return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+title+'</title><style>body{margin:0;background:#0b0b0d;color:#f7f7f7;font-family:Arial,sans-serif}.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#151518;border:1px solid #343438;border-radius:18px;padding:24px}.gold{color:#e6c84f}button{background:#e6c84f;color:#111;border:0;border-radius:12px;padding:13px 18px;font-weight:800;font-size:16px;cursor:pointer}.muted{color:#bbb;line-height:1.55}iframe{width:100%;border:0;background:#fff;border-radius:14px}</style></head><body><div class="wrap">'+body+'</div></body></html>';}
 
