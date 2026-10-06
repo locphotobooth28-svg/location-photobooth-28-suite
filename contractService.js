@@ -654,6 +654,14 @@ async function generateContractPdf(event){
   );
 
   drawText(
+    "Le matériel est mis à disposition pour une durée maximale de 24 heures, sauf disposition contraire prévue au devis. Cette durée peut être inférieure selon les horaires, l'organisation de l'événement, les contraintes du lieu ou les modalités convenues avec le client. Elle peut également être supérieure à 24 heures lorsqu'une option ou une durée complémentaire est expressément prévue au devis ou au contrat de location."
+  );
+
+  drawText(
+    "Les horaires exacts de livraison, d'installation et de reprise sont définis en fonction de l'organisation de la prestation et ne correspondent pas nécessairement à une période de 24 heures pleines."
+  );
+
+  drawText(
     `Forfait sélectionné : ${printPackage.label}.`,
     {
       fontUsed:bold
@@ -702,6 +710,24 @@ async function generateContractPdf(event){
     );
   }
 
+  const travel = event.preparation && typeof event.preparation === "object"
+    ? event.preparation
+    : {};
+  const travelDistance = Math.max(Number(travel.travelDistanceKm || 0), 0);
+  const travelFreeKm = travel.travelFree15 ? 15 : 0;
+  const travelRate = Number.isFinite(Number(travel.travelRate))
+    ? Math.max(Number(travel.travelRate), 0)
+    : 0.50;
+  const travelFee = Math.max(travelDistance - travelFreeKm, 0) * travelRate;
+
+  if(travelDistance > 0){
+    drawText(
+      `Frais de déplacement : ${money(travelFee)}${travel.travelFree15 ? " (15 km offerts appliqués)" : ""}.`,
+      { fontUsed:bold }
+    );
+  }
+
+
   drawText(
     `Montant total de la prestation : ${money(event.totalPrice)}.`,
     {
@@ -714,21 +740,6 @@ async function generateContractPdf(event){
   drawText(
     "Le montant total enregistré dans la prestation prévaut sur les tarifs catalogue en cas de remise, offre commerciale, prestation professionnelle ou conditions particulières."
   );
-
-  const travel = event.preparation && typeof event.preparation === "object"
-    ? event.preparation
-    : {};
-  const travelDistance = Math.max(Number(travel.travelDistanceKm || 0), 0);
-  const travelFreeKm = travel.travelFree15 ? 15 : 0;
-  const travelRate = 0.50;
-  const travelFee = Math.max(travelDistance - travelFreeKm, 0) * travelRate;
-
-  if(travelDistance > 0){
-    drawText(
-      `Frais de déplacement : ${money(travelFee)}${travel.travelFree15 ? " (15 km offerts appliqués)" : ""}.`,
-      { fontUsed:bold }
-    );
-  }
 
   // PAGE 2+
   section(4,"Règlement et dépôt de garantie");
