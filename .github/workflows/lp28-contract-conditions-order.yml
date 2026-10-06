@@ -1,4 +1,3 @@
-# One-off patch workflow for LP28 contract wording/order
 name: LP28 contract conditions patch
 
 on:
@@ -24,95 +23,40 @@ jobs:
           from pathlib import Path
 
           files = [Path('contractService.js'), Path('services/contractService.js')]
-
-          duration_anchor = '''  drawText(
-            `Le matériel est loué du ${dateFr(event.eventDate)} au ${
-              event.pickupDate
-                ? dateFr(event.pickupDate)
-                : dateFr(event.eventDate)
-            }.`
-          );'''
-
-          duration_extra = duration_anchor + '''
-
-          drawText(
-            "Le matériel est mis à disposition pour une durée maximale de 24 heures, sauf disposition contraire prévue au devis. Cette durée peut être inférieure selon les horaires, l'organisation de l'événement, les contraintes du lieu ou les modalités convenues avec le client. Elle peut également être supérieure à 24 heures lorsqu'une option ou une durée complémentaire est expressément prévue au devis ou au contrat de location."
-          );
-
-          drawText(
-            "Les horaires exacts de livraison, d'installation et de reprise sont définis en fonction de l'organisation de la prestation et ne correspondent pas nécessairement à une période de 24 heures pleines."
-          );'''
-
-          old_total_then_travel = '''  drawText(
-            `Montant total de la prestation : ${money(event.totalPrice)}.`,
-            {
-              size:11,
-              fontUsed:bold,
-              gapAfter:6
-            }
-          );
-
-          drawText(
-            "Le montant total enregistré dans la prestation prévaut sur les tarifs catalogue en cas de remise, offre commerciale, prestation professionnelle ou conditions particulières."
-          );
-
-          const travel = event.preparation && typeof event.preparation === "object"
-            ? event.preparation
-            : {};
-          const travelDistance = Math.max(Number(travel.travelDistanceKm || 0), 0);
-          const travelFreeKm = travel.travelFree15 ? 15 : 0;
-          const travelRate = 0.50;
-          const travelFee = Math.max(travelDistance - travelFreeKm, 0) * travelRate;
-
-          if(travelDistance > 0){
-            drawText(
-              `Frais de déplacement : ${money(travelFee)}${travel.travelFree15 ? " (15 km offerts appliqués)" : ""}.`,
-              { fontUsed:bold }
-            );
-          }'''
-
-          new_travel_then_total = '''  const travel = event.preparation && typeof event.preparation === "object"
-            ? event.preparation
-            : {};
-          const travelDistance = Math.max(Number(travel.travelDistanceKm || 0), 0);
-          const travelFreeKm = travel.travelFree15 ? 15 : 0;
-          const travelRate = Number.isFinite(Number(travel.travelRate))
-            ? Math.max(Number(travel.travelRate), 0)
-            : 0.50;
-          const travelFee = Math.max(travelDistance - travelFreeKm, 0) * travelRate;
-
-          if(travelDistance > 0){
-            drawText(
-              `Frais de déplacement : ${money(travelFee)}${travel.travelFree15 ? " (15 km offerts appliqués)" : ""}.`,
-              { fontUsed:bold, gapAfter:5 }
-            );
-          }
-
-          drawText(
-            `Montant total de la prestation : ${money(event.totalPrice)}.`,
-            {
-              size:11,
-              fontUsed:bold,
-              gapAfter:6
-            }
-          );
-
-          drawText(
-            "Le montant total enregistré dans la prestation prévaut sur les tarifs catalogue en cas de remise, offre commerciale, prestation professionnelle ou conditions particulières."
-          );'''
+          clause1 = "Le matériel est mis à disposition pour une durée maximale de 24 heures, sauf disposition contraire prévue au devis. Cette durée peut être inférieure selon les horaires, l'organisation de l'événement, les contraintes du lieu ou les modalités convenues avec le client. Elle peut également être supérieure à 24 heures lorsqu'une option ou une durée complémentaire est expressément prévue au devis ou au contrat de location."
+          clause2 = "Les horaires exacts de livraison, d'installation et de reprise sont définis en fonction de l'organisation de la prestation et ne correspondent pas nécessairement à une période de 24 heures pleines."
 
           for path in files:
             text = path.read_text(encoding='utf-8')
 
-            if "Le matériel est mis à disposition pour une durée maximale de 24 heures" not in text:
-              if duration_anchor not in text:
-                raise SystemExit(f'{path}: ancre durée introuvable')
-              text = text.replace(duration_anchor, duration_extra, 1)
+            if clause1 not in text:
+              forfait_marker = '  drawText(\n    `Forfait sélectionné : ${printPackage.label}.`,'
+              pos = text.find(forfait_marker)
+              if pos < 0:
+                raise SystemExit(f'{path}: marqueur forfait introuvable')
+              addition = f'''  drawText(\n    "{clause1}"\n  );\n\n  drawText(\n    "{clause2}"\n  );\n\n'''
+              text = text[:pos] + addition + text[pos:]
 
-            if old_total_then_travel in text:
-              text = text.replace(old_total_then_travel, new_travel_then_total, 1)
-            elif "const travelRate = Number.isFinite(Number(travel.travelRate))" not in text:
-              raise SystemExit(f'{path}: bloc frais de déplacement attendu introuvable')
+            # Le contrat doit utiliser le tarif propre à l'événement.
+            text = text.replace(
+              '  const travelRate = 0.50;',
+              '  const travelRate = Number.isFinite(Number(travel.travelRate))\n    ? Math.max(Number(travel.travelRate), 0)\n    : 0.50;',
+              1
+            )
+
+            # Placer les frais de déplacement avant le montant total.
+            total_marker = '  drawText(\n    `Montant total de la prestation : ${money(event.totalPrice)}.`,'
+            travel_marker = '  const travel = event.preparation && typeof event.preparation === "object"'
+            page_marker = '  // PAGE 2+'
+            total_pos = text.find(total_marker)
+            travel_pos = text.find(travel_marker, total_pos if total_pos >= 0 else 0)
+            page_pos = text.find(page_marker, travel_pos if travel_pos >= 0 else 0)
+            if total_pos >= 0 and travel_pos > total_pos and page_pos > travel_pos:
+              total_block = text[total_pos:travel_pos]
+              travel_block = text[travel_pos:page_pos]
+              text = text[:total_pos] + travel_block + '\n' + total_block + text[page_pos:]
+            elif not (travel_pos >= 0 and total_pos >= 0 and travel_pos < total_pos):
+              raise SystemExit(f'{path}: impossible de vérifier l’ordre déplacement/total')
 
             path.write_text(text, encoding='utf-8')
             print(f'{path}: OK')
@@ -120,7 +64,7 @@ jobs:
       - name: Verify patch
         run: |
           grep -n "durée maximale de 24 heures" contractService.js services/contractService.js
-          grep -n "const travelRate = Number.isFinite(Number(travel.travelRate))" contractService.js services/contractService.js
+          grep -n "Number.isFinite(Number(travel.travelRate))" contractService.js services/contractService.js
           node --check contractService.js
           node --check services/contractService.js
 
