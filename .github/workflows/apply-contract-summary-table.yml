@@ -1,0 +1,32 @@
+name: Apply contract summary table
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-contract-summary-table.js'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: node scripts/patch-contract-summary-table.js
+      - name: Validate
+        run: |
+          node --check contractService.js
+          node --check services/contractService.js
+          grep -n "Frais de déplacement (Aller/Retour)" services/contractService.js
+      - name: Commit changes
+        run: |
+          git config user.name "LP28 Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add contractService.js services/contractService.js
+          git commit -m "feat: add contract pricing summary table" || exit 0
+          git push origin main
