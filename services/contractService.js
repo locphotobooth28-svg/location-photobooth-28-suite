@@ -673,7 +673,31 @@ async function generateContractPdf(event){
     "Le matériel est remis en bon état de fonctionnement. Le locataire reconnaît avoir pris connaissance des consignes d'utilisation et s'engage à signaler immédiatement toute anomalie constatée."
   );
 
-  section(3,"Conditions de location");
+  section(3,"Forfait d'impression");
+
+  drawText(
+    "Le forfait d'impression sélectionné est défini lors de la réservation ou du devis."
+  );
+
+  drawText(
+    "Les impressions incluses sont valables uniquement pendant la durée de la prestation."
+  );
+
+  drawText(
+    "Toute impression non utilisée à l'issue de la location est considérée comme consommée et ne peut donner lieu à aucun remboursement, report ou compensation."
+  );
+
+  if(printPackage.count !== null){
+    drawText(
+      `Quantité prévue pour cette prestation : ${printPackage.count} impression(s).`,
+      {
+        fontUsed:bold
+      }
+    );
+  }
+
+
+  section(4,"Conditions de location");
 
   drawText(
     `Le matériel est loué du ${dateFr(event.eventDate)} au ${
@@ -733,7 +757,7 @@ async function generateContractPdf(event){
   );
 
   // PAGE 2+
-  section(4,"Règlement et dépôt de garantie");
+  section(5,"Règlement et dépôt de garantie");
 
   drawText(
     `Acompte : ${money(event.deposit)}.`
@@ -762,29 +786,6 @@ async function generateContractPdf(event){
   drawText(
     "Le dépôt de garantie est restitué après vérification du bon état du matériel lors de sa reprise."
   );
-
-  section(5,"Forfait d'impression");
-
-  drawText(
-    "Le forfait d'impression sélectionné est défini lors de la réservation ou du devis."
-  );
-
-  drawText(
-    "Les impressions incluses sont valables uniquement pendant la durée de la prestation."
-  );
-
-  drawText(
-    "Toute impression non utilisée à l'issue de la location est considérée comme consommée et ne peut donner lieu à aucun remboursement, report ou compensation."
-  );
-
-  if(printPackage.count !== null){
-    drawText(
-      `Quantité prévue pour cette prestation : ${printPackage.count} impression(s).`,
-      {
-        fontUsed:bold
-      }
-    );
-  }
 
   section(6,"Obligations du locataire");
 
