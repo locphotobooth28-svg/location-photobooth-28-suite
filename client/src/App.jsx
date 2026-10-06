@@ -143,7 +143,7 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{travelRate:0.70,materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
   customPrintCount:"",
@@ -610,11 +610,33 @@ const getTravelFee = (preparation) => {
   const p = preparation && typeof preparation === "object" ? preparation : {};
   const distance = Math.max(Number(p.travelDistanceKm || 0), 0);
   const freeKm = p.travelFree15 ? 15 : 0;
-  return Math.max(distance - freeKm, 0) * 0.50;
+  // Compatibilité : un ancien événement sans tarif enregistré reste à 0,50 €/km.
+  const rate = Number.isFinite(Number(p.travelRate)) ? Math.max(Number(p.travelRate), 0) : 0.50;
+  return Math.max(distance - freeKm, 0) * rate;
 };
 
 const withTravelFee = (basePrice, preparation) =>
   Number(basePrice || 0) + getTravelFee(preparation);
+
+const withTravelRateChange = (form, rate) => {
+  const oldPrep = form?.preparation || {};
+  const oldFee = getTravelFee(oldPrep);
+  const numericRate = Number(rate);
+  const nextRate = Number.isFinite(numericRate)
+    ? Math.max(Math.round(numericRate * 100) / 100, 0)
+    : 0;
+  const newPrep = {...oldPrep, travelRate: nextRate};
+  const newFee = getTravelFee(newPrep);
+  newPrep.travelFee = Number(newFee.toFixed(2));
+  const base = Math.max(Number(form?.totalPrice || 0) - oldFee, 0);
+  const total = base + newFee;
+  return {
+    ...form,
+    preparation: newPrep,
+    totalPrice: total.toFixed(2),
+    balance: Math.max(total - Number(form?.deposit || 0), 0).toFixed(2)
+  };
+};
 
 const getFrameFee = (preparation) => {
   const p = preparation && typeof preparation === "object" ? preparation : {};
@@ -1466,7 +1488,7 @@ Johan — Location Photobooth 28`;
                 setForm(f=>{
                   const oldPrep=f.preparation||{};
                   const oldFee=getTravelFee(oldPrep);
-                  const newPrep={...oldPrep,travelDistanceKm:value,travelRate:0.50};
+                  const newPrep={...oldPrep,travelDistanceKm:value,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};
                   const newFee=getTravelFee(newPrep);
                   newPrep.travelFee=Number(newFee.toFixed(2));
                   const base=Math.max(Number(f.totalPrice||0)-oldFee,0);
@@ -1479,7 +1501,29 @@ Johan — Location Photobooth 28`;
           </div>
           <div>
             <label>Tarif déplacement</label>
-            <input value="0,50 € / km" readOnly />
+            <div style={{display:"grid",gridTemplateColumns:"44px minmax(120px,1fr) 44px",gap:8,alignItems:"center"}}>
+              <button
+                type="button"
+                className="ghost"
+                aria-label="Diminuer le tarif de déplacement"
+                onClick={()=>setForm(f=>withTravelRateChange(f, Math.max(Number(f.preparation?.travelRate ?? 0.50) - 0.05, 0)))}
+              >−</button>
+              <input
+                type="number"
+                min="0"
+                step="0.05"
+                value={form.preparation?.travelRate ?? 0.50}
+                onChange={e=>setForm(f=>withTravelRateChange(f,e.target.value))}
+                style={{textAlign:"center"}}
+              />
+              <button
+                type="button"
+                className="ghost"
+                aria-label="Augmenter le tarif de déplacement"
+                onClick={()=>setForm(f=>withTravelRateChange(f, Number(f.preparation?.travelRate ?? 0.50) + 0.05))}
+              >+</button>
+            </div>
+            <div className="muted" style={{fontSize:12,marginTop:5}}>Tarif propre à cette prestation • les autres événements ne changent pas</div>
           </div>
           <label className="switch-line">
             <input
@@ -1488,7 +1532,7 @@ Johan — Location Photobooth 28`;
               onChange={e=>setForm(f=>{
                 const oldPrep=f.preparation||{};
                 const oldFee=getTravelFee(oldPrep);
-                const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:0.50};
+                const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};
                 const newFee=getTravelFee(newPrep);
                 newPrep.travelFee=Number(newFee.toFixed(2));
                 const base=Math.max(Number(f.totalPrice||0)-oldFee,0);
