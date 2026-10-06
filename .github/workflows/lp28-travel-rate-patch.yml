@@ -21,6 +21,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           files = [Path('App.jsx'), Path('client/src/App.jsx')]
 
@@ -35,7 +36,7 @@ jobs:
             const p = preparation && typeof preparation === "object" ? preparation : {};
             const distance = Math.max(Number(p.travelDistanceKm || 0), 0);
             const freeKm = p.travelFree15 ? 15 : 0;
-            // Les anciens événements sans tarif enregistré conservent l'ancien tarif de 0,50 €/km.
+            // Compatibilité : un ancien événement sans tarif enregistré reste à 0,50 €/km.
             const rate = Number.isFinite(Number(p.travelRate)) ? Math.max(Number(p.travelRate), 0) : 0.50;
             return Math.max(distance - freeKm, 0) * rate;
           };'''
@@ -66,12 +67,14 @@ jobs:
             };
           };'''
 
-          old_rate_input = '''<div>
-            <label>Tarif déplacement</label>
-            <input value="0,50 € / km" readOnly />
-          </div>'''
+          rate_block_re = re.compile(
+            r'(?P<indent>[ \t]*)<div>\s*\n'
+            r'[ \t]*<label>Tarif déplacement</label>\s*\n'
+            r'[ \t]*<input\b[^>]*\breadOnly\b[^>]*/>\s*\n'
+            r'[ \t]*</div>'
+          )
 
-          new_rate_input = '''<div>
+          rate_block_body = '''<div>
             <label>Tarif déplacement</label>
             <div style={{display:"grid",gridTemplateColumns:"44px minmax(120px,1fr) 44px",gap:8,alignItems:"center"}}>
               <button
@@ -95,8 +98,12 @@ jobs:
                 onClick={()=>setForm(f=>withTravelRateChange(f, Number(f.preparation?.travelRate ?? 0.50) + 0.05))}
               >+</button>
             </div>
-            <div className="muted" style={{fontSize:12,marginTop:5}}>Tarif propre à cette prestation • pas de modification des autres événements</div>
+            <div className="muted" style={{fontSize:12,marginTop:5}}>Tarif propre à cette prestation • les autres événements ne changent pas</div>
           </div>'''
+
+          def indent_block(block, indent):
+            lines = block.splitlines()
+            return '\n'.join(indent + line if line else line for line in lines)
 
           for path in files:
             text = path.read_text(encoding='utf-8')
@@ -110,26 +117,32 @@ jobs:
               raise SystemExit(f'{path}: bloc withTravelFee attendu introuvable')
             text = text.replace(old_with_fee, new_with_fee)
 
-            # Le tarif 0,70 €/km devient la valeur initiale uniquement pour les nouveaux événements.
             marker = 'preparation:{materialChecked:false'
             if marker not in text:
               raise SystemExit(f'{path}: EMPTY_EVENT preparation introuvable')
             text = text.replace(marker, 'preparation:{travelRate:0.70,materialChecked:false', 1)
 
-            # Ne jamais réécraser le tarif particulier quand on modifie la distance ou les 15 km offerts.
+            distance_old = 'const newPrep={...oldPrep,travelDistanceKm:value,travelRate:0.50};'
+            free_old = 'const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:0.50};'
+            if distance_old not in text or free_old not in text:
+              raise SystemExit(f'{path}: gestion distance/15 km attendue introuvable')
             text = text.replace(
-              'const newPrep={...oldPrep,travelDistanceKm:value,travelRate:0.50};',
+              distance_old,
               'const newPrep={...oldPrep,travelDistanceKm:value,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};'
             )
             text = text.replace(
-              'const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:0.50};',
+              free_old,
               'const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};'
             )
 
-            count = text.count(old_rate_input)
+            def repl(m):
+              return indent_block(rate_block_body, m.group('indent'))
+
+            text, count = rate_block_re.subn(repl, text)
             if count < 1:
-              raise SystemExit(f'{path}: champ Tarif déplacement attendu introuvable')
-            text = text.replace(old_rate_input, new_rate_input)
+              idx = text.find('Tarif déplacement')
+              context = text[max(0,idx-300):idx+500] if idx >= 0 else 'libellé absent'
+              raise SystemExit(f'{path}: champ Tarif déplacement introuvable. Contexte: {context!r}')
 
             if text == original:
               raise SystemExit(f'{path}: aucune modification appliquée')
