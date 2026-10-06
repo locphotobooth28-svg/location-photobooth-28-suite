@@ -1,0 +1,151 @@
+name: LP28 travel rate patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lp28-travel-rate-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch travel rate handling
+        shell: python
+        run: |
+          from pathlib import Path
+
+          files = [Path('App.jsx'), Path('client/src/App.jsx')]
+
+          old_fee = '''const getTravelFee = (preparation) => {
+            const p = preparation && typeof preparation === "object" ? preparation : {};
+            const distance = Math.max(Number(p.travelDistanceKm || 0), 0);
+            const freeKm = p.travelFree15 ? 15 : 0;
+            return Math.max(distance - freeKm, 0) * 0.50;
+          };'''
+
+          new_fee = '''const getTravelFee = (preparation) => {
+            const p = preparation && typeof preparation === "object" ? preparation : {};
+            const distance = Math.max(Number(p.travelDistanceKm || 0), 0);
+            const freeKm = p.travelFree15 ? 15 : 0;
+            // Les anciens événements sans tarif enregistré conservent l'ancien tarif de 0,50 €/km.
+            const rate = Number.isFinite(Number(p.travelRate)) ? Math.max(Number(p.travelRate), 0) : 0.50;
+            return Math.max(distance - freeKm, 0) * rate;
+          };'''
+
+          old_with_fee = '''const withTravelFee = (basePrice, preparation) =>
+            Number(basePrice || 0) + getTravelFee(preparation);'''
+
+          new_with_fee = '''const withTravelFee = (basePrice, preparation) =>
+            Number(basePrice || 0) + getTravelFee(preparation);
+
+          const withTravelRateChange = (form, rate) => {
+            const oldPrep = form?.preparation || {};
+            const oldFee = getTravelFee(oldPrep);
+            const numericRate = Number(rate);
+            const nextRate = Number.isFinite(numericRate)
+              ? Math.max(Math.round(numericRate * 100) / 100, 0)
+              : 0;
+            const newPrep = {...oldPrep, travelRate: nextRate};
+            const newFee = getTravelFee(newPrep);
+            newPrep.travelFee = Number(newFee.toFixed(2));
+            const base = Math.max(Number(form?.totalPrice || 0) - oldFee, 0);
+            const total = base + newFee;
+            return {
+              ...form,
+              preparation: newPrep,
+              totalPrice: total.toFixed(2),
+              balance: Math.max(total - Number(form?.deposit || 0), 0).toFixed(2)
+            };
+          };'''
+
+          old_rate_input = '''<div>
+            <label>Tarif déplacement</label>
+            <input value="0,50 € / km" readOnly />
+          </div>'''
+
+          new_rate_input = '''<div>
+            <label>Tarif déplacement</label>
+            <div style={{display:"grid",gridTemplateColumns:"44px minmax(120px,1fr) 44px",gap:8,alignItems:"center"}}>
+              <button
+                type="button"
+                className="ghost"
+                aria-label="Diminuer le tarif de déplacement"
+                onClick={()=>setForm(f=>withTravelRateChange(f, Math.max(Number(f.preparation?.travelRate ?? 0.50) - 0.05, 0)))}
+              >−</button>
+              <input
+                type="number"
+                min="0"
+                step="0.05"
+                value={form.preparation?.travelRate ?? 0.50}
+                onChange={e=>setForm(f=>withTravelRateChange(f,e.target.value))}
+                style={{textAlign:"center"}}
+              />
+              <button
+                type="button"
+                className="ghost"
+                aria-label="Augmenter le tarif de déplacement"
+                onClick={()=>setForm(f=>withTravelRateChange(f, Number(f.preparation?.travelRate ?? 0.50) + 0.05))}
+              >+</button>
+            </div>
+            <div className="muted" style={{fontSize:12,marginTop:5}}>Tarif propre à cette prestation • pas de modification des autres événements</div>
+          </div>'''
+
+          for path in files:
+            text = path.read_text(encoding='utf-8')
+            original = text
+
+            if old_fee not in text:
+              raise SystemExit(f'{path}: bloc getTravelFee attendu introuvable')
+            text = text.replace(old_fee, new_fee)
+
+            if old_with_fee not in text:
+              raise SystemExit(f'{path}: bloc withTravelFee attendu introuvable')
+            text = text.replace(old_with_fee, new_with_fee)
+
+            # Le tarif 0,70 €/km devient la valeur initiale uniquement pour les nouveaux événements.
+            marker = 'preparation:{materialChecked:false'
+            if marker not in text:
+              raise SystemExit(f'{path}: EMPTY_EVENT preparation introuvable')
+            text = text.replace(marker, 'preparation:{travelRate:0.70,materialChecked:false', 1)
+
+            # Ne jamais réécraser le tarif particulier quand on modifie la distance ou les 15 km offerts.
+            text = text.replace(
+              'const newPrep={...oldPrep,travelDistanceKm:value,travelRate:0.50};',
+              'const newPrep={...oldPrep,travelDistanceKm:value,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};'
+            )
+            text = text.replace(
+              'const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:0.50};',
+              'const newPrep={...oldPrep,travelFree15:e.target.checked,travelRate:Number.isFinite(Number(oldPrep.travelRate))?Number(oldPrep.travelRate):0.50};'
+            )
+
+            count = text.count(old_rate_input)
+            if count < 1:
+              raise SystemExit(f'{path}: champ Tarif déplacement attendu introuvable')
+            text = text.replace(old_rate_input, new_rate_input)
+
+            if text == original:
+              raise SystemExit(f'{path}: aucune modification appliquée')
+            path.write_text(text, encoding='utf-8')
+            print(f'{path}: OK ({count} bloc(s) tarif remplacé(s))')
+
+      - name: Verify patch
+        run: |
+          grep -n "const rate = Number.isFinite(Number(p.travelRate))" App.jsx client/src/App.jsx
+          grep -n "Tarif propre à cette prestation" App.jsx client/src/App.jsx
+          grep -n "travelRate:0.70" App.jsx client/src/App.jsx
+
+      - name: Commit patch
+        run: |
+          git config user.name "LP28 Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add App.jsx client/src/App.jsx
+          git commit -m "feat: make travel rate configurable per event"
+          git push origin main
