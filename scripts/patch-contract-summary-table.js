@@ -111,3 +111,4 @@ for(const file of files){
   fs.writeFileSync(file,text,'utf8');
   console.log(file+': OK');
 }
+// trigger workflow
