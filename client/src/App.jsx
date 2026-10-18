@@ -1574,11 +1574,12 @@ Johan — Location Photobooth 28`;
       <h3>🖨️ Imprimante affectée</h3>
       <div className="card event-section-card" style={{marginBottom:16}}>
         <label>Choisir l'imprimante utilisée pendant la prestation</label>
-        <select value={form.printerId||form.printer?.id||""} onChange={e=>setForm(f=>({...f,printerId:e.target.value,printer:e.target.value?printersForEvent.find(p=>p.id===e.target.value)||null:null}))}>
+        <select value={form.printerId??form.printer?.id??""} onChange={e=>setForm(f=>({...f,printerId:e.target.value,printer:e.target.value&&e.target.value!=="NONE"?printersForEvent.find(p=>p.id===e.target.value)||null:null}))}>
           <option value="">Attribution automatique</option>
+          <option value="NONE">Aucune imprimante — à attribuer plus tard</option>
           {printersForEvent.map(p=><option key={p.id} value={p.id}>{p.name} — {p.remainingPrints} tirages disponibles</option>)}
         </select>
-        <p className="muted">Une imprimante peut être réutilisée sur deux événements successifs uniquement si les horaires renseignés ne se chevauchent pas. Prévois le démontage, le transport et la remise en service.</p>
+        <p className="muted">Choisir « Aucune imprimante » permet d’enregistrer sans réserver de matériel. Une imprimante peut être réutilisée sur deux événements successifs uniquement si les horaires renseignés ne se chevauchent pas. Prévois le démontage, le transport et la remise en service.</p>
       </div>
       <h3>👤 Animation sur place</h3>
       <div className="card event-section-card">
