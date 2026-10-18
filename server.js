@@ -3577,6 +3577,17 @@ app.patch("/api/events/:id/caution", adminOnly, async (req,res)=>{
     res.json({ok:true,payments:updated});
   }catch(error){console.error("[caution-quick]",error);res.status(500).json({ok:false,message:"Échec de l'enregistrement de la caution."});}
 });
+app.patch("/api/events/:id/payment-status", adminOnly, async (req,res)=>{
+  try {
+    const {paid}=req.body||{};
+    if(typeof paid!=="boolean")return res.status(400).json({ok:false,message:"Statut de règlement invalide."});
+    const existing=await prisma.event.findUnique({where:{id:req.params.id},select:{id:true,totalPrice:true,deposit:true,balancePaid:true}});
+    if(!existing)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    const balance=paid?0:Math.max(0,Number(existing.totalPrice||0)-Number(existing.deposit||0));
+    const updated=await prisma.event.update({where:{id:existing.id},data:{balancePaid:paid,balance},select:{balancePaid:true,balance:true}});
+    res.json({ok:true,balancePaid:updated.balancePaid,balance:Number(updated.balance)});
+  }catch(error){console.error("[payment-status-quick]",error);res.status(500).json({ok:false,message:"Erreur d'enregistrement du règlement."});}
+});
 app.put("/api/events/:id", adminOnly, async (req, res) => {
   const b = req.body || {};
   const selected = Array.isArray(b.materials) ? b.materials : [];
