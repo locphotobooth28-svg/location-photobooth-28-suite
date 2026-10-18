@@ -3463,11 +3463,11 @@ app.post("/api/events", adminOnly, async (req, res) => {
   selected,
   b.customPrintCount
 );
-  const printerChoice = await choosePrinterForEvent({
+  const printerChoice = b.printerId === "NONE" ? {printer:null,warning:null} : await choosePrinterForEvent({
     date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,planned:printCount,requestedPrinterId:b.printerId||null
   });
 
-  if(printCount > 0 && !printerChoice.printer){
+  if(printCount > 0 && b.printerId !== "NONE" && !printerChoice.printer){
     return res.status(409).json({
       ok:false,
       error:"printer_conflict",
@@ -3621,12 +3621,12 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
 
   const currentEventForPrinter = await prisma.event.findUnique({ where:{id:req.params.id} });
   const printCount = plannedPrints(selected);
-  const printerChoice = await choosePrinterForEvent({
+  const printerChoice = b.printerId === "NONE" ? {printer:null,warning:null} : await choosePrinterForEvent({
     date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,
     planned:printCount,excludeEventId:req.params.id,currentPrinterId:currentEventForPrinter?.printerId||null,requestedPrinterId:b.printerId||null
   });
 
-  if(printCount > 0 && !printerChoice.printer){
+  if(printCount > 0 && b.printerId !== "NONE" && !printerChoice.printer){
     return res.status(409).json({
       ok:false,
       error:"printer_conflict",
