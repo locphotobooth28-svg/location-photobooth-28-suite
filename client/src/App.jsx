@@ -143,7 +143,7 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{travelRate:0.70,materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{travelRate:0.70,depositEnabled:true,depositMode:"PERCENT",depositRate:30,animationMode:"NONE",animationSlots:[],animationPrice:"",materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
   customPrintCount:"",
@@ -746,7 +746,27 @@ if (
     };
   });
 };
-  const togglePayment=(key)=>setForm(f=>({...f,payments:{...f.payments,[key]:!f.payments[key]}}));
+  const togglePayment=(key)=>setForm(f=>{
+    const payments={...(f.payments||{}),[key]:!f.payments?.[key]};
+    if(key==="cautionReceived"&&!payments.cautionReceived)payments.cautionReturned=false;
+    if(key==="cautionReturned"&&payments.cautionReturned&&!payments.cautionReceived)return f;
+    return {...f,payments};
+  });
+  const setDepositSettings=(patch)=>setForm(f=>{
+    const prep={...(f.preparation||{}),...patch};
+    const enabled=prep.depositEnabled!==false;
+    const rate=Math.max(0,Math.min(100,Number(prep.depositRate??30)||0));
+    const deposit=!enabled?"":prep.depositMode==="PERCENT"
+      ?(Math.max(0,Number(f.totalPrice)||0)*rate/100).toFixed(2):f.deposit;
+    return {...f,preparation:prep,deposit,balance:Math.max(0,(Number(f.totalPrice)||0)-(Number(deposit)||0)).toFixed(2)};
+  });
+  useEffect(()=>{
+    if(form.preparation?.depositEnabled===false || form.preparation?.depositMode!=="PERCENT")return;
+    const amount=(Math.max(0,Number(form.totalPrice)||0)*Math.max(0,Math.min(100,Number(form.preparation.depositRate??30)||0))/100).toFixed(2);
+    if(Number(form.deposit||0)===Number(amount))return;
+    setForm(f=>({...f,deposit:amount,balance:Math.max(0,(Number(f.totalPrice)||0)-Number(amount)).toFixed(2)}));
+  },[form.totalPrice,form.preparation?.depositEnabled,form.preparation?.depositMode,form.preparation?.depositRate]);
+
 
   async function save(e){
     e.preventDefault();
@@ -1549,75 +1569,46 @@ Johan — Location Photobooth 28`;
         </div>
       </div>
 
-      <h3>💳 Paiement et caution</h3><div className="card event-section-card event-payment-card"><div className="form-grid">
-
-  <div>
-    <label>💰 Montant total de la prestation</label>
-    <input
-      type="number"
-      min="0"
-      step="0.01"
-      value={form.totalPrice||""}
-      onChange={e=>{
-        const total=e.target.value;
-        const deposit=form.deposit||0;
-
-        setForm(f=>({
-          ...f,
-          totalPrice:total,
-          balance:total
-            ? Math.max(
-                Number(total)-Number(deposit||0),
-                0
-              ).toFixed(2)
-            : ""
-        }));
-      }}
-      placeholder="Ex : 350"
-    />
-  </div>
-
-  <div>
-    <label>💳 Montant de l'acompte</label>
-    <input
-      type="number"
-      min="0"
-      step="0.01"
-      value={form.deposit||""}
-      onChange={e=>{
-        const deposit=e.target.value;
-        const total=form.totalPrice||0;
-
-        setForm(f=>({
-          ...f,
-          deposit,
-          balance:form.totalPrice
-            ? Math.max(
-                Number(total)-Number(deposit||0),
-                0
-              ).toFixed(2)
-            : ""
-        }));
-      }}
-      placeholder="Ex : 100"
-    />
-  </div>
-
-  <div>
-    <label>💶 Reste à régler</label>
-    <input
-      type="number"
-      value={form.balance||""}
-      readOnly
-    />
-  </div>
-
-</div>
-      <div className="checks-grid event-payment-checks">
-        {[["depositPaid","Acompte reçu"],["balancePaid","Prestation réglée"],["cautionReceived","Caution reçue"],["cautionReturned","Caution rendue"]].map(([key,label])=>
-          <label className={`status-check ${form.payments[key]?"checked":""}`} key={key}><input type="checkbox" checked={form.payments[key]} onChange={()=>togglePayment(key)}/><span>{form.payments[key]?"✓":"○"} {label}</span></label>
-        )}
+      <h3>👤 Animation sur place</h3>
+      <div className="card event-section-card">
+        <label>Présence de l'animateur</label>
+        <select value={form.preparation?.animationMode||"NONE"} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationMode:e.target.value,animationSlots:e.target.value==="PARTIAL"?(f.preparation?.animationSlots?.length?f.preparation.animationSlots:[{date:"",start:"",end:""}]):f.preparation?.animationSlots||[]}}))}>
+          <option value="NONE">Sans animateur (client autonome)</option>
+          <option value="FULL">Pendant toute la prestation</option>
+          <option value="PARTIAL">Sur des créneaux précis</option>
+        </select>
+        {form.preparation?.animationMode==="PARTIAL"&&<>
+          {(form.preparation?.animationSlots||[]).map((slot,i)=><div className="form-grid" key={i} style={{marginTop:10}}>
+            <div><label>Date d'intervention</label><input type="date" value={slot.date||""} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationSlots:f.preparation.animationSlots.map((x,j)=>j===i?{...x,date:e.target.value}:x)}}))}/></div>
+            <div><label>Début</label><input type="time" value={slot.start||""} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationSlots:f.preparation.animationSlots.map((x,j)=>j===i?{...x,start:e.target.value}:x)}}))}/></div>
+            <div><label>Fin</label><input type="time" value={slot.end||""} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationSlots:f.preparation.animationSlots.map((x,j)=>j===i?{...x,end:e.target.value}:x)}}))}/></div>
+            <button type="button" className="ghost" onClick={()=>setForm(f=>({...f,preparation:{...f.preparation,animationSlots:f.preparation.animationSlots.filter((_,j)=>j!==i)}}))}>Supprimer</button>
+          </div>)}
+          <button type="button" className="ghost" onClick={()=>setForm(f=>({...f,preparation:{...f.preparation,animationSlots:[...(f.preparation?.animationSlots||[]),{date:"",start:"",end:""}]}}))}>+ Ajouter un créneau</button>
+        </>}
+        {form.preparation?.animationMode!=="NONE"&&<div style={{marginTop:10}}><label>Tarif animation (€) — informatif, à inclure au total net</label><input type="number" min="0" step="0.01" value={form.preparation?.animationPrice??""} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationPrice:e.target.value}}))}/></div>}
       </div>
+      <h3>💳 Paiement et caution</h3>
+      <div className="card event-section-card event-payment-card">
+        <div className="form-grid">
+          <div><label>💰 Montant net de la prestation (€)</label><input type="number" min="0" step="0.01" value={form.totalPrice||""} onChange={e=>{const total=e.target.value;setForm(f=>({...f,totalPrice:total,balance:Math.max(0,Number(total||0)-Number(f.deposit||0)).toFixed(2)}));}}/></div>
+          <div><label>Demander un acompte ?</label><label className="switch-line"><input type="checkbox" checked={form.preparation?.depositEnabled!==false&&(event?form.preparation?.depositEnabled===true||Number(form.deposit||0)>0:true)} onChange={e=>setDepositSettings({depositEnabled:e.target.checked,depositMode:e.target.checked?"PERCENT":form.preparation?.depositMode||"PERCENT",depositRate:form.preparation?.depositRate??30})}/> Avec acompte</label></div>
+          {form.preparation?.depositEnabled!==false&&(event?form.preparation?.depositEnabled===true||Number(form.deposit||0)>0:true)&&<>
+            <div><label>Mode d'acompte</label><select value={form.preparation?.depositMode||"FIXED"} onChange={e=>setDepositSettings({depositMode:e.target.value})}><option value="PERCENT">Pourcentage du net</option><option value="FIXED">Montant fixe (€)</option></select></div>
+            {(form.preparation?.depositMode==="PERCENT")&&<div><label>Taux d'acompte (%)</label><input type="number" min="0" max="100" step="0.01" value={form.preparation?.depositRate??30} onChange={e=>setDepositSettings({depositRate:e.target.value})}/></div>}
+            <div><label>💳 Montant de l'acompte (€)</label><input type="number" min="0" max={form.totalPrice||undefined} step="0.01" readOnly={form.preparation?.depositMode==="PERCENT"} value={form.deposit??""} onChange={e=>{const deposit=e.target.value;setForm(f=>({...f,deposit,balance:Math.max(0,Number(f.totalPrice||0)-Number(deposit||0)).toFixed(2)}));}}/></div>
+          </>}
+          <div><label>💶 Reste à régler (€)</label><input type="number" value={form.balance||""} readOnly/></div>
+        </div>
+        <div className="checks-grid event-payment-checks">
+          {[["depositPaid","Acompte reçu"],["balancePaid","Prestation réglée"]].map(([key,label])=><label className={`status-check ${form.payments?.[key]?"checked":""}`} key={key}><input type="checkbox" disabled={key==="depositPaid"&&form.preparation?.depositEnabled===false} checked={!!form.payments?.[key]} onChange={()=>togglePayment(key)}/><span>{form.payments?.[key]?"✓":"○"} {label}</span></label>)}
+        </div>
+        <h4>🔐 Suivi de la caution</h4>
+        <div className="checks-grid event-payment-checks">
+          <button type="button" className={`status-check ${form.payments?.cautionReceived?"checked":""}`} onClick={()=>togglePayment("cautionReceived")}>{form.payments?.cautionReceived?"✓":"○"} Caution reçue</button>
+          <button type="button" className={`status-check ${form.payments?.cautionReturned?"checked":""}`} disabled={!form.payments?.cautionReceived} onClick={()=>togglePayment("cautionReturned")}>{form.payments?.cautionReturned?"✓":"○"} Caution rendue</button>
+        </div>
+        <p className="muted">La caution n'est pas comptabilisée comme un acompte ni comme un paiement de la prestation. Enregistrer l'événement pour sauvegarder ces statuts.</p>
       </div>
 {event?.collaboratorActions?.length>0 && (
   <div className="card" style={{marginTop:16}}>
