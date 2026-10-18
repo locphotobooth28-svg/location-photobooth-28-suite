@@ -3561,6 +3561,22 @@ customPrintPrice:
   res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
+// Quick deposit/caution status change from the events dashboard (admin only).
+app.patch("/api/events/:id/caution", adminOnly, async (req,res)=>{
+  try{
+    const {action}=req.body||{};
+    if(!["received","returned","reset_received","reset_returned"].includes(action))
+      return res.status(400).json({ok:false,message:"Action de caution invalide."});
+    const existing=await prisma.event.findUnique({where:{id:req.params.id},select:{id:true,cautionReceived:true,cautionReturned:true}});
+    if(!existing)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    if(action==="returned"&&!existing.cautionReceived)return res.status(409).json({ok:false,message:"Confirmer d'abord la réception de la caution."});
+    const data=action==="received"?{cautionReceived:true}:
+      action==="returned"?{cautionReturned:true}:
+      action==="reset_received"?{cautionReceived:false,cautionReturned:false}:{cautionReturned:false};
+    const updated=await prisma.event.update({where:{id:existing.id},data,select:{cautionReceived:true,cautionReturned:true}});
+    res.json({ok:true,payments:updated});
+  }catch(error){console.error("[caution-quick]",error);res.status(500).json({ok:false,message:"Échec de l'enregistrement de la caution."});}
+});
 app.put("/api/events/:id", adminOnly, async (req, res) => {
   const b = req.body || {};
   const selected = Array.isArray(b.materials) ? b.materials : [];
