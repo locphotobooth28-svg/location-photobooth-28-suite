@@ -2786,6 +2786,7 @@ client: e.client ? {
 googleCalendarEventId: e.googleCalendarEventId,
 googleCalendarId: e.googleCalendarId,
 googleDriveFolderId: e.googleDriveFolderId,
+      printerId: e.printerId || null,
       printer: e.printer ? {
         id: e.printer.id,
         name: e.printer.name,
