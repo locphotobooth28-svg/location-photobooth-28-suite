@@ -589,7 +589,7 @@ if(materialUnavailabilities.length){
 }
 
 async function choosePrinterForEvent({
-  date,time,pickupDate,pickupTime,planned,excludeEventId=null,currentPrinterId=null
+  date,time,pickupDate,pickupTime,planned,excludeEventId=null,currentPrinterId=null,requestedPrinterId=null
 }){
   if(!planned) return {printer:null,warning:null};
 
@@ -616,6 +616,12 @@ async function choosePrinterForEvent({
     }
   }
 
+  if(requestedPrinterId){
+    const chosen=printers.find(p=>p.id===requestedPrinterId);
+    if(!chosen)return {printer:null,warning:"Imprimante sélectionnée inexistante ou désactivée."};
+    if(occupied.has(chosen.id))return {printer:null,warning:`L'imprimante ${chosen.name} est déjà affectée à une prestation sur ce créneau. Vérifie les heures de pose et de reprise.`};
+    return {printer:chosen,warning:chosen.remainingPrints<planned?`Prévoir du papier : ${chosen.name} dispose de ${chosen.remainingPrints} tirages pour ${planned} prévus.`:null};
+  }
   if(currentPrinterId && !occupied.has(currentPrinterId)){
     const current=printers.find(p=>p.id===currentPrinterId);
     if(current){
@@ -3458,7 +3464,7 @@ app.post("/api/events", adminOnly, async (req, res) => {
   b.customPrintCount
 );
   const printerChoice = await choosePrinterForEvent({
-    date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,planned:printCount
+    date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,planned:printCount,requestedPrinterId:b.printerId||null
   });
 
   if(printCount > 0 && !printerChoice.printer){
@@ -3617,7 +3623,7 @@ app.put("/api/events/:id", adminOnly, async (req, res) => {
   const printCount = plannedPrints(selected);
   const printerChoice = await choosePrinterForEvent({
     date:b.date,time:b.time,pickupDate:b.pickupDate,pickupTime:b.pickupTime,
-    planned:printCount,excludeEventId:req.params.id,currentPrinterId:currentEventForPrinter?.printerId||null
+    planned:printCount,excludeEventId:req.params.id,currentPrinterId:currentEventForPrinter?.printerId||null,requestedPrinterId:b.printerId||null
   });
 
   if(printCount > 0 && !printerChoice.printer){
