@@ -2671,6 +2671,7 @@ app.get("/api/events", anyModuleViewOnly(["events","planning","materialPlanning"
     where:assignedWhere,
     include: {
   client: true,
+  printer: true,
 
   materials: {
     include: {
