@@ -244,18 +244,6 @@ function SettingsPage({user}){
   const [userEventActions,setUserEventActions]=useState({});
   const [passwordForm,setPasswordForm]=useState({current:"",next:"",confirm:""});
   const [passwordBusy,setPasswordBusy]=useState(false);
-  const [cautionBusy,setCautionBusy]=useState({});
-  async function quickCaution(event,action){
-    if(cautionBusy[event.id])return;
-    setCautionBusy(prev=>({...prev,[event.id]:true}));
-    try{
-      const response=await fetch(`/api/events/${event.id}/caution`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});
-      const result=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(result.message||"Impossible d'enregistrer la caution.");
-      setEvents(prev=>prev.map(item=>item.id===event.id?{...item,payments:{...(item.payments||{}),...result.payments}}:item));
-    }catch(error){alert(error.message||"Erreur de caution.");}
-    finally{setCautionBusy(prev=>({...prev,[event.id]:false}));}
-  }
   async function load(){
     const requests=[
       fetch("/api/session").then(r=>r.json()),
@@ -6342,6 +6330,31 @@ function Dashboard({onLogout,user}) {
   },[]);
 
 
+  const [cautionBusy,setCautionBusy]=useState({});
+  async function quickCaution(event,action){
+    if(cautionBusy[event.id])return;
+    setCautionBusy(prev=>({...prev,[event.id]:true}));
+    try{
+      const response=await fetch(`/api/events/${event.id}/caution`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.message||"Impossible d'enregistrer la caution.");
+      setEvents(prev=>prev.map(item=>item.id===event.id?{...item,payments:{...(item.payments||{}),...result.payments}}:item));
+    }catch(error){alert(error.message||"Erreur de caution.");}
+    finally{setCautionBusy(prev=>({...prev,[event.id]:false}));}
+  }
+  async function quickPayment(event){
+    if(cautionBusy[event.id])return;
+    const paid=!event.payments?.balancePaid;
+    if(!window.confirm(paid?"Confirmer que la prestation est intégralement réglée ?":"Annuler le statut Prestation réglée ?"))return;
+    setCautionBusy(prev=>({...prev,[event.id]:true}));
+    try{
+      const response=await fetch(`/api/events/${event.id}/payment-status`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({paid})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.message||"Impossible d'enregistrer le paiement.");
+      setEvents(prev=>prev.map(item=>item.id===event.id?{...item,balance:result.balance,payments:{...(item.payments||{}),balancePaid:result.balancePaid}}:item));
+    }catch(error){alert(error.message||"Erreur lors du règlement.");}
+    finally{setCautionBusy(prev=>({...prev,[event.id]:false}));}
+  }
   async function load(){
     const [e,d]=await Promise.all([
       fetch("/api/events").then(r=>r.json()),
@@ -7125,6 +7138,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                 {event.googleDriveFolderId&&<span>☁️ Drive ✓</span>}
               </div>
               {isAdmin&&<div style={{display:"flex",gap:8,flexWrap:"wrap",margin:"8px 0 12px"}}>
+                <button type="button" disabled={!!cautionBusy[event.id]} onClick={()=>quickPayment(event)} style={{border:"1px solid #fbbf24",background:event.payments?.balancePaid?"rgba(146,64,14,.38)":"rgba(146,64,14,.12)",color:"#fde68a",fontWeight:800}}>{event.payments?.balancePaid?"✅ Prestation réglée":"💶 Prestation réglée"}</button>
                 <button type="button" disabled={!!cautionBusy[event.id]} onClick={()=>quickCaution(event,event.payments?.cautionReceived?"reset_received":"received")} style={{border:"1px solid #22c55e",background:event.payments?.cautionReceived?"rgba(22,101,52,.38)":"rgba(22,101,52,.12)",color:"#bbf7d0",fontWeight:800}}> {event.payments?.cautionReceived?"✅ Caution reçue":"☐ Caution reçue"}</button>
                 <button type="button" disabled={!!cautionBusy[event.id]||!event.payments?.cautionReceived} onClick={()=>quickCaution(event,event.payments?.cautionReturned?"reset_returned":"returned")} style={{border:"1px solid #38bdf8",background:event.payments?.cautionReturned?"rgba(14,116,144,.38)":"rgba(14,116,144,.12)",color:"#bae6fd",fontWeight:800}}>{event.payments?.cautionReturned?"✅ Caution rendue":"↩️ Caution rendue"}</button>
               </div>}
