@@ -7123,6 +7123,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                   <div>
                     <div style={{fontSize:12,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.9}}>Impressions choisies par le client</div>
                     <div style={{fontSize:28,fontWeight:900,lineHeight:1.1,marginTop:4}}>{eventPrintChoice(event)}</div>
+                    <div style={{fontSize:13,fontWeight:800,marginTop:7,color:"#f3e8ff"}}>🖨️ {event.printer?.name || "Imprimante à attribuer"}</div>
                   </div>
                 </div>
               </div>
@@ -7143,7 +7144,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                 <span>📍 {event.address||"Adresse non renseignée"}</span>
                 <span>📦 {event.materials?.length||0} sélection(s)</span>
                 {event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}
-                {!event.printer&&<span>🖨️ Imprimante non attribuée</span>}
+
                 <span>👥 {event.guestCount||0} invité(s)</span>
                 {event.pickupDate&&<span>↩️ Reprise {new Date(event.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{event.pickupTime?` ${event.pickupTime}`:""}</span>}
                 {event.frameSource&&event.frameSource!=="NONE"&&<span className={`frame-badge frame-${event.frameStatus?.toLowerCase()}`}>🎨 {event.frameSource==="CLIENT"?"Client":"LP28"} · {event.frameStatus==="DONE"?"Terminé":event.frameStatus==="IN_PROGRESS"?"En cours":"À faire"}</span>}
