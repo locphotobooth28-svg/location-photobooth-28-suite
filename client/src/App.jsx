@@ -458,6 +458,8 @@ const [collaboratorPermissions,setCollaboratorPermissions]=useState(()=>{
   };
 });
 
+  const [printersForEvent,setPrintersForEvent]=useState([]);
+  useEffect(()=>{fetch("/api/admin/inventory").then(r=>r.ok?r.json():Promise.reject()).then(d=>setPrintersForEvent(d.printers||[])).catch(()=>{});},[]);
   const [collaborators,setCollaborators]=useState([]);
 
 useEffect(()=>{
@@ -1569,6 +1571,15 @@ Johan — Location Photobooth 28`;
         </div>
       </div>
 
+      <h3>🖨️ Imprimante affectée</h3>
+      <div className="card event-section-card" style={{marginBottom:16}}>
+        <label>Choisir l'imprimante utilisée pendant la prestation</label>
+        <select value={form.printerId||form.printer?.id||""} onChange={e=>setForm(f=>({...f,printerId:e.target.value,printer:e.target.value?printersForEvent.find(p=>p.id===e.target.value)||null:null}))}>
+          <option value="">Attribution automatique</option>
+          {printersForEvent.map(p=><option key={p.id} value={p.id}>{p.name} — {p.remainingPrints} tirages disponibles</option>)}
+        </select>
+        <p className="muted">Une imprimante peut être réutilisée sur deux événements successifs uniquement si les horaires renseignés ne se chevauchent pas. Prévois le démontage, le transport et la remise en service.</p>
+      </div>
       <h3>👤 Animation sur place</h3>
       <div className="card event-section-card">
         <label>Présence de l'animateur</label>
@@ -7131,6 +7142,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                 <span>📍 {event.address||"Adresse non renseignée"}</span>
                 <span>📦 {event.materials?.length||0} sélection(s)</span>
                 {event.printer&&<span>🖨️ {event.printer.name} · {event.printer.remainingPrints} restants</span>}
+                {!event.printer&&<span>🖨️ Imprimante non attribuée</span>}
                 <span>👥 {event.guestCount||0} invité(s)</span>
                 {event.pickupDate&&<span>↩️ Reprise {new Date(event.pickupDate+"T12:00:00").toLocaleDateString("fr-FR")}{event.pickupTime?` ${event.pickupTime}`:""}</span>}
                 {event.frameSource&&event.frameSource!=="NONE"&&<span className={`frame-badge frame-${event.frameStatus?.toLowerCase()}`}>🎨 {event.frameSource==="CLIENT"?"Client":"LP28"} · {event.frameStatus==="DONE"?"Terminé":event.frameStatus==="IN_PROGRESS"?"En cours":"À faire"}</span>}
