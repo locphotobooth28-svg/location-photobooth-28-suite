@@ -5806,7 +5806,7 @@ function DocumentManager({event,onClose}){
                 >
                   <a
                     className="portal-action"
-                    href={document.adminUrl}
+                    href={document.source==="WEB" ? document.url : document.adminUrl}
                     target="_blank"
                     rel="noreferrer"
                   >
