@@ -151,6 +151,7 @@ model Event {
   contractSignedAt      DateTime?
   contractSignerName    String?
   contractSignerEmail   String?
+  contractSignerRole    String?
   contractSignatureData String?
   contractDocumentHash  String?
 
