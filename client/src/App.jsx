@@ -7644,6 +7644,7 @@ function ContractSignaturePage({token}){
   const [error,setError]=useState("");
   const [signerName,setSignerName]=useState("");
   const [signerEmail,setSignerEmail]=useState("");
+  const [signerRole,setSignerRole]=useState("");
   const [accepted,setAccepted]=useState(false);
   const [sending,setSending]=useState(false);
   const [signed,setSigned]=useState(false);
@@ -7666,16 +7667,9 @@ function ContractSignaturePage({token}){
       .then(d=>{
         setData(d);
 
-        setSignerName(
-          d.signerName ||
-          d.event?.organizerName ||
-          ""
-        );
-
-        setSignerEmail(
-          d.event?.organizerEmail ||
-          ""
-        );
+        setSignerName(d.status==="SIGNED" ? (d.signerName || "") : "");
+        setSignerEmail(d.status==="SIGNED" ? (d.signerEmail || "") : "");
+        setSignerRole(d.status==="SIGNED" ? (d.signerRole || "") : "");
 
         if(d.status==="SIGNED"){
           setSigned(true);
@@ -7787,6 +7781,10 @@ function ContractSignaturePage({token}){
       );
     }
 
+    if(!signerRole){
+      return alert("Merci de sélectionner votre fonction ou Sans fonction particulière.");
+    }
+
     if(!accepted){
       return alert(
         "Vous devez accepter le contrat avant de le signer."
@@ -7817,6 +7815,7 @@ function ContractSignaturePage({token}){
           body:JSON.stringify({
             signerName:signerName.trim(),
             signerEmail:signerEmail.trim(),
+            signerRole,
             signatureData
           })
         }
@@ -8015,6 +8014,19 @@ function ContractSignaturePage({token}){
             }
             placeholder="Nom et prénom"
           />
+
+          <label>Fonction / qualité du signataire</label>
+          <select value={signerRole} onChange={e=>setSignerRole(e.target.value)} required>
+            <option value="">Sélectionner une fonction</option>
+            <option value="Président(e)">Président(e)</option>
+            <option value="Vice-président(e)">Vice-président(e)</option>
+            <option value="Secrétaire">Secrétaire</option>
+            <option value="Trésorier(ère)">Trésorier(ère)</option>
+            <option value="Membre du bureau">Membre du bureau</option>
+            <option value="Autre représentant habilité">Autre représentant habilité</option>
+            <option value="Sans fonction particulière">Sans fonction particulière</option>
+          </select>
+          <p className="muted">Indiquez votre propre identité et votre fonction. Vous devez être habilité(e) à signer ce contrat pour l'organisme représenté.</p>
 
           <label>
             Adresse e-mail
