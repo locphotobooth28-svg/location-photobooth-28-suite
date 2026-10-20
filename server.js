@@ -3904,7 +3904,7 @@ app.get("/api/events/:id/documents", adminOnly, async (req,res)=>{
       .map(normalizeDriveDocument).concat(await lp28WebDocuments(event.id))
       .map(d=>({
         ...d,
-        adminUrl:
+        adminUrl: d.source==="WEB" ? d.url :
           `/api/events/${encodeURIComponent(event.id)}` +
           `/documents/${encodeURIComponent(d.id)}/file`
       }));
@@ -4050,6 +4050,14 @@ app.delete(
   adminOnly,
   async (req,res)=>{
     try{
+      if(String(req.params.fileId||"").startsWith("web-")){
+        const id=String(req.params.fileId).slice(4);
+        const links=await lp28ReadDocumentLinks(req.params.id);
+        const remaining=links.filter(item=>String(item.id)!==id);
+        if(remaining.length===links.length)return res.status(404).json({ok:false,message:"Lien introuvable."});
+        await lp28WriteDocumentLinks(req.params.id,remaining);
+        return res.json({ok:true});
+      }
       await googleService.deleteEventDocument(
         req,
         req.params.id,
@@ -4074,6 +4082,14 @@ app.get(
   adminOnly,
   async (req,res)=>{
     try{
+      if(String(req.params.fileId||"").startsWith("web-")){
+        const links=await lp28ReadDocumentLinks(req.params.id);
+        const entry=links.find(x=>String(x.id)===String(req.params.fileId).slice(4));
+        if(!entry)return res.status(404).end();
+        let target;try{target=new URL(String(entry.url||""))}catch{return res.status(400).end()}
+        if(!["http:","https:"].includes(target.protocol))return res.status(400).end();
+        return res.redirect(302,target.toString());
+      }
       const driveResult=
         await googleService.listEventDocuments(
           req,
