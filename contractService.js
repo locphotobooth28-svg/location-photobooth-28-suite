@@ -392,6 +392,7 @@ async function generateContractPdf(event){
   const signatureImage = signatureDataUrl(event);
   const signerName = signatureSignerName(event,client);
   const signerEmail = signatureSignerEmail(event,client);
+  const signerRole = String(event.contractSignerRole || "").trim();
   const contractIsSigned =
     event.contractStatus === "SIGNED" ||
     Boolean(signedAtValue && signatureImage);
@@ -1017,6 +1018,11 @@ async function generateContractPdf(event){
         size:10,
         gapAfter:3
       }
+    );
+
+    drawText(
+      `Fonction : ${signerRole || "Non renseignée"}`,
+      { size:10, gapAfter:3 }
     );
 
     drawText(
