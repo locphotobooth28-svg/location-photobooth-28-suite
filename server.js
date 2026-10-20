@@ -3137,6 +3137,7 @@ app.post("/api/events/:id/contract-signature-link", adminOnly, async (req, res) 
         contractSignedAt: null,
         contractSignerName: null,
         contractSignerEmail: null,
+        contractSignerRole: null,
         contractSignatureData: null
       }
     });
@@ -3220,6 +3221,8 @@ app.get("/api/contract-signature/:token", async (req, res) => {
       generatedAt: event.contractGeneratedAt,
       signedAt: event.contractSignedAt,
       signerName: event.contractSignerName,
+      signerEmail: event.contractSignerEmail,
+      signerRole: event.contractSignerRole,
 
       contractPdfUrl:
         `/api/contract-signature/${encodeURIComponent(req.params.token)}/contract.pdf`
@@ -3313,6 +3316,12 @@ app.post("/api/contract-signature/:token/sign", async (req, res) => {
     const signerEmail =
       String(req.body?.signerEmail || "").trim();
 
+    const signerRole = String(req.body?.signerRole || "").trim();
+    const allowedSignerRoles = ["Président(e)","Vice-président(e)","Secrétaire","Trésorier(ère)","Membre du bureau","Autre représentant habilité","Sans fonction particulière"];
+    if(!allowedSignerRoles.includes(signerRole)){
+      return res.status(400).json({ok:false,message:"Merci de préciser votre fonction de signataire."});
+    }
+
     const signatureData =
       String(req.body?.signatureData || "");
 
@@ -3391,6 +3400,7 @@ if (
         contractSignedAt: signedAt,
         contractSignerName: signerName,
         contractSignerEmail: signerEmail || null,
+        contractSignerRole: signerRole,
         contractSignatureData: signatureData
       }
     });
