@@ -715,6 +715,26 @@ async function generateContractPdf(event){
     "Les horaires exacts de livraison, d'installation et de reprise sont définis en fonction de l'organisation de la prestation et ne correspondent pas nécessairement à une période de 24 heures pleines."
   );
 
+  // LP28_ANIMATION_CONTRAT_V1 : horaires contractuels et tarif informatif.
+  const animation=event.preparation&&typeof event.preparation==="object"?event.preparation:{};
+  const animationMode=String(animation.animationMode||"NONE").toUpperCase();
+  const animationActive=animationMode==="FULL"||animationMode==="PARTIAL";
+  const animationSlots=Array.isArray(animation.animationSlots)?animation.animationSlots:[];
+  if(animationActive){
+    if(animationMode==="FULL"){
+      drawText("Présence d'un animateur : pendant toute la prestation, selon les horaires d'intervention convenus avec le client.");
+    }else{
+      drawText("Présence d'un animateur : uniquement pendant les créneaux d'intervention indiqués ci-dessous.");
+      for(const slot of animationSlots){
+        const day=slot&&slot.date?dateFr(slot.date):"Date non renseignée";
+        const start=slot&&slot.start?String(slot.start):"heure non renseignée";
+        const end=slot&&slot.end?String(slot.end):"heure non renseignée";
+        drawText(`${day} : de ${start} à ${end}`);
+      }
+    }
+    drawText("La présence de l'animateur est limitée aux horaires convenus et n'implique pas une surveillance permanente du matériel en dehors de ces horaires.");
+  }
+
   const summaryRows=[{label:"Forfait sélectionné",value:printPackage.label}];
 
   if(printPackage.custom){
@@ -747,6 +767,24 @@ async function generateContractPdf(event){
         ? `${kmLabel(travelDistance)} km (Aller/Retour) − 15 km offerts = ${kmLabel(billedKm)} km facturés × ${money(travelRate)}/km = ${money(travelFee)}`
         : `${kmLabel(travelDistance)} km (Aller/Retour) × ${money(travelRate)}/km = ${money(travelFee)}`
     });
+  }
+
+  if(animationActive){
+    if(animationMode==="FULL"){
+      summaryRows.push({label:"Présence d'un animateur",value:"Pendant toute la prestation"});
+    }else{
+      const slots=animationSlots.length?animationSlots:[{}];
+      for(const [index,slot] of slots.entries()){
+        const day=slot&&slot.date?dateFr(slot.date):"Date non renseignée";
+        const start=slot&&slot.start?String(slot.start):"Heure non renseignée";
+        const end=slot&&slot.end?String(slot.end):"Heure non renseignée";
+        summaryRows.push({label:slots.length>1?`Animateur - créneau ${index+1}`:"Présence d'un animateur",value:`${day} - ${start} à ${end}`});
+      }
+    }
+    const rawPrice=animation.animationPrice;
+    const priceProvided=rawPrice!==undefined&&rawPrice!==null&&String(rawPrice).trim()!=="";
+    const price=Number(rawPrice);
+    summaryRows.push({label:"Tarif animation (inclus dans le total)",value:priceProvided&&Number.isFinite(price)&&price>=0?money(price):"Non renseigné"});
   }
 
   summaryRows.push({label:"Montant total de la prestation",value:money(event.totalPrice),bold:true});
