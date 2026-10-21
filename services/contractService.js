@@ -279,7 +279,13 @@ function clientInfo(event){
 }
 
 function wrapText(text,font,size,maxWidth){
-  const words = String(text || "").split(/\s+/);
+  // Les polices PDF standard utilisent WinAnsi : normaliser les caractères incompatibles.
+  const safeText = String(text ?? "")
+    .replace(/[\u2212\u2010\u2011\u2012\u2013\u2014]/g, "-")
+    .replace(/[\u202F\u2007\u2009]/g, " ")
+    .replace(/\u2192/g, "->")
+    .replace(/\u2190/g, "<-");
+  const words = safeText.split(/\s+/);
   const lines = [];
 
   let line = "";
@@ -765,7 +771,7 @@ async function generateContractPdf(event){
     summaryRows.push({
       label:"Frais de déplacement (Aller/Retour)",
       value:travel.travelFree15
-        ? `${kmLabel(travelDistance)} km (Aller/Retour) − 15 km offerts = ${kmLabel(billedKm)} km facturés × ${money(travelRate)}/km = ${money(travelFee)}`
+        ? `${kmLabel(travelDistance)} km (Aller/Retour) - 15 km offerts = ${kmLabel(billedKm)} km facturés × ${money(travelRate)}/km = ${money(travelFee)}`
         : `${kmLabel(travelDistance)} km (Aller/Retour) × ${money(travelRate)}/km = ${money(travelFee)}`
     });
   }
