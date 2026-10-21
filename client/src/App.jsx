@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import CameraSettingsPage from "./CameraSettingsPage.jsx";
 
 const SITE = "https://www.locationphotobooth28.fr";
 const FACEBOOK = "https://www.facebook.com/location.photobooth.28/";
@@ -6316,6 +6317,7 @@ function Dashboard({onLogout,user}) {
     {id:"planning",label:"Planning",icon:"🗓️",locked:true},
     {id:"materialPlanning",label:"Planning matériel",icon:"📦",locked:true},
     {id:"inventory",label:"Inventaire admin",icon:"🔐",locked:true},
+    {id:"cameraSettings",label:"Réglages appareils photo",icon:"📷",locked:true},
     {id:"longPlanning",label:"Planning 24 mois",icon:"🗓️",locked:true},
     {id:"documents",label:"Documents",icon:"📄",locked:true},
     {id:"galleries",label:"Galeries",icon:"📸",locked:true},
@@ -6740,7 +6742,7 @@ function Dashboard({onLogout,user}) {
     return `${item?.icon||"📦"} ${label}`;
   }
 
-  const currentViewTitle = view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire admin":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google":view==="settings"?"Paramètres":"Tableau de bord";
+  const currentViewTitle = view==="events"?"Mes événements":view==="planning"?"Planning":view==="materialPlanning"?"Planning matériel":view==="inventory"?"Inventaire admin":view==="cameraSettings"?"Réglages appareils photo":view==="longPlanning"?"Planning 24 mois":view==="documents"?"Documents":view==="galleries"?"Galeries":view==="booths"?"Mes bornes":view==="assistance"?"Assistance":view==="collaborators"?"Collaborateurs":view==="google"?"Google":view==="settings"?"Paramètres":"Tableau de bord";
 
   const navigate = nextView => {
     setView(nextView);
@@ -6960,6 +6962,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
         {navModules.filter(m=>{
           if(m.visible===false)return false;
           if(isAdmin)return true;
+          if(m.id==="cameraSettings")return false;
           if(m.id==="settings")return true;
           const allowed=Array.isArray(user?.permissions?.allowedModules)?user.permissions.allowedModules:(user?.role==="INTERVENANT"?["dashboard","events","planning","materialPlanning"]:["dashboard","planning"]);
           return allowed.includes(m.id);
@@ -7194,7 +7197,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
       </> : view==="planning" ? <>
         <FamilyPlanningAccountControls onChanged={()=>setPlanningRefresh(v=>v+1)}/><AdminPlanningCalendar events={events} refreshKey={planningRefresh} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={isAdmin?remove:undefined}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span>{isAdmin&&<span style={{fontWeight:800}}>🎁 Don / prestation offerte</span>}</section>
-      </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
+      </> : view==="inventory" ? <AdminInventory/> : view==="cameraSettings" ? (isAdmin ? <CameraSettingsPage/> : null) : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
     </main>
 
     {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
