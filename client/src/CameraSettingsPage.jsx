@@ -146,3 +146,4 @@ export default function CameraSettingsPage(){
     </section>}
     <p style={{...STYLE.muted,fontSize:12}}>LP28 · Fiche D7200 v1 · 21 octobre 2026 · réglages indicatifs à valider sur matériel réel.</p>
   </div>;
+}
