@@ -2559,6 +2559,9 @@ app.get("/api/family-planning/data",familyPlanningOnly,async(req,res)=>{
   res.json({ok:true,events:events.map(familyEventDto),blocks:groupedBlocks});
 });
 
+// Disponibilités personnelles administrateur : privées, indépendantes du stock et des blocages familiaux.
+require("./services/personalAvailabilityRoutes")(app, prisma, adminOnly);
+
 // Planning Admin : mêmes blocages familiaux, sans exposer le motif privé.
 function canManageFamilyPlanningAccount(user){
   if(!user)return false;
