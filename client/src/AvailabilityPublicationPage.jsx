@@ -131,12 +131,20 @@ export default function AvailabilityPublicationPage(){
       return "📅 "+fullDate(r.date)+" — "+label+" : "+r.availableCameras.map(c=>c.name).join(", ");
     }).join("\n");
     const more=publishable.length>10?"\n... et d'autres dates sur demande.":"";
-    if(channel==="story")return "📸 LOCATION PHOTOBOOTH 28\n\nBORNES ENCORE DISPONIBLES\n"+monthLabel(month).toUpperCase()+"\n\n"+labels+more+"\n\n💌 Demandez votre devis\nwww.locationphotobooth28.fr\n\nDisponibilité de notre équipe, livraison et installation à confirmer.";
-    const preface=channel==="instagram"?"📸 Des souvenirs inoubliables avec Location Photobooth 28 !":"📸 Vos prochains événements se préparent avec Location Photobooth 28 !";
-    return preface+"\n\nNos bornes encore disponibles en "+monthLabel(month)+" :\n"+labels+more+
-      "\n\nMariages, anniversaires, soirées et événements professionnels.\n\n"+
-      "📩 Contactez-nous pour confirmer la prestation, les horaires et obtenir votre devis personnalisé.\n🌐 www.locationphotobooth28.fr\n"+
-      (channel==="instagram"?"\n#Photobooth28 #EureEtLoir #Photobooth #Mariage #Anniversaire":"")+
+    const flashTitle=publishable.length===1
+      ?"🚨 FLASH INFO – UNE DATE ENCORE DISPONIBLE ! 📸"
+      :"🚨 FLASH INFO – DISPONIBILITÉS PHOTOBOOTH ! 📸";
+    if(channel==="story")return flashTitle+"\n\nLOCATION PHOTOBOOTH 28\n\n"+monthLabel(month).toUpperCase()+
+      "\n\n"+labels+more+
+      "\n\n💌 Contactez-nous pour votre devis\n🌐 www.locationphotobooth28.fr"+
+      "\n\n*Équipe, livraison et installation à confirmer.*";
+    return flashTitle+
+      "\n\n🎉 Vous organisez un mariage, un anniversaire, une soirée ou un événement professionnel ?"+
+      "\n\n📅 Nos bornes encore disponibles en "+monthLabel(month)+" :\n"+labels+more+
+      "\n\n✨ Offrez à vos invités des souvenirs inoubliables !"+
+      "\n\n📩 Contactez-nous pour vérifier les horaires et recevoir votre devis personnalisé."+
+      "\n🌐 www.locationphotobooth28.fr"+
+      (channel==="instagram"?"\n\n#Photobooth28 #EureEtLoir #Photobooth #Mariage #Anniversaire #FlashInfo":"")+
       "\n\n*Disponibilité des bornes sous réserve de confirmation de notre équipe, des horaires de livraison/installation et de reprise. Dates susceptibles d'évoluer.*";
   },[loaded,publishable,month,channel,publicationMode]);
   useEffect(()=>{if(!manualEdit)setDraft(generated)},[generated,manualEdit]);
