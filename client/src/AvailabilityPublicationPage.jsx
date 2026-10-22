@@ -1,8 +1,9 @@
 import React, {useCallback,useEffect,useMemo,useState} from "react";
 
-// LP28 — Les dates "libres" ne sont jamais déduites de l'absence de réservation.
-// Publication uniquement après validation explicite de la disponibilité personnelle
-// ET après contrôle des réservations, options, devis et blocages du planning.
+// LP28 — Publication de disponibilités de matériel (proposition commerciale),
+// ou dates confirmées personnellement, selon un filtre explicite.
+// Toujours tenir compte des événements, devis, options, blocages et indisponibilités.
+// La publication générée impose une confirmation des horaires / de l'intervention.
 const CAMERAS = [
   {name:"Lola",material:"Borne Photobooth Miroir Lola",icon:"🪞"},
   {name:"Nina",material:"Borne Photobooth Nina",icon:"📸"},
@@ -48,6 +49,7 @@ export default function AvailabilityPublicationPage(){
   const [status,setStatus]=useState("UNKNOWN");
   const [note,setNote]=useState("");
   const [weekendOnly,setWeekendOnly]=useState(true);
+  const [publicationMode,setPublicationMode]=useState("material");
   const [channel,setChannel]=useState("facebook");
   const [draft,setDraft]=useState("");
   const [manualEdit,setManualEdit]=useState(false);
@@ -109,7 +111,17 @@ export default function AvailabilityPublicationPage(){
   }),[days,entries,blocks,events]);
 
   const counts=useMemo(()=>records.reduce((o,r)=>(o[r.kind]=(o[r.kind]||0)+1,o),{FREE:0,REVIEW:0,BLOCKED:0,UNKNOWN:0,FULL:0}),[records]);
-  const publishable=records.filter(r=>r.kind==="FREE"&&(!weekendOnly||weekendsOnlyDate(r.date)));
+  // Mode matériel : une disponibilité personnelle non renseignée ne doit pas bloquer
+  // la communication sur une borne libre. Une indisponibilité personnelle
+  // explicitement déclarée continue en revanche de bloquer la date.
+  const materialDates=records.filter(r=>
+    r.availableCameras.length>0 && !r.familyBlock &&
+    r.personal!=="UNAVAILABLE" && !r.unspecified
+  );
+  const publishable=materialDates.filter(r=>
+    (publicationMode==="material" || r.personal==="AVAILABLE") &&
+    (!weekendOnly||weekendsOnlyDate(r.date))
+  );
   const publishedDates=publishable.slice(0,10);
   const generated=useMemo(()=>{
     if(!loaded||!publishedDates.length)return "";
@@ -119,14 +131,14 @@ export default function AvailabilityPublicationPage(){
       return "📅 "+fullDate(r.date)+" — "+label+" : "+r.availableCameras.map(c=>c.name).join(", ");
     }).join("\n");
     const more=publishable.length>10?"\n... et d'autres dates sur demande.":"";
-    if(channel==="story")return "📸 LOCATION PHOTOBOOTH 28\n\nDATES ENCORE DISPONIBLES\n"+monthLabel(month).toUpperCase()+"\n\n"+labels+more+"\n\n💌 Demandez votre devis\nwww.locationphotobooth28.fr\n\nSous réserve de validation de la prestation.";
+    if(channel==="story")return "📸 LOCATION PHOTOBOOTH 28\n\nBORNES ENCORE DISPONIBLES\n"+monthLabel(month).toUpperCase()+"\n\n"+labels+more+"\n\n💌 Demandez votre devis\nwww.locationphotobooth28.fr\n\nDisponibilité de notre équipe, livraison et installation à confirmer.";
     const preface=channel==="instagram"?"📸 Des souvenirs inoubliables avec Location Photobooth 28 !":"📸 Vos prochains événements se préparent avec Location Photobooth 28 !";
-    return preface+"\n\nQuelques dates disponibles en "+monthLabel(month)+" :\n"+labels+more+
+    return preface+"\n\nNos bornes encore disponibles en "+monthLabel(month)+" :\n"+labels+more+
       "\n\nMariages, anniversaires, soirées et événements professionnels.\n\n"+
-      "📩 Contactez-nous pour confirmer le matériel, les horaires et obtenir votre devis personnalisé.\n🌐 www.locationphotobooth28.fr\n"+
+      "📩 Contactez-nous pour confirmer la prestation, les horaires et obtenir votre devis personnalisé.\n🌐 www.locationphotobooth28.fr\n"+
       (channel==="instagram"?"\n#Photobooth28 #EureEtLoir #Photobooth #Mariage #Anniversaire":"")+
-      "\n\n*Dates susceptibles d'évoluer selon les réservations.*";
-  },[loaded,publishable,month,channel]);
+      "\n\n*Disponibilité des bornes sous réserve de confirmation de notre équipe, des horaires de livraison/installation et de reprise. Dates susceptibles d'évoluer.*";
+  },[loaded,publishable,month,channel,publicationMode]);
   useEffect(()=>{if(!manualEdit)setDraft(generated)},[generated,manualEdit]);
 
   async function saveDay(){
@@ -152,7 +164,7 @@ export default function AvailabilityPublicationPage(){
 
   return <section className="panel" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",alignItems:"stretch",width:"100%",minWidth:0,gap:13,marginBottom:16,border:"1px solid rgba(214,185,79,.55)"}}>
     <div style={{...flex,justifyContent:"space-between"}}>
-      <div><div className="eyebrow">ADMIN LP28 · CONFIDENTIEL</div><h2 style={{margin:"4px 0"}}>📣 Publications et disponibilités personnelles</h2><p className="muted" style={{margin:0}}>LP28 vérifie Lola, Nina et Gabin séparément. Même si deux bornes sont réservées, la troisième reste visible comme disponible. Pour publier une date, confirme aussi ta disponibilité personnelle et l'absence de blocage.</p></div>
+      <div><div className="eyebrow">ADMIN LP28 · CONFIDENTIEL</div><h2 style={{margin:"4px 0"}}>📣 Publications et disponibilités personnelles</h2><p className="muted" style={{margin:0}}>LP28 vérifie Lola, Nina et Gabin séparément et tient compte des réservations, devis et blocages. Tu peux annoncer les bornes encore libres sans renseigner tous tes jours personnels ; la disponibilité de l'équipe reste à confirmer avant réservation.</p></div>
       <button type="button" onClick={reload} disabled={loading} style={btnSmall}>{loading?"Actualisation…":"🔄 Actualiser planning et devis"}</button>
     </div>
     {error&&<div className="alert" role="alert">{error}</div>}
@@ -167,9 +179,10 @@ export default function AvailabilityPublicationPage(){
           Publications : week-ends uniquement
         </label>
       </div>
-      <p style={muted}>Statut personnel enregistré sur le serveur LP28. À renseigner selon tes jours VINCI, ta vie familiale et tes possibilités réelles de livraison / animation. Une journée partiellement libre doit rester « à confirmer ».</p>
+      <p style={muted}>Le planning affiche les disponibilités du matériel, même si tes disponibilités personnelles ne sont pas renseignées. Enregistre tes véritables indisponibilités pour exclure automatiquement ces dates. Une journée seulement partiellement libre doit rester à confirmer.</p>
       <div style={{...flex,marginBottom:10}}>
-        <div style={{...P,flex:1,minWidth:130}}><strong>✅ {counts.FREE}</strong><div style={muted}>Jours potentiellement libres</div></div>
+        <div style={{...P,flex:1,minWidth:130}}><strong>📸 {materialDates.length}</strong><div style={muted}>Jours avec au moins 1 borne libre</div></div>
+        <div style={{...P,flex:1,minWidth:130}}><strong>✅ {counts.FREE}</strong><div style={muted}>Jours disponibles personnellement confirmés</div></div>
         <div style={{...P,flex:1,minWidth:130}}><strong>🟠 {counts.REVIEW}</strong><div style={muted}>À confirmer</div></div>
         <div style={{...P,flex:1,minWidth:130}}><strong>🚫 {counts.FULL}</strong><div style={muted}>3 bornes occupées / devis</div></div>
         <div style={{...P,flex:1,minWidth:130}}><strong>⛔ {counts.BLOCKED}</strong><div style={muted}>Dates bloquées</div></div>
@@ -199,8 +212,9 @@ export default function AvailabilityPublicationPage(){
         <label style={{display:"grid",gap:5,flex:"1 1 250px"}}>Note privée (non publiée)
           <input value={note} maxLength={180} onChange={e=>setNote(e.target.value)} placeholder="Travail VINCI, repos, famille…"/>
         </label>
-        <button type="button" className="primary" onClick={saveDay} disabled={saveBusy||!loaded}>{saveBusy?"Enregistrement…":"💾 Enregistrer"}</button>
+        <button type="button" className="primary" onClick={saveDay} disabled={saveBusy||!loaded}>{saveBusy?"Enregistrement…":"💾 Enregistrer ce jour"}</button>
       </div>
+      {loaded&&(status!==(entries[selected]?.status||"UNKNOWN")||note!==(entries[selected]?.note||""))&&<p style={{color:"#eabf58",margin:"7px 0"}}>⚠️ Ce choix personnel n'est pas encore enregistré. Clique sur « Enregistrer ce jour » si tu souhaites conserver cette information.</p>}
       {records.find(r=>r.date===selected)&&(()=>{
         const r=records.find(x=>x.date===selected);
         return <div style={{marginTop:12}}>
@@ -226,15 +240,25 @@ export default function AvailabilityPublicationPage(){
           </select>
         </label>
       </div>
-      {loaded&&<p style={muted}>{publishable.length} date(s) remplissant les critères, dont {publishedDates.length} affichée(s) dans le message. Les noms des clients, devis et motifs personnels ne sont jamais intégrés à la publication.</p>}
-      {loaded&&publishable.length===0?<p style={muted}><strong>Aucune date publiable pour l'instant.</strong> Les bornes libres sont quand même indiquées dans le calendrier : valide tes disponibilités personnelles et contrôle les éventuels devis ou blocages.</p>:null}
+      <div style={{...flex,margin:"6px 0 8px"}}>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",minWidth:240}}>
+          <input type="radio" name="lp28-publication-mode" checked={publicationMode==="material"} onChange={()=>{setPublicationMode("material");setManualEdit(false)}}/>
+          <span><strong>📸 Bornes disponibles</strong><small style={{display:"block",...muted}}>Recommandé : proposition commerciale, intervention à confirmer</small></span>
+        </label>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",minWidth:240}}>
+          <input type="radio" name="lp28-publication-mode" checked={publicationMode==="personal"} onChange={()=>{setPublicationMode("personal");setManualEdit(false)}}/>
+          <span><strong>✅ Mes jours confirmés</strong><small style={{display:"block",...muted}}>N'utilise que les journées enregistrées comme personnellement disponibles</small></span>
+        </label>
+      </div>
+      {loaded&&<p style={muted}>{publishable.length} date(s) compatibles avec le filtre, dont {publishedDates.length} affichée(s) dans le message. Les clients, devis et motifs personnels ne sont jamais publiés.</p>}
+      {loaded&&publishable.length===0?<p style={muted}><strong>Aucune date correspondant aux filtres.</strong> {publicationMode==="personal"?"Choisis « Bornes disponibles » pour générer sans renseigner chaque jour personnel.":"Vérifie les blocages, devis, réservations et le filtre week-ends uniquement."}</p>:null}
       <textarea aria-label="Publication modifiable" value={draft} onChange={e=>{setDraft(e.target.value);setManualEdit(true)}} disabled={!loaded||!publishable.length}
         placeholder="Les dates vérifiées et le texte de publication apparaîtront ici."
         style={{boxSizing:"border-box",width:"100%",minHeight:225,padding:12,borderRadius:10,resize:"vertical"}}/>
       <div style={{...flex,marginTop:9}}>
         <button type="button" className="primary" disabled={!loaded||!publishable.length||!draft.trim()} onClick={copyText}>📋 Copier la publication</button>
         <button type="button" onClick={()=>{setDraft(generated);setManualEdit(false)}} disabled={!loaded}>↺ Régénérer</button>
-        <small style={muted}>Publication manuelle uniquement. Revalider les horaires et l'inventaire avant de confirmer au client.</small>
+        <small style={muted}>Publication manuelle uniquement. Ce message indique le stock, pas une promesse de livraison : confirme la disponibilité de ton équipe avant réservation.</small>
       </div>
     </div>
   </section>;
