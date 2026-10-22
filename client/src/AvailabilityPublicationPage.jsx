@@ -84,35 +84,45 @@ export default function AvailabilityPublicationPage(){
     });
     const cameras=CAMERAS.map(c=>{
       const matches=matched.filter(e=>involvedMaterial(e).includes(c.material));
-      return {...c,
-        confirmed:matches.some(e=>HOLD.has(e.bookingStatus)||e.status==="IN_PROGRESS"),
-        pending:matches.some(e=>PENDING.has(e.bookingStatus))
-      };
+      // Une option immobilise sa borne, un devis la rend provisoirement indisponible
+      // dans les propositions publiques, mais pas les autres bornes.
+      const confirmed=matches.some(e=>HOLD.has(String(e.bookingStatus||"CONFIRMED").toUpperCase())||e.status==="IN_PROGRESS");
+      const pending=matches.some(e=>PENDING.has(String(e.bookingStatus||"").toUpperCase()));
+      return {...c,confirmed,pending,available:!confirmed&&!pending};
     });
-    const occupied=matched.some(e=>HOLD.has(e.bookingStatus)||e.status==="IN_PROGRESS");
-    const pending=matched.some(e=>PENDING.has(e.bookingStatus));
-    let kind="UNKNOWN",reason="Disponibilité personnelle non renseignée";
-    if(familyBlock){kind="BLOCKED";reason="Date non réservable (planning familial)";}
-    else if(personal==="UNAVAILABLE"){kind="BLOCKED";reason="Indisponibilité personnelle";}
+    const availableCameras=cameras.filter(c=>c.available);
+    const occupied=matched.some(e=>HOLD.has(String(e.bookingStatus||"CONFIRMED").toUpperCase())||e.status==="IN_PROGRESS");
+    const pending=matched.some(e=>PENDING.has(String(e.bookingStatus||"").toUpperCase()));
+    // Une prestation sans borne identifiée est à vérifier : on ne peut pas
+    // calculer quel appareil physique elle mobilise.
+    const unspecified=matched.some(e=>!CAMERAS.some(c=>involvedMaterial(e).includes(c.material)));
+    const countLabel=availableCameras.length+" borne"+(availableCameras.length>1?"s":"")+" libre"+(availableCameras.length>1?"s":"")+" sur 3";
+    const names=availableCameras.map(c=>c.name).join(", ");
+    let kind="UNKNOWN",reason=countLabel+" ("+names+") · disponibilité personnelle à confirmer";
+    if(familyBlock){kind="BLOCKED";reason="Non réservable (planning familial) · "+countLabel;}
+    else if(personal==="UNAVAILABLE"){kind="BLOCKED";reason="Indisponibilité personnelle · "+countLabel;}
+    else if(availableCameras.length===0){kind="FULL";reason="Toutes les bornes sont réservées, en option ou concernées par un devis";}
+    else if(unspecified){kind="REVIEW";reason=countLabel+" ("+names+") · prestation sans borne identifiée : vérification nécessaire";}
     else if(personal!=="AVAILABLE"){}
-    else if(occupied){kind="REVIEW";reason="Réservation / option : vérifier installations et reprises";}
-    else if(pending){kind="REVIEW";reason="Devis en cours : date à confirmer";}
-    else if(cameras.every(c=>c.confirmed||c.pending)){kind="BLOCKED";reason="Aucune borne libre";}
-    else{kind="FREE";reason="Disponible personnellement, aucune occupation signalée";}
-    return {date,personal,familyBlock,cameras,kind,reason,occupied,pending};
+    else{kind="FREE";reason=countLabel+" ("+names+") · horaires de livraison et reprise à confirmer";}
+    return {date,personal,familyBlock,cameras,availableCameras,kind,reason,occupied,pending,unspecified};
   }),[days,entries,blocks,events]);
 
-  const counts=useMemo(()=>records.reduce((o,r)=>(o[r.kind]=(o[r.kind]||0)+1,o),{FREE:0,REVIEW:0,BLOCKED:0,UNKNOWN:0}),[records]);
+  const counts=useMemo(()=>records.reduce((o,r)=>(o[r.kind]=(o[r.kind]||0)+1,o),{FREE:0,REVIEW:0,BLOCKED:0,UNKNOWN:0,FULL:0}),[records]);
   const publishable=records.filter(r=>r.kind==="FREE"&&(!weekendOnly||weekendsOnlyDate(r.date)));
   const publishedDates=publishable.slice(0,10);
   const generated=useMemo(()=>{
     if(!loaded||!publishedDates.length)return "";
-    const labels=publishedDates.map(r=>"📅 "+fullDate(r.date)).join("\n");
+    const labels=publishedDates.map(r=>{
+      const n=r.availableCameras.length;
+      const label=n===3?"3 bornes disponibles":n+" borne"+(n>1?"s":"")+" disponible"+(n>1?"s":"");
+      return "📅 "+fullDate(r.date)+" — "+label+" : "+r.availableCameras.map(c=>c.name).join(", ");
+    }).join("\n");
     const more=publishable.length>10?"\n... et d'autres dates sur demande.":"";
     if(channel==="story")return "📸 LOCATION PHOTOBOOTH 28\n\nDATES ENCORE DISPONIBLES\n"+monthLabel(month).toUpperCase()+"\n\n"+labels+more+"\n\n💌 Demandez votre devis\nwww.locationphotobooth28.fr\n\nSous réserve de validation de la prestation.";
     const preface=channel==="instagram"?"📸 Des souvenirs inoubliables avec Location Photobooth 28 !":"📸 Vos prochains événements se préparent avec Location Photobooth 28 !";
     return preface+"\n\nQuelques dates disponibles en "+monthLabel(month)+" :\n"+labels+more+
-      "\n\n🪞 Borne miroir Lola · 📸 Nina · ✨ Gabin\nMariages, anniversaires, soirées et événements professionnels.\n\n"+
+      "\n\nMariages, anniversaires, soirées et événements professionnels.\n\n"+
       "📩 Contactez-nous pour confirmer le matériel, les horaires et obtenir votre devis personnalisé.\n🌐 www.locationphotobooth28.fr\n"+
       (channel==="instagram"?"\n#Photobooth28 #EureEtLoir #Photobooth #Mariage #Anniversaire":"")+
       "\n\n*Dates susceptibles d'évoluer selon les réservations.*";
@@ -140,9 +150,9 @@ export default function AvailabilityPublicationPage(){
     catch{window.prompt("Copier la publication :",draft);}
   }
 
-  return <section className="panel" style={{display:"grid",gap:13,marginBottom:16,border:"1px solid rgba(214,185,79,.55)"}}>
+  return <section className="panel" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr)",alignItems:"stretch",width:"100%",minWidth:0,gap:13,marginBottom:16,border:"1px solid rgba(214,185,79,.55)"}}>
     <div style={{...flex,justifyContent:"space-between"}}>
-      <div><div className="eyebrow">ADMIN LP28 · CONFIDENTIEL</div><h2 style={{margin:"4px 0"}}>📣 Publications et disponibilités personnelles</h2><p className="muted" style={{margin:0}}>Une date n'est publiable que si tu t'es déclaré disponible et que le planning n'affiche aucune réservation, option, devis ou période bloquée.</p></div>
+      <div><div className="eyebrow">ADMIN LP28 · CONFIDENTIEL</div><h2 style={{margin:"4px 0"}}>📣 Publications et disponibilités personnelles</h2><p className="muted" style={{margin:0}}>LP28 vérifie Lola, Nina et Gabin séparément. Même si deux bornes sont réservées, la troisième reste visible comme disponible. Pour publier une date, confirme aussi ta disponibilité personnelle et l'absence de blocage.</p></div>
       <button type="button" onClick={reload} disabled={loading} style={btnSmall}>{loading?"Actualisation…":"🔄 Actualiser planning et devis"}</button>
     </div>
     {error&&<div className="alert" role="alert">{error}</div>}
@@ -161,8 +171,9 @@ export default function AvailabilityPublicationPage(){
       <div style={{...flex,marginBottom:10}}>
         <div style={{...P,flex:1,minWidth:130}}><strong>✅ {counts.FREE}</strong><div style={muted}>Jours potentiellement libres</div></div>
         <div style={{...P,flex:1,minWidth:130}}><strong>🟠 {counts.REVIEW}</strong><div style={muted}>À confirmer</div></div>
-        <div style={{...P,flex:1,minWidth:130}}><strong>🚫 {counts.BLOCKED}</strong><div style={muted}>Indisponibles</div></div>
-        <div style={{...P,flex:1,minWidth:130}}><strong>❔ {counts.UNKNOWN}</strong><div style={muted}>Perso. non renseignée</div></div>
+        <div style={{...P,flex:1,minWidth:130}}><strong>🚫 {counts.FULL}</strong><div style={muted}>3 bornes occupées / devis</div></div>
+        <div style={{...P,flex:1,minWidth:130}}><strong>⛔ {counts.BLOCKED}</strong><div style={muted}>Dates bloquées</div></div>
+        <div style={{...P,flex:1,minWidth:130}}><strong>❔ {counts.UNKNOWN}</strong><div style={muted}>Perso. à confirmer (matériel visible)</div></div>
       </div>
       {loaded&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:7}}>
         {records.map(r=><button type="button" key={r.date} onClick={()=>setSelected(r.date)} title={r.reason}
@@ -170,7 +181,8 @@ export default function AvailabilityPublicationPage(){
           border:"1px solid "+(selected===r.date?"#d6b94f":"rgba(128,128,128,.24)"),
           borderRadius:10,padding:"9px 11px",color:"inherit"}}>
           <strong style={{display:"block"}}>{fmt(r.date)}</strong>
-          <small>{r.kind==="FREE"?"✅ Libre":r.kind==="REVIEW"?"🟠 À confirmer":r.kind==="BLOCKED"?"🚫 Indisponible":"❔ Perso. inconnue"}</small>
+          <small style={{display:"block",marginTop:3}}>{r.availableCameras.length}/3 borne{r.availableCameras.length>1?"s":""} libre{r.availableCameras.length>1?"s":""}{r.availableCameras.length? " : "+r.availableCameras.map(c=>c.name).join(", "):""}</small>
+          <small style={{display:"block",marginTop:2}}>{r.kind==="FREE"?"✅ Publiable":r.kind==="REVIEW"?"🟠 Réservation à vérifier":r.kind==="BLOCKED"?"⛔ Date bloquée":r.kind==="FULL"?"🚫 Plus de borne libre":"❔ Dispo. perso. à confirmer"}</small>
         </button>)}
       </div>}
     </div>
@@ -189,7 +201,19 @@ export default function AvailabilityPublicationPage(){
         </label>
         <button type="button" className="primary" onClick={saveDay} disabled={saveBusy||!loaded}>{saveBusy?"Enregistrement…":"💾 Enregistrer"}</button>
       </div>
-      {records.find(r=>r.date===selected)&&<p style={{...muted,marginBottom:0}}><strong>Analyse LP28 :</strong> {records.find(r=>r.date===selected).reason}.</p>}
+      {records.find(r=>r.date===selected)&&(()=>{
+        const r=records.find(x=>x.date===selected);
+        return <div style={{marginTop:12}}>
+          <p style={{...muted,marginBottom:8}}><strong>Analyse LP28 :</strong> {r.reason}.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
+            {r.cameras.map(c=><div key={c.name} style={{border:"1px solid rgba(128,128,128,.3)",borderRadius:10,padding:10,minWidth:0}}>
+              <strong>{c.icon} {c.name}</strong>
+              <div style={{fontSize:12,marginTop:5}}>{c.confirmed?"🔴 Réservée / option":c.pending?"🟠 Devis en cours":"✅ Matériel libre"}</div>
+            </div>)}
+          </div>
+          <p style={{...muted,fontSize:12,marginBottom:0}}>Disponibilité du matériel et disponibilité personnelle sont deux contrôles distincts. Vérifie la possibilité de livraison, installation et reprise même si une borne est libre.</p>
+        </div>;
+      })()}
     </div>
     <div style={P}>
       <div style={{...flex,justifyContent:"space-between"}}>
@@ -203,7 +227,7 @@ export default function AvailabilityPublicationPage(){
         </label>
       </div>
       {loaded&&<p style={muted}>{publishable.length} date(s) remplissant les critères, dont {publishedDates.length} affichée(s) dans le message. Les noms des clients, devis et motifs personnels ne sont jamais intégrés à la publication.</p>}
-      {loaded&&publishable.length===0?<p style={muted}><strong>Aucune date publiable avec certitude.</strong> Renseigne d'abord tes disponibilités personnelles, puis actualise les devis. Aucune disponibilité n'est inventée.</p>:null}
+      {loaded&&publishable.length===0?<p style={muted}><strong>Aucune date publiable pour l'instant.</strong> Les bornes libres sont quand même indiquées dans le calendrier : valide tes disponibilités personnelles et contrôle les éventuels devis ou blocages.</p>:null}
       <textarea aria-label="Publication modifiable" value={draft} onChange={e=>{setDraft(e.target.value);setManualEdit(true)}} disabled={!loaded||!publishable.length}
         placeholder="Les dates vérifiées et le texte de publication apparaîtront ici."
         style={{boxSizing:"border-box",width:"100%",minHeight:225,padding:12,borderRadius:10,resize:"vertical"}}/>
