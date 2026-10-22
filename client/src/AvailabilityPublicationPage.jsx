@@ -136,14 +136,14 @@ export default function AvailabilityPublicationPage(){
       :"🚨 FLASH INFO – DISPONIBILITÉS PHOTOBOOTH ! 📸";
     if(channel==="story")return flashTitle+"\n\nLOCATION PHOTOBOOTH 28\n\n"+monthLabel(month).toUpperCase()+
       "\n\n"+labels+more+
-      "\n\n💌 Contactez-nous pour votre devis\n🌐 www.locationphotobooth28.fr"+
+      "\n\n💌 Contactez-nous pour votre devis\n📞 07 56 83 21 85\n🌐 www.locationphotobooth28.fr"+
       "\n\n*Équipe, livraison et installation à confirmer.*";
     return flashTitle+
       "\n\n🎉 Vous organisez un mariage, un anniversaire, une soirée ou un événement professionnel ?"+
       "\n\n📅 Nos bornes encore disponibles en "+monthLabel(month)+" :\n"+labels+more+
       "\n\n✨ Offrez à vos invités des souvenirs inoubliables !"+
       "\n\n📩 Contactez-nous pour vérifier les horaires et recevoir votre devis personnalisé."+
-      "\n🌐 www.locationphotobooth28.fr"+
+      "\n📞 07 56 83 21 85\n🌐 www.locationphotobooth28.fr"+
       (channel==="instagram"?"\n\n#Photobooth28 #EureEtLoir #Photobooth #Mariage #Anniversaire #FlashInfo":"")+
       "\n\n*Disponibilité des bornes sous réserve de confirmation de notre équipe, des horaires de livraison/installation et de reprise. Dates susceptibles d'évoluer.*";
   },[loaded,publishable,month,channel,publicationMode]);
