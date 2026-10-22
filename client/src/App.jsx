@@ -1,6 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import CameraSettingsPage from "./CameraSettingsPage.jsx";
+import AvailabilityPublicationPage from "./AvailabilityPublicationPage.jsx";
 
 const SITE = "https://www.locationphotobooth28.fr";
 const FACEBOOK = "https://www.facebook.com/location.photobooth.28/";
@@ -6250,6 +6251,7 @@ function NotificationBell({onOpen}){
 function Dashboard({onLogout,user}) {
   const [view,setView]=useState("dashboard");
   const [planningRefresh,setPlanningRefresh]=useState(0);
+  const [showAvailabilityPublication,setShowAvailabilityPublication]=useState(false);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [notificationOpen,setNotificationOpen]=useState(false),[notificationItems,setNotificationItems]=useState([]);
   async function openNotifications(){try{const r=await fetch("/api/notifications");const d=await r.json();if(d?.ok)setNotificationItems(d.notifications||[])}catch{}setNotificationOpen(true)}
@@ -7195,6 +7197,11 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           </article></React.Fragment>;})}
         </div>
       </> : view==="planning" ? <>
+        {isAdmin&&<section className="panel" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div><strong>📣 Publication des disponibilités</strong><p className="muted" style={{margin:"4px 0 0"}}>Planning, devis et disponibilités personnelles — validation avant toute annonce.</p></div>
+          <button type="button" className="primary" onClick={()=>setShowAvailabilityPublication(v=>!v)}>{showAvailabilityPublication?"✕ Fermer le générateur":"📣 Communiquer mes disponibilités"}</button>
+        </section>}
+        {isAdmin&&showAvailabilityPublication&&<AvailabilityPublicationPage/>}
         <FamilyPlanningAccountControls onChanged={()=>setPlanningRefresh(v=>v+1)}/><AdminPlanningCalendar events={events} refreshKey={planningRefresh} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={isAdmin?remove:undefined}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span>{isAdmin&&<span style={{fontWeight:800}}>🎁 Don / prestation offerte</span>}</section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
