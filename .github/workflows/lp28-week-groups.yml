@@ -1,0 +1,141 @@
+name: LP28 - Apply weekly event grouping
+
+on:
+  push:
+    branches:
+      - feature/events-week-groups
+    paths:
+      - .github/workflows/lp28-week-groups.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/events-week-groups
+
+      - name: Apply LP28 weekly event grouping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('App.jsx')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          old_week_logic = re.compile(
+              r'  const isDateInCurrentWeek=date=>\{.*?\n  const firstLaterUpcomingIndex=eventTab==="upcoming"\?filtered\.findIndex\(e=>!isDateInCurrentWeek\(e\.date\)\):-1;\n',
+              re.S,
+          )
+          new_week_logic = r'''  const [weekClock,setWeekClock]=useState(()=>new Date());
+          useEffect(()=>{
+            const timer=window.setInterval(()=>setWeekClock(new Date()),60*60*1000);
+            return()=>window.clearInterval(timer);
+          },[]);
+
+          const lp28Months=["JANVIER","FÉVRIER","MARS","AVRIL","MAI","JUIN","JUILLET","AOÛT","SEPTEMBRE","OCTOBRE","NOVEMBRE","DÉCEMBRE"];
+          const startOfLp28Week=value=>{
+            const d=new Date(value);d.setHours(12,0,0,0);
+            const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);
+            return d;
+          };
+          const addLp28Days=(value,days)=>{const d=new Date(value);d.setDate(d.getDate()+days);return d;};
+          const parseLp28EventDate=date=>{
+            if(!date)return null;
+            const d=new Date(`${date}T12:00:00`);
+            return Number.isNaN(d.getTime())?null:d;
+          };
+          const formatLp28ShortDate=date=>`${date.getDate()} ${lp28Months[date.getMonth()]}`;
+          const formatLp28WeekRange=(start,end)=>{
+            if(start.getMonth()===end.getMonth()&&start.getFullYear()===end.getFullYear())return `${start.getDate()} → ${end.getDate()} ${lp28Months[start.getMonth()]}`;
+            return `${formatLp28ShortDate(start)} → ${formatLp28ShortDate(end)}`;
+          };
+          const lp28WeekStart=startOfLp28Week(weekClock);
+          const lp28WeekSections=[
+            {id:"week-current",className:"week-current",start:lp28WeekStart,end:addLp28Days(lp28WeekStart,7),label:`📅 ÉVÉNEMENTS DE LA SEMAINE — ${formatLp28WeekRange(lp28WeekStart,addLp28Days(lp28WeekStart,6))}`},
+            {id:"week-1",className:"week-1",start:addLp28Days(lp28WeekStart,7),end:addLp28Days(lp28WeekStart,14),label:`📅 SEMAINE +1 — ${formatLp28WeekRange(addLp28Days(lp28WeekStart,7),addLp28Days(lp28WeekStart,13))}`},
+            {id:"week-2",className:"week-2",start:addLp28Days(lp28WeekStart,14),end:addLp28Days(lp28WeekStart,21),label:`📅 SEMAINE +2 — ${formatLp28WeekRange(addLp28Days(lp28WeekStart,14),addLp28Days(lp28WeekStart,20))}`},
+            {id:"week-3",className:"week-3",start:addLp28Days(lp28WeekStart,21),end:addLp28Days(lp28WeekStart,28),label:`📅 SEMAINE +3 — ${formatLp28WeekRange(addLp28Days(lp28WeekStart,21),addLp28Days(lp28WeekStart,27))}`},
+            {id:"later",className:"week-later",start:addLp28Days(lp28WeekStart,28),end:null,label:`📁 ÉVÉNEMENTS À VENIR — À PARTIR DU ${formatLp28ShortDate(addLp28Days(lp28WeekStart,28))}`}
+          ];
+          const getUpcomingWeekSection=date=>{
+            const d=parseLp28EventDate(date);
+            if(!d)return lp28WeekSections[4];
+            if(d<lp28WeekStart)return lp28WeekSections[0];
+            return lp28WeekSections.find(section=>section.end?d>=section.start&&d<section.end:d>=section.start)||lp28WeekSections[4];
+          };
+'''
+          text, count = old_week_logic.subn(new_week_logic, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Weekly logic block not found exactly once (found {count})')
+
+          old_header = '          {eventTab==="upcoming"&&hasWeekUpcoming&&<div className="event-list-section-title">📅 ÉVÉNEMENTS DE LA SEMAINE</div>}\n'
+          if old_header not in text:
+              raise SystemExit('Old current-week header not found')
+          text = text.replace(old_header, '', 1)
+
+          old_map_start = '          {filtered.map((event,eventIndex)=>{\n            const isGifted=!!event.preparation?.gifted;'
+          new_map_start = '''          {filtered.map((event,eventIndex)=>{
+            const weekSection=eventTab==="upcoming"?getUpcomingWeekSection(event.date):null;
+            const previousWeekSection=eventTab==="upcoming"&&eventIndex>0?getUpcomingWeekSection(filtered[eventIndex-1]?.date):null;
+            const showWeekHeader=!!weekSection&&(!previousWeekSection||previousWeekSection.id!==weekSection.id);
+            const isGifted=!!event.preparation?.gifted;'''
+          if old_map_start not in text:
+              raise SystemExit('Event map start not found')
+          text = text.replace(old_map_start, new_map_start, 1)
+
+          old_fragment = '''            return <React.Fragment key={event.id}>
+            {eventTab==="upcoming"&&eventIndex===firstLaterUpcomingIndex&&<div className="event-list-section-title upcoming">📆 ÉVÉNEMENTS À VENIR</div>}
+            <article className={`event-card ${event.archived?"archived":""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>'''
+          new_fragment = '''            return <React.Fragment key={event.id}>
+            {showWeekHeader&&<div className={`event-list-section-title ${weekSection.className}`}>{weekSection.label}</div>}
+            <article className={`event-card ${event.archived?"archived":""} ${weekSection?`event-week-card ${weekSection.className}`:""}`} style={{gridTemplateColumns:"250px minmax(0,1fr)",...giftedStyle,...inProgressStyle}}>'''
+          if old_fragment not in text:
+              raise SystemExit('Old event section fragment not found')
+          text = text.replace(old_fragment, new_fragment, 1)
+
+          old_css = re.compile(r'      \.event-list-section-title\{grid-column:1/-1;padding:8px 12px;border-left:4px solid #d4ad2d;border-radius:8px;background:rgba\(212,173,45,\.10\);font-size:\.82rem;font-weight:950;letter-spacing:\.045em;color:#8a6500\}\.event-list-section-title\.upcoming\{margin-top:4px;border-left-color:#3b82f6;background:rgba\(59,130,246,\.08\);color:#2563eb\}html\[data-lp28-theme="dark"\] \.event-list-section-title\{color:#f4d76b;background:rgba\(212,173,45,\.10\)\}html\[data-lp28-theme="dark"\] \.event-list-section-title\.upcoming\{color:#93c5fd;background:rgba\(59,130,246,\.10\)\}\n')
+          new_css = '''      .event-list-section-title{grid-column:1/-1;padding:9px 12px;border-left:5px solid var(--week-accent,#94a3b8);border-radius:8px;background:var(--week-bg,rgba(148,163,184,.10));font-size:.82rem;font-weight:950;letter-spacing:.045em;color:var(--week-text,#475569);margin-top:4px}
+          .event-list-section-title.week-current,.event-week-card.week-current{--week-accent:#22c55e;--week-bg:rgba(34,197,94,.10);--week-text:#15803d}
+          .event-list-section-title.week-1,.event-week-card.week-1{--week-accent:#3b82f6;--week-bg:rgba(59,130,246,.09);--week-text:#2563eb}
+          .event-list-section-title.week-2,.event-week-card.week-2{--week-accent:#a855f7;--week-bg:rgba(168,85,247,.09);--week-text:#7e22ce}
+          .event-list-section-title.week-3,.event-week-card.week-3{--week-accent:#f59e0b;--week-bg:rgba(245,158,11,.10);--week-text:#b45309}
+          .event-list-section-title.week-later,.event-week-card.week-later{--week-accent:#94a3b8;--week-bg:rgba(148,163,184,.10);--week-text:#475569}
+          .event-week-card{border-left:4px solid var(--week-accent,#94a3b8)!important}
+          html[data-lp28-theme="dark"] .event-list-section-title{background:var(--week-bg,rgba(148,163,184,.10));color:var(--week-text,#cbd5e1)}
+          html[data-lp28-theme="dark"] .event-list-section-title.week-current{--week-text:#86efac}
+          html[data-lp28-theme="dark"] .event-list-section-title.week-1{--week-text:#93c5fd}
+          html[data-lp28-theme="dark"] .event-list-section-title.week-2{--week-text:#d8b4fe}
+          html[data-lp28-theme="dark"] .event-list-section-title.week-3{--week-text:#fcd34d}
+          html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#cbd5e1}
+'''
+          text, count = old_css.subn(new_css, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Event section CSS not found exactly once (found {count})')
+
+          if 'Version 8.5.78' not in text:
+              raise SystemExit('Expected LP28 version 8.5.78 not found')
+          text = text.replace('Version 8.5.78', 'Version 8.5.79', 1)
+
+          if text == original:
+              raise SystemExit('No changes produced')
+          path.write_text(text, encoding='utf-8')
+          print('LP28 weekly grouping patch applied successfully')
+          PY
+
+      - name: Commit patched App.jsx
+        shell: bash
+        run: |
+          git config user.name "LP28 Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add App.jsx
+          git rm .github/workflows/lp28-week-groups.yml
+          git commit -m "feat: group upcoming events by rolling weeks"
+          git push origin HEAD:feature/events-week-groups
