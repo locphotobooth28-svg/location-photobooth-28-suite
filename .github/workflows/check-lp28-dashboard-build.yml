@@ -21,7 +21,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Installer les dépendances
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Construire LP28 et appliquer les correctifs
         run: npm run build
       - name: Contrôler les indicateurs du tableau de bord
