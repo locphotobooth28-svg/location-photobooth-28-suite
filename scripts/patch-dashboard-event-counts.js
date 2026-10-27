@@ -14,14 +14,12 @@ const orderBefore='const DASHBOARD_DEFAULT_ORDER=["events","quoteSent","inProgre
 const orderAfter='const DASHBOARD_DEFAULT_ORDER=["events","quoteSent","completedEvents","futureEvents","pendingEvents","inProgress","upcoming","contracts","weekEvents","liveBooths","weekBilled","monthBilled","futureBilled","weekGift","monthGift","futureGift"];';
 replaceOnce(orderBefore,orderAfter,"ordre des cartes");
 
-const restoreBefore='return Array.isArray(saved)&&saved.length?DASHBOARD_DEFAULT_ORDER.filter(id=>saved.includes(id)).concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!saved.includes(id))):DASHBOARD_DEFAULT_ORDER;';
+const restoreBefore='      return validSaved.concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!validSaved.includes(id)));';
 const restoreAfter=[
-  'if(!Array.isArray(saved)||!saved.length)return DASHBOARD_DEFAULT_ORDER;',
-  '      const savedOrder=DASHBOARD_DEFAULT_ORDER.filter(id=>saved.includes(id));',
-  '      const missing=["completedEvents","futureEvents","pendingEvents"].filter(id=>!savedOrder.includes(id));',
-  '      const anchor=Math.max(savedOrder.indexOf("quoteSent"),savedOrder.indexOf("events"));',
-  '      savedOrder.splice(anchor+1,0,...missing);',
-  '      return savedOrder.concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!savedOrder.includes(id)));'
+  '      const missing=["completedEvents","futureEvents","pendingEvents"].filter(id=>!validSaved.includes(id));',
+  '      const anchor=Math.max(validSaved.indexOf("quoteSent"),validSaved.indexOf("events"));',
+  '      validSaved.splice(anchor+1,0,...missing);',
+  '      return validSaved.concat(DASHBOARD_DEFAULT_ORDER.filter(id=>!validSaved.includes(id)));'
 ].join("\n");
 replaceOnce(restoreBefore,restoreAfter,"dispositions personnalisées existantes");
 
