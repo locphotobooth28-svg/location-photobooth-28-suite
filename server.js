@@ -2974,6 +2974,18 @@ app.get("/api/events/:id/contract.pdf", userOnly, async (req, res) => {
 // SIGNATURE ELECTRONIQUE DES CONTRATS
 // ======================================================
 
+// Nature du client pour le parcours de signature (indépendante du thème de l'événement).
+// Anciennes fiches : déduction prudente, modifiable depuis LP28 Admin.
+function getContractClientCategory(event){
+  const prep=event?.preparation && typeof event.preparation==="object" ? event.preparation : {};
+  const explicit=String(prep.clientCategory||"").trim().toUpperCase();
+  if(["PARTICULIER","ASSOCIATION","ENTREPRISE","ADMINISTRATION"].includes(explicit))return explicit;
+  const eventType=String(event?.type||"").trim().toUpperCase();
+  if(["ASSOCIATION","ENTREPRISE","ADMINISTRATION"].includes(eventType))return eventType;
+  if(prep.clientEstablishment || prep.clientLegalName || prep.clientSiret)return "ENTREPRISE";
+  return "PARTICULIER";
+}
+
 function contractHash(event) {
   const contractData = {
     name: event.name || null,
@@ -3226,6 +3238,7 @@ app.get("/api/contract-signature/:token", async (req, res) => {
       signerName: event.contractSignerName,
       signerEmail: event.contractSignerEmail,
       signerRole: event.contractSignerRole,
+      clientCategory: getContractClientCategory(event),
 
       contractPdfUrl:
         `/api/contract-signature/${encodeURIComponent(req.params.token)}/contract.pdf`
@@ -3320,10 +3333,6 @@ app.post("/api/contract-signature/:token/sign", async (req, res) => {
       String(req.body?.signerEmail || "").trim();
 
     const signerRole = String(req.body?.signerRole || "").trim();
-    const allowedSignerRoles = ["Président(e)","Vice-président(e)","Secrétaire","Trésorier(ère)","Membre du bureau","Autre représentant habilité","Sans fonction particulière"];
-    if(!allowedSignerRoles.includes(signerRole)){
-      return res.status(400).json({ok:false,message:"Merci de préciser votre fonction de signataire."});
-    }
 
     const signatureData =
       String(req.body?.signatureData || "");
@@ -3378,6 +3387,15 @@ app.post("/api/contract-signature/:token/sign", async (req, res) => {
       });
     }
 
+    const clientCategory=getContractClientCategory(event);
+    const requiresRole=clientCategory!=="PARTICULIER";
+    const allowedSignerRoles=clientCategory==="ASSOCIATION"
+      ? ["Président(e)","Vice-président(e)","Secrétaire","Trésorier(ère)","Membre du bureau","Autre représentant habilité"]
+      : ["Gérant(e)","Dirigeant(e)","Directeur(trice)","Responsable","Représentant légal","Autre représentant habilité"];
+    if(requiresRole && !allowedSignerRoles.includes(signerRole)){
+      return res.status(400).json({ok:false,message:"Merci de préciser une fonction de signataire valide."});
+    }
+
     const currentHash = contractHash(event);
 
 if (
@@ -3403,7 +3421,7 @@ if (
         contractSignedAt: signedAt,
         contractSignerName: signerName,
         contractSignerEmail: signerEmail || null,
-        contractSignerRole: signerRole,
+        contractSignerRole: requiresRole ? signerRole : null,
         contractSignatureData: signatureData
       }
     });
