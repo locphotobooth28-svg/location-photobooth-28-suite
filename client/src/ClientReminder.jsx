@@ -55,7 +55,7 @@ export function buildClientReminderMessage(event){
   if(info.paymentDue)lines.push(info.remaining===null
     ? "✅ Le règlement du montant restant dû sur votre facture."
     : "✅ Le règlement restant de votre facture : "+euros(info.remaining)+".");
-  lines.push("","Merci beaucoup pour votre confiance et à très bientôt ! 😊","","Location Photobooth 28 📸");
+  lines.push("","Merci beaucoup pour votre confiance et à très bientôt ! 😊","","Johan","Location Photobooth 28");
   return lines.join("\n");
 }
 
