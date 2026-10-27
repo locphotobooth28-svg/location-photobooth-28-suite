@@ -1,0 +1,43 @@
+name: Vérifier build LP28 et indicateurs événements
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'client/src/App.jsx'
+      - 'scripts/patch-dashboard-event-counts.js'
+      - '.github/workflows/check-lp28-dashboard-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Installer les dépendances
+        run: npm install --no-audit --no-fund
+      - name: Construire LP28 et appliquer les correctifs
+        run: npm run build
+      - name: Contrôler les indicateurs du tableau de bord
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const app=fs.readFileSync('client/src/App.jsx','utf8');
+          const checks=[
+            [app.includes('Dossiers enregistrés'),'Libellé des dossiers'],
+            [app.includes('Prestations terminées'),'Carte des prestations terminées'],
+            [app.includes('Prestations futures confirmées'),'Carte des prestations futures confirmées'],
+            [app.includes('Dossiers à confirmer'),'Carte des dossiers à confirmer'],
+            [app.includes('lp28EventCounts=useMemo'),'Calcul des comptes'],
+            [app.includes('completedEvents'),'Ordre des cartes'],
+            [app.includes('pendingEvents'),'Dossiers en attente']
+          ];
+          for(const [ok,label] of checks) if(!ok)throw new Error(label+' absent(e) du build');
+          console.log('Indicateurs du tableau de bord LP28 : OK');
+          NODE
