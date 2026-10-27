@@ -145,7 +145,7 @@ responsibleCollaboratorId:"",
 installerCollaboratorId:"",
 pickupCollaboratorId:"",
 
-materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{travelRate:0.70,depositEnabled:true,depositMode:"PERCENT",depositRate:30,animationMode:"NONE",animationSlots:[],animationPrice:"",materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
+materials:[], bookingStatus:"CONFIRMED", optionUntil:"", sceneJets:{enabled:false,boxes:4,color:"OR",height:"2M",duration:"20S",theme:"MARIAGE"}, portalEnabled:true, guestUploadEnabled:true, guestVideoEnabled:false, guestUploadModerated:false, portalExpiresAt:"", portalPassword:"", fotoshareUrl:"", frameSource:"NONE", frameStatus:"NOT_REQUIRED", preparation:{clientCategory:"PARTICULIER",travelRate:0.70,depositEnabled:true,depositMode:"PERCENT",depositRate:30,animationMode:"NONE",animationSlots:[],animationPrice:"",materialChecked:false,paperChecked:false,cablesChecked:false,powerChecked:false,qrChecked:false,contractChecked:false,frameChecked:false,loaded:false,departed:false,returned:false,gifted:false}, notes:"", googleCalendarId:"",totalPrice:"",
 deposit:"",
 balance:"",
   customPrintCount:"",
@@ -433,6 +433,17 @@ function SettingsPage({user}){
         <p>✅ <strong>Date libérée par Lydie</strong> → notification ADMIN lors de la suppression du blocage.</p></div>
     </div>}
   </section>;
+}
+
+// La catégorie du client est distincte du type d'événement (mariage, anniversaire, etc.).
+function lp28ClientCategory(event){
+  const prep=event?.preparation && typeof event.preparation==="object" ? event.preparation : {};
+  const explicit=String(prep.clientCategory||"").toUpperCase();
+  if(["PARTICULIER","ASSOCIATION","ENTREPRISE","ADMINISTRATION"].includes(explicit))return explicit;
+  const type=String(event?.type||"").trim().toUpperCase();
+  if(["ASSOCIATION","ENTREPRISE","ADMINISTRATION"].includes(type))return type;
+  if(prep.clientEstablishment || prep.clientLegalName || prep.clientSiret)return "ENTREPRISE";
+  return "PARTICULIER";
 }
 
 function EventForm({event,onClose,onSaved}) {
@@ -1120,6 +1131,19 @@ Johan — Location Photobooth 28`;
         </div>
       </div>
 
+      <h3>Type de client — signature du contrat</h3>
+      <div className="form-grid">
+        <div className="wide">
+          <label>Catégorie du client</label>
+          <select value={lp28ClientCategory(form)} onChange={e=>setForm(f=>({...f,preparation:{...(f.preparation||{}),clientCategory:e.target.value}}))}>
+            <option value="PARTICULIER">👤 Particulier</option>
+            <option value="ASSOCIATION">🏛️ Association</option>
+            <option value="ENTREPRISE">🏢 Entreprise</option>
+            <option value="ADMINISTRATION">🏫 Administration / collectivité</option>
+          </select>
+          <p className="muted">Ce choix détermine si une fonction doit être indiquée lors de la signature. Il est indépendant du type d'événement.</p>
+        </div>
+      </div>
       <h3>Organisateur</h3>
       <div className="form-grid">
         <div><label>Nom / prénom</label><input value={form.organizerName} onChange={e=>set("organizerName",e.target.value)}/></div>
@@ -7656,6 +7680,8 @@ function ContractSignaturePage({token}){
   const [signerName,setSignerName]=useState("");
   const [signerEmail,setSignerEmail]=useState("");
   const [signerRole,setSignerRole]=useState("");
+  const clientCategory=String(data?.clientCategory||"PARTICULIER");
+  const needsSignerRole=clientCategory!=="PARTICULIER";
   const [accepted,setAccepted]=useState(false);
   const [sending,setSending]=useState(false);
   const [signed,setSigned]=useState(false);
@@ -7792,8 +7818,8 @@ function ContractSignaturePage({token}){
       );
     }
 
-    if(!signerRole){
-      return alert("Merci de sélectionner votre fonction ou Sans fonction particulière.");
+    if(needsSignerRole && !signerRole){
+      return alert("Merci de sélectionner votre fonction pour signer au nom de l'organisme.");
     }
 
     if(!accepted){
@@ -7826,7 +7852,7 @@ function ContractSignaturePage({token}){
           body:JSON.stringify({
             signerName:signerName.trim(),
             signerEmail:signerEmail.trim(),
-            signerRole,
+            signerRole:needsSignerRole ? signerRole : null,
             signatureData
           })
         }
@@ -8026,18 +8052,33 @@ function ContractSignaturePage({token}){
             placeholder="Nom et prénom"
           />
 
-          <label>Fonction / qualité du signataire</label>
-          <select value={signerRole} onChange={e=>setSignerRole(e.target.value)} required>
-            <option value="">Sélectionner une fonction</option>
-            <option value="Président(e)">Président(e)</option>
-            <option value="Vice-président(e)">Vice-président(e)</option>
-            <option value="Secrétaire">Secrétaire</option>
-            <option value="Trésorier(ère)">Trésorier(ère)</option>
-            <option value="Membre du bureau">Membre du bureau</option>
-            <option value="Autre représentant habilité">Autre représentant habilité</option>
-            <option value="Sans fonction particulière">Sans fonction particulière</option>
-          </select>
-          <p className="muted">Indiquez votre propre identité et votre fonction. Vous devez être habilité(e) à signer ce contrat pour l'organisme représenté.</p>
+          {needsSignerRole && (
+            <>
+              <label>Fonction / qualité du signataire</label>
+              <select value={signerRole} onChange={e=>setSignerRole(e.target.value)} required>
+                <option value="">Sélectionner une fonction</option>
+                {clientCategory==="ASSOCIATION" ? (
+                  <>
+                    <option value="Président(e)">Président(e)</option>
+                    <option value="Vice-président(e)">Vice-président(e)</option>
+                    <option value="Secrétaire">Secrétaire</option>
+                    <option value="Trésorier(ère)">Trésorier(ère)</option>
+                    <option value="Membre du bureau">Membre du bureau</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Gérant(e)">Gérant(e)</option>
+                    <option value="Dirigeant(e)">Dirigeant(e)</option>
+                    <option value="Directeur(trice)">Directeur(trice)</option>
+                    <option value="Responsable">Responsable</option>
+                    <option value="Représentant légal">Représentant légal</option>
+                  </>
+                )}
+                <option value="Autre représentant habilité">Autre représentant habilité</option>
+              </select>
+              <p className="muted">Indiquez votre propre identité et votre fonction. Vous devez être habilité(e) à signer pour l'organisme représenté.</p>
+            </>
+          )}
 
           <label>
             Adresse e-mail
