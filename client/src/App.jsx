@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import CameraSettingsPage from "./CameraSettingsPage.jsx";
 import AvailabilityPublicationPage from "./AvailabilityPublicationPage.jsx";
+import ClientReminderModal, {isClientReminderDue} from "./ClientReminder.jsx";
 
 const SITE = "https://www.locationphotobooth28.fr";
 const FACEBOOK = "https://www.facebook.com/location.photobooth.28/";
@@ -6290,6 +6291,9 @@ function Dashboard({onLogout,user}) {
   const [formEvent,setFormEvent]=useState(undefined);
   const [showForm,setShowForm]=useState(false);
   const [shareEvent,setShareEvent]=useState(null);
+  const [reminderEventId,setReminderEventId]=useState(null);
+  const reminderEvent=events.find(item=>item.id===reminderEventId)||null;
+  const remindersDue=useMemo(()=>events.filter(isClientReminderDue).sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))),[events]);
   async function previewPortal(event,role){
     try{
       const r=await fetch(`/api/events/${event.id}/share`); const d=await r.json().catch(()=>({}));
@@ -7019,6 +7023,19 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
       })()}
 
       {view==="dashboard" ? <>
+        {isAdmin&&<section className="panel" style={{marginBottom:14,border:"1px solid rgba(59,130,246,.35)"}}>
+          <div className="panel-kicker">📩 SUIVI CLIENT</div>
+          <h2>Rappels caution & règlement — 7 prochains jours</h2>
+          <p className="muted">Prestations confirmées qui nécessitent un rappel et n'ont pas encore été marquées « envoyé ».</p>
+          {remindersDue.length===0 ? <p style={{fontWeight:800,color:"#86efac"}}>✅ Aucun rappel à traiter pour les 7 prochains jours.</p> : (
+            <div style={{display:"grid",gap:8,marginTop:10}}>
+              {remindersDue.map(event=><div key={event.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,padding:"10px 12px",border:"1px solid rgba(148,163,184,.3)",borderRadius:12}}>
+                <div><strong>{event.name}</strong><div className="muted">{new Date(event.date+"T12:00:00").toLocaleDateString("fr-FR")} · {event.preparation?.clientFirstName||event.client?.firstName||event.organizerName||"Client"}</div></div>
+                <button type="button" className="primary" onClick={()=>setReminderEventId(event.id)}>💬 Préparer le rappel</button>
+              </div>)}
+            </div>
+          )}
+        </section>}
         <section className="stats-grid">
           <article className="stat-card"><span>Événements</span><strong>{stats.events}</strong></article>
           <article className="stat-card" style={{border:"1px solid rgba(245,158,11,.45)",background:"linear-gradient(135deg,rgba(120,72,18,.32),rgba(69,44,16,.24))"}}>
@@ -7123,6 +7140,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <button type="button" onClick={()=>setViewEvent(event)} style={{padding:0,border:0,background:"transparent",color:"inherit",fontWeight:900,fontSize:"inherit",cursor:"pointer",textAlign:"left"}}>👁️ {event.name}</button>
                 {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
+                {isAdmin&&event.preparation?.clientReminderSentAt&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dbeafe",color:"#1e40af",fontSize:12,fontWeight:800}}>📩 Rappel envoyé</span>}
                 {event.preparation?.gifted&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#7e22ce",color:"#faf5ff",border:"1px solid #c084fc",fontSize:12,fontWeight:900}}>🎁 DON / PRESTATION OFFERTE</span>}
                 {event.status==="IN_PROGRESS"&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#92400e",color:"#ffedd5",border:"1px solid #f59e0b",fontSize:12,fontWeight:900}}>🟠 ÉVÉNEMENT EN COURS</span>}
                 {event.status==="COMPLETED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>✅ Prestation terminée</span>}
@@ -7190,6 +7208,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
                 {canEventAction("navigate")&&event.address&&<button onClick={()=>window.open(`https://waze.com/ul?q=${encodeURIComponent(event.address)}&navigate=yes&utm_source=lp28-suite`,`_blank`,`noopener,noreferrer`)} style={{border:"1px solid #38bdf8",background:"rgba(14,116,144,.20)",color:"#bae6fd",fontWeight:900}}>🚗 Se rendre à l’événement</button>}
                 {canEventAction("google")&&<button onClick={()=>syncGoogle(event)}>☁️ Sync Google</button>}
                 {canEventAction("share")&&<button onClick={()=>setShareEvent(event)}>📱 Partager</button>}
+                {isAdmin&&<button type="button" onClick={()=>setReminderEventId(event.id)} style={{border:"1px solid #60a5fa",background:"rgba(29,78,216,.16)",color:"#bfdbfe",fontWeight:800}}>💬 Rappel caution & règlement</button>}
                 {isAdmin&&<details className="preview-role-menu"><summary>👁️ Voir en tant que…</summary><div><button onClick={()=>previewPortal(event,"ORGANIZER")}>👤 Organisateur</button><button onClick={()=>previewPortal(event,"GUEST")}>👥 Invité</button></div></details>}
                 {canEventAction("contract")&&<button onClick={()=>window.open(`/api/events/${event.id}/contract.pdf`,"_blank","noopener,noreferrer")}>📄 Voir le contrat</button>}
                 {canEventAction("documents")&&<button onClick={()=>setDocumentEvent(event)}>📁 Documents</button>}
@@ -7250,6 +7269,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
         canEventAction={canEventAction}
       />
     )}
+    {reminderEvent&&<ClientReminderModal event={reminderEvent} onClose={()=>setReminderEventId(null)} onUpdated={(eventId,sentAt)=>setEvents(prev=>prev.map(item=>item.id===eventId?{...item,preparation:{...(item.preparation||{}),clientReminderSentAt:sentAt}}:item))}/>}
     {shareEvent&&<ShareModal event={shareEvent} onClose={()=>setShareEvent(null)}/>}
     {documentEvent&&<DocumentManager event={documentEvent} onClose={()=>setDocumentEvent(null)}/>}
   </div></>;

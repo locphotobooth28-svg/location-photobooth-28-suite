@@ -3600,6 +3600,32 @@ customPrintPrice:
   res.json({ ok: true, event, google, printerWarning: printerChoice.warning || null });
 });
 
+// Rappel caution / règlement : horodatage uniquement après confirmation explicite de l'admin.
+// Conserve toutes les autres données de préparation, notamment les informations du contrat.
+app.patch("/api/events/:id/client-reminder", adminOnly, async (req,res)=>{
+  try{
+    const action=String(req.body?.action||"");
+    if(!["mark_sent","reset"].includes(action)){
+      return res.status(400).json({ok:false,message:"Action de rappel invalide."});
+    }
+    const existing=await prisma.event.findUnique({
+      where:{id:req.params.id},select:{id:true,preparation:true}
+    });
+    if(!existing)return res.status(404).json({ok:false,message:"Événement introuvable."});
+    const prep=existing.preparation && typeof existing.preparation==="object" && !Array.isArray(existing.preparation)
+      ? existing.preparation : {};
+    const sentAt=action==="mark_sent" ? new Date().toISOString() : null;
+    await prisma.event.update({
+      where:{id:existing.id},
+      data:{preparation:{...prep,clientReminderSentAt:sentAt}}
+    });
+    return res.json({ok:true,sentAt});
+  }catch(error){
+    console.error("[client-reminder]",error);
+    return res.status(500).json({ok:false,message:"Impossible d'enregistrer le rappel."});
+  }
+});
+
 // Quick deposit/caution status change from the events dashboard (admin only).
 app.patch("/api/events/:id/caution", adminOnly, async (req,res)=>{
   try{
