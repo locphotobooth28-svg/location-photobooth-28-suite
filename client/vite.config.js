@@ -15,7 +15,8 @@ VitePWA({
     navigateFallback: "index.html",
     navigateFallbackDenylist: [
       /^\/api\//,
-      /^\/auth\//
+      /^\/auth\//,
+      /^\/defis-photo\.html$/
     ]
   },
 
