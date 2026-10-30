@@ -26,7 +26,7 @@ replaceOnce(
 const accessAnchor='  const guestQrGalleryOpen=portalPermissions.guestQrGalleryOpen!==false;';
 replaceOnce(
   accessAnchor,
-  accessAnchor+'\n  const portalTabs=organizer\n    ? [\n        ["home","🏠","Accueil"],\n        ["documents","📄","Documents"],\n        ["personalization","🎨","Personnalisation"],\n        ["qr","📱","QR invités"],\n        ["photos","📸","Accès photos"],\n        ["gallery","🖼️","Galerie QR"],\n        ["challenges","🎲","Défis Photo"],\n        ["support","🆘","Assistance"]\n      ]\n    : [\n        ["home","🏠","Accueil"],\n        ["photos","📸","Accès photos"],\n        ["gallery","🖼️","Galerie"],\n        ["challenges","🎲","Défis Photo"],\n        ["support","🆘","Assistance"]\n      ];\n  const activePortalTab=portalTabs.find(([key])=>key===portalTab)||portalTabs[0];',
+  accessAnchor+'\n  const portalTabs=organizer\n    ? [\n        ["home","🏠","Accueil"],\n        ["documents","📄","Documents"],\n        ["personalization","🎨","Personnalisation"],\n        ["qr","📱","QR invités"],\n        ["photos","📸","Accès photos"],\n        ["gallery","🖼️","Galerie QR"],\n        ["challenges","🎲","Jeux Photobooth"],\n        ["support","🆘","Assistance"]\n      ]\n    : [\n        ["home","🏠","Accueil"],\n        ["photos","📸","Accès photos"],\n        ["gallery","🖼️","Galerie"],\n        ["challenges","🎲","Jeux Photobooth"],\n        ["support","🆘","Assistance"]\n      ];\n  const activePortalTab=portalTabs.find(([key])=>key===portalTab)||portalTabs[0];',
   'liste des onglets'
 );
 
