@@ -594,6 +594,13 @@ async function syncCalendar(client,event){
     transparency:"opaque",
     start:t.start,
     end:t.end,
+    reminders:{
+      useDefault:false,
+      overrides:[
+        {method:"popup",minutes:1440},
+        {method:"popup",minutes:60}
+      ]
+    },
     extendedProperties:{private:{lp28EventId:event.id}}
   };
 
