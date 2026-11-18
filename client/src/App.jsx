@@ -6586,7 +6586,10 @@ function Dashboard({onLogout,user}) {
   },[events]);
 
   const filtered=useMemo(()=>{
-    const q=search.trim().toLowerCase();
+    const normalizeText=value=>String(value??"").normalize("NFD").replace(/\p{M}/gu,"").toLowerCase().trim().replace(/\s+/g," ");
+    const normalizePhone=value=>String(value??"").replace(/\D/g,"").replace(/^(?:0033|33)(?=\d)/,"0");
+    const q=normalizeText(search);
+    const phoneQuery=/^\+?[\d\s().-]+$/.test(q)?normalizePhone(q):"";
     const isCompleted=e=>e?.status==="COMPLETED"||e?.bookingStatus==="COMPLETED";
     const isInProgress=e=>e?.status==="IN_PROGRESS"&&!isCompleted(e);
     const isQuoteSent=e=>e?.bookingStatus==="QUOTE_SENT"&&!isCompleted(e);
@@ -6599,7 +6602,28 @@ function Dashboard({onLogout,user}) {
         if(eventTab==="quoteSent")return !e.archived&&isQuoteSent(e)&&!isInProgress(e);
         return !e.archived&&!isCompleted(e)&&!isInProgress(e)&&!isQuoteSent(e);
       })
-      .filter(e=>(`${e.name||""} ${e.organizerName||""} ${e.type||""}`).toLowerCase().includes(q))
+      .filter(e=>{
+        if(!q)return true;
+
+        const lastName=e.organizerName||e.client?.lastName;
+        const firstName=e.preparation?.clientFirstName||e.client?.firstName;
+        const names=[
+          [e.name,e.organizerName,e.type].join(" "),
+          [lastName,firstName].join(" "),
+          [firstName,lastName].join(" ")
+        ];
+        if(names.some(value=>normalizeText(value).includes(q)))return true;
+
+        const date=String(e.date??"").match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+        if(date){
+          const [isoDate,year,month,day]=date;
+          const label=new Date(year,month-1,day).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+          const dates=[isoDate.slice(0,10),`${day}/${month}/${year}`,`${Number(day)}/${Number(month)}/${year}`,label];
+          if(dates.some(value=>normalizeText(value).includes(q)))return true;
+        }
+
+        return phoneQuery!==""&&[e.organizerPhone,e.client?.phone].some(value=>normalizePhone(value).includes(phoneQuery));
+      })
       .sort((a,b)=>{
         const da=String(a.date||"");
         const db=String(b.date||"");
@@ -7101,7 +7125,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
             style={{border:`1px solid ${eventTab==="quoteSent"?"#38bdf8":"rgba(56,189,248,.50)"}`,background:eventTab==="quoteSent"?"#075985":"rgba(56,189,248,.10)",color:eventTab==="quoteSent"?"#ffffff":"#7dd3fc",fontWeight:900,boxShadow:eventTab==="quoteSent"?"0 6px 18px rgba(56,189,248,.18)":"none"}}
           >📤 Devis envoyés <strong style={{marginLeft:6}}>{eventTabCounts.quoteSent}</strong></button>
         </div>
-        <div className="events-toolbar"><input placeholder="🔎 Rechercher un événement..." value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
+        <div className="events-toolbar"><input aria-label="Rechercher un événement par nom, prénom, téléphone ou date" placeholder="🔎 Nom, prénom, téléphone ou date" value={search} onChange={e=>setSearch(e.target.value)}/><span>{filtered.length} événement(s)</span></div>
         <div className="events-list">
           {filtered.length===0 && <div className="empty-state"><span>{eventTab==="inProgress"?"🟠":eventTab==="completed"?"✅":eventTab==="archived"?"📦":eventTab==="quoteSent"?"📤":"📅"}</span><h2>{eventTab==="inProgress"?"Aucun événement en cours":eventTab==="completed"?"Aucune prestation terminée":eventTab==="archived"?"Aucune prestation archivée":eventTab==="quoteSent"?"Aucun devis envoyé":"Aucune prestation à venir"}</h2><p>{eventTab==="upcoming"?"Les prochaines prestations apparaîtront ici.":eventTab==="inProgress"?"Clique sur « Début événement » depuis l'onglet À venir pour démarrer une prestation.":eventTab==="quoteSent"?"Les devis envoyés en attente de confirmation apparaîtront ici.":"Aucun dossier dans cet onglet."}</p></div>}
           {filtered.map((event,eventIndex)=>{
