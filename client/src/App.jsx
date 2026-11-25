@@ -1628,7 +1628,7 @@ Johan — Location Photobooth 28`;
         {form.preparation?.animationMode!=="NONE"&&<div style={{marginTop:10}}><label>Tarif animation (€) — informatif, à inclure au total net</label><input type="number" min="0" step="0.01" value={form.preparation?.animationPrice??""} onChange={e=>setForm(f=>({...f,preparation:{...f.preparation,animationPrice:e.target.value}}))}/></div>}
       </div>
       <h3>💳 Paiement et caution</h3>
-      <div className="card event-section-card event-payment-card">
+      <div data-lp28-tab="finance" className="card event-section-card event-payment-card">
         <div className="form-grid">
           <div><label>💰 Montant net de la prestation (€)</label><input type="number" min="0" step="0.01" value={form.totalPrice||""} onChange={e=>{const total=e.target.value;setForm(f=>({...f,totalPrice:total,balance:Math.max(0,Number(total||0)-Number(f.deposit||0)).toFixed(2)}));}}/></div>
           <div><label>Demander un acompte ?</label><label className="switch-line"><input type="checkbox" checked={form.preparation?.depositEnabled!==false&&(event?form.preparation?.depositEnabled===true||Number(form.deposit||0)>0:true)} onChange={e=>setDepositSettings({depositEnabled:e.target.checked,depositMode:e.target.checked?"PERCENT":form.preparation?.depositMode||"PERCENT",depositRate:form.preparation?.depositRate??30})}/> Avec acompte</label></div>
