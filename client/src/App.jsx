@@ -7,14 +7,15 @@ import ClientReminderModal, {isClientReminderDue} from "./ClientReminder.jsx";
 const SITE = "https://www.locationphotobooth28.fr";
 const FACEBOOK = "https://www.facebook.com/location.photobooth.28/";
 
-const DEFAULT_APPEARANCE={mode:"dark",lightStart:"07:00",darkStart:"19:00"};
+const DEFAULT_APPEARANCE={mode:"dark",lightStart:"07:00",darkStart:"19:00",christmas2026:false};
 
 function normalizeAppearance(value){
   const v=value&&typeof value==="object"?value:{};
   return {
     mode:["light","dark","auto"].includes(v.mode)?v.mode:"dark",
     lightStart:/^\d{2}:\d{2}$/.test(v.lightStart||"")?v.lightStart:"07:00",
-    darkStart:/^\d{2}:\d{2}$/.test(v.darkStart||"")?v.darkStart:"19:00"
+    darkStart:/^\d{2}:\d{2}$/.test(v.darkStart||"")?v.darkStart:"19:00",
+    christmas2026:v.christmas2026===true
   };
 }
 
@@ -37,6 +38,7 @@ function applyAppearance(pref){
   const resolved=resolveAppearanceMode(p);
   document.documentElement.dataset.lp28Theme=resolved;
   document.documentElement.dataset.lp28ThemeMode=p.mode;
+  document.documentElement.toggleAttribute("data-lp28-christmas-2026",p.christmas2026);
   localStorage.setItem("lp28.appearance",JSON.stringify(p));
   return resolved;
 }
@@ -401,6 +403,10 @@ function SettingsPage({user}){
         <div><label>🌙 Mode sombre à partir de</label><input type="time" value={appearance.darkStart} onChange={e=>previewAppearance({...appearance,darkStart:e.target.value})}/></div>
       </div>}
       <div className="card" style={{marginTop:14,padding:12}}><strong>Aperçu actuel : {appearancePreview==="light"?"☀️ Mode clair":"🌙 Mode sombre"}</strong>{appearance.mode==="auto"&&<div className="muted">Clair de {appearance.lightStart} à {appearance.darkStart}, sombre le reste du temps.</div>}</div>
+      {isAdmin&&<label className="christmas-theme-setting">
+        <input type="checkbox" checked={appearance.christmas2026} onChange={e=>previewAppearance({...appearance,christmas2026:e.target.checked})}/>
+        <span>🎄 Thème Noël 2026</span>
+      </label>}
       <button className="primary" style={{marginTop:14}} onClick={saveAppearance}>💾 Enregistrer l'affichage</button>
     </div>}
     {settingsTab==="tests-notifications"&&<div className="panel">
@@ -7135,7 +7141,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
     </aside>
 
     <main className="content">
-      <header className="topbar">
+      <header className={view==="dashboard"?"topbar dashboard-topbar":"topbar"}>
         <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{currentViewTitle}</h1><p className="muted">Simple, rapide, efficace.</p></div>
         {isAdmin&&<button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>}
       </header>
@@ -8505,6 +8511,18 @@ if(signatureMatch){
   },[]);
   async function logout(){await fetch("/api/logout",{method:"POST"});setAuth(false);setCurrentUser(null)}
   if(loading)return <div className="loading">Chargement…</div>;
-  return auth?<Dashboard onLogout={logout} user={currentUser}/>:<><LP28ThemeStyles/><Login onLogin={u=>{setCurrentUser(u);setAuth(true)}}/></>;
+  return auth?<Dashboard onLogout={logout} user={currentUser}/>:<><LP28ThemeStyles/><Login onLogin={async u=>{
+    let preference=DEFAULT_APPEARANCE;
+    try{
+      const response=await fetch("/api/account/appearance");
+      if(response.ok){
+        const data=await response.json();
+        if(data?.appearance)preference=normalizeAppearance(data.appearance);
+      }
+    }catch{}
+    window.dispatchEvent(new CustomEvent("lp28-appearance-changed",{detail:preference}));
+    setCurrentUser(u);
+    setAuth(true);
+  }}/></>;
 }
 

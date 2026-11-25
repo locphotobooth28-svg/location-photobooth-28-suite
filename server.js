@@ -1901,7 +1901,7 @@ app.get("/api/account/appearance",userOnly,async(req,res)=>{
   const mode=["light","dark","auto"].includes(raw.mode)?raw.mode:"dark";
   const lightStart=/^\d{2}:\d{2}$/.test(raw.lightStart||"")?raw.lightStart:"07:00";
   const darkStart=/^\d{2}:\d{2}$/.test(raw.darkStart||"")?raw.darkStart:"19:00";
-  res.json({ok:true,appearance:{mode,lightStart,darkStart}});
+  res.json({ok:true,appearance:{mode,lightStart,darkStart,christmas2026:user.role==="ADMIN"&&raw.christmas2026===true}});
 });
 app.put("/api/account/appearance",userOnly,async(req,res)=>{
   const user=req.currentUser||await sessionUser(req);
@@ -1913,7 +1913,7 @@ app.put("/api/account/appearance",userOnly,async(req,res)=>{
   const lightStart=validTime(incoming.lightStart)?incoming.lightStart:"07:00";
   const darkStart=validTime(incoming.darkStart)?incoming.darkStart:"19:00";
   const permissions=permissionsObject(user);
-  const appearance={mode,lightStart,darkStart};
+  const appearance={mode,lightStart,darkStart,christmas2026:user.role==="ADMIN"&&incoming.christmas2026===true};
   await prisma.user.update({where:{id:user.id},data:{permissions:{...permissions,uiAppearance:appearance}}});
   res.json({ok:true,appearance});
 });
