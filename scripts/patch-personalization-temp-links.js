@@ -117,7 +117,7 @@ const component=`function LP28PersonalizationCatalog({token,permissions={}}){
 `;
 app=app.slice(0,start)+component+app.slice(end);
 
-const eventMarker='function EventForm({event,onClose,onSaved}) {\n  const [form,setForm]=useState(event ? JSON.parse(JSON.stringify(event)) : JSON.parse(JSON.stringify(EMPTY_EVENT)));\n  const [busy,setBusy]=useState(false);';
+const eventMarker='function EventForm({event,onClose,onSaved,planningAlerts}) {\n  const [form,setForm]=useState(event ? JSON.parse(JSON.stringify(event)) : JSON.parse(JSON.stringify(EMPTY_EVENT)));\n  const [busy,setBusy]=useState(false);';
 if(app.includes(eventMarker)&&!app.includes("renewPersonalizationLink(catalog)")){
   app=replaceOnce(app,eventMarker,eventMarker+'\n  const [personalizationRenewMsg,setPersonalizationRenewMsg]=useState("");\n  async function renewPersonalizationLink(catalog){\n    if(!form?.id){setPersonalizationRenewMsg("Enregistre d’abord l’événement.");return;}\n    setPersonalizationRenewMsg("Renouvellement…");\n    try{\n      const r=await fetch("/api/events/"+encodeURIComponent(form.id)+"/personalization-renew/"+catalog,{method:"POST"});\n      const d=await r.json().catch(()=>({}));\n      if(!r.ok)throw new Error(d.message||"Renouvellement impossible.");\n      setPersonalizationRenewMsg("✅ Nouveau jeton créé. Les anciens liens de ce catalogue sont invalidés.");\n    }catch(err){setPersonalizationRenewMsg("⚠️ "+(err.message||"Renouvellement impossible."));}\n  }',"fonction renouvellement Admin");
 }

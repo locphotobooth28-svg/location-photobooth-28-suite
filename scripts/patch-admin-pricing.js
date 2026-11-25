@@ -83,7 +83,7 @@ if(!app.includes(MARK)){
  const printAnchor='const PRINT_MATERIALS = [';
  const idx=app.indexOf(printAnchor); if(idx<0)throw new Error("[pricing] forfaits introuvables");
  // Runtime pricing hook in EventForm: load settings and use them for travel + displayed rate.
- const eventAnchor='function EventForm({event,onClose,onSaved}) {';
+ const eventAnchor='function EventForm({event,onClose,onSaved,planningAlerts}) {';
  if(!app.includes(eventAnchor))throw new Error("[pricing] EventForm introuvable");
  app=app.replace(eventAnchor,eventAnchor+'\n  const [lp28Pricing,setLp28Pricing]=useState(null);\n  useEffect(()=>{fetch("/api/pricing").then(r=>r.json()).then(d=>d.ok&&setLp28Pricing(d.pricing)).catch(()=>{})},[]);');
  app=app.replace('return Math.max(distance - freeKm, 0) * 0.50;','return Math.max(distance - freeKm, 0) * Number(globalThis.__LP28_TRAVEL_RATE__||0.70);');

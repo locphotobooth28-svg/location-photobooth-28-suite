@@ -103,8 +103,8 @@ console.log('[event-weeks-share] OK: enhanced ShareModal');
 
 // Ajoute le partage directement depuis "Voir l'événement".
 replaceOnce(
-'function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false}) {',
-'function EventConsultationModal({event,onClose,onEdit,onDocuments,onShare,isAdmin=false,canEventAction=()=>false}) {',
+'function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false,planningAlerts}) {',
+'function EventConsultationModal({event,onClose,onEdit,onDocuments,onShare,isAdmin=false,canEventAction=()=>false,planningAlerts}) {',
 'EventConsultationModal onShare prop'
 );
 replaceOnce(

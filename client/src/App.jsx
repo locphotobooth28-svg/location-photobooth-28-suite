@@ -447,7 +447,27 @@ function lp28ClientCategory(event){
   return "PARTICULIER";
 }
 
-function EventForm({event,onClose,onSaved}) {
+const PLANNING_ALERTS_URL = "/api/admin/planning-alerts";
+const planningAlertDate = date => date.split("-").reverse().join("/");
+const planningAlertLabel = alert => {
+  const start = planningAlertDate(alert.startDate);
+  const end = planningAlertDate(alert.endDate);
+  return `${alert.notes} (${start === end ? start : `${start} au ${end}`})`;
+};
+
+function matchingPlanningAlerts(event, alerts) {
+  const start = String(event.date || "").slice(0, 10);
+  const pickup = String(event.pickupDate || "").slice(0, 10);
+  const end = pickup > start ? pickup : start;
+  return start ? alerts.filter(alert => alert.startDate <= end && alert.endDate >= start) : [];
+}
+
+function PlanningAlertNotice({alerts}) {
+  if (!alerts.length) return null;
+  return <div style={{color:"#fbbf24"}}>⚠️ {alerts.map(planningAlertLabel).join(" · ")}</div>;
+}
+
+function EventForm({event,onClose,onSaved,planningAlerts}) {
   const [form,setForm]=useState(event ? JSON.parse(JSON.stringify(event)) : JSON.parse(JSON.stringify(EMPTY_EVENT)));
   const [busy,setBusy]=useState(false);
   const [googleStatus,setGoogleStatus]=useState(null);
@@ -784,8 +804,17 @@ if (
   },[form.totalPrice,form.preparation?.depositEnabled,form.preparation?.depositMode,form.preparation?.depositRate]);
 
 
-  async function save(e){
+  const planningAlertDialog=useRef(null);
+  const eventPlanningAlerts=matchingPlanningAlerts(form,planningAlerts);
+
+  async function save(e,confirmed=false){
     e.preventDefault();
+    if(busy)return;
+    if(eventPlanningAlerts.length&&!confirmed){
+      planningAlertDialog.current.showModal();
+      return;
+    }
+    planningAlertDialog.current?.close();
     setBusy(true);
     try {
       const method=event?"PUT":"POST";
@@ -1042,8 +1071,18 @@ Johan — Location Photobooth 28`;
   const groups=[...new Set(MATERIALS.map(m=>m.group))];
   return <div className="modal-backdrop"><div className="event-modal">
     <div className="modal-head"><div><div className="eyebrow">{event?"MODIFIER":"NOUVEL"} ÉVÉNEMENT</div><h2>{event?"Modifier l'événement":"Créer un événement"}</h2></div><button className="icon-btn" onClick={onClose}>×</button></div>
+    <dialog ref={planningAlertDialog} aria-labelledby="planning-alert-confirm-title" className="card" style={{maxWidth:"min(460px, 90vw)",background:"#171719",color:"#fff",border:"1px solid #f59e0b"}}>
+      <h3 id="planning-alert-confirm-title">Alerte de disponibilité</h3>
+      <PlanningAlertNotice alerts={eventPlanningAlerts}/>
+      <p>Veux-tu enregistrer cet événement malgré cette alerte ?</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        <button type="button" className="secondary-btn" autoFocus onClick={()=>planningAlertDialog.current.close()}>Revenir au formulaire</button>
+        <button type="button" className="primary" onClick={e=>save(e,true)}>Confirmer quand même</button>
+      </div>
+    </dialog>
     <form onSubmit={save}>
       <h3>Informations générales</h3>
+      <PlanningAlertNotice alerts={eventPlanningAlerts}/>
       <div className="form-grid">
         <div><label>Nom de l'événement *</label><input value={form.name} onChange={e=>set("name",e.target.value)} required/></div>
         <div><label>Type</label><select value={form.type} onChange={e=>set("type",e.target.value)}><option>Mariage</option><option>Anniversaire</option><option>Baptême</option><option>Entreprise</option><option>Association</option><option>Administration</option><option>Autre</option></select></div>
@@ -1724,6 +1763,56 @@ function AdminPlanningCalendar({events,onOpenEvent,onDeleteEvent,refreshKey=0}){
   return <CalendarView events={[...(events||[]),...blockEvents]} onOpenEvent={e=>{if(!e?.planningBlock)onOpenEvent?.(e)}} onDeleteEvent={onDeleteEvent}/>;
 }
 
+
+function PlanningAlertControls({alerts,onAdded,onRemoved}){
+  const emptyForm={startDate:"",endDate:"",notes:""};
+  const [form,setForm]=useState(emptyForm);
+  const [open,setOpen]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+
+  async function changeAlert(id){
+    setBusy(true);
+    setError("");
+    try{
+      const response=await fetch(id ? `${PLANNING_ALERTS_URL}/${id}` : PLANNING_ALERTS_URL,id
+        ? {method:"DELETE"}
+        : {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,endDate:form.endDate||form.startDate})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.message);
+      if(id)onRemoved(id);
+      else{
+        onAdded(result);
+        setForm(emptyForm);
+        setOpen(false);
+      }
+    }catch(err){
+      setError(err.message||"Impossible de modifier les alertes.");
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  return <section className="panel" style={{marginBottom:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div><h2 style={{margin:"4px 0"}}>⚠️ Alertes de disponibilité</h2><p className="muted" style={{margin:0}}>Signale une astreinte ou une autre contrainte. La période reste réservable.</p></div>
+      <button type="button" className="secondary-btn" onClick={()=>setOpen(value=>!value)}>{open?"Fermer":"Ajouter une alerte"}</button>
+    </div>
+    {open&&<form onSubmit={e=>{e.preventDefault();changeAlert();}} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginTop:14}}>
+      <label>Du<input type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})} required/></label>
+      <label>Au<input type="date" min={form.startDate||undefined} value={form.endDate||form.startDate} onChange={e=>setForm({...form,endDate:e.target.value})} required/></label>
+      <label>Motif<input value={form.notes} maxLength={180} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Astreinte, service Vinci…" required/></label>
+      <button className="primary" disabled={busy}>Enregistrer l’alerte</button>
+    </form>}
+    {error&&<p role="alert">{error}</p>}
+    {alerts.length>0&&<ul style={{paddingLeft:0,listStyle:"none"}}>
+      {alerts.map(alert=><li key={alert.id} style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:8}}>
+        <PlanningAlertNotice alerts={[alert]}/>
+        <button type="button" className="secondary-btn" disabled={busy} onClick={()=>changeAlert(alert.id)}>Retirer l’alerte</button>
+      </li>)}
+    </ul>}
+  </section>;
+}
 
 function FamilyPlanningAccountControls({onChanged}){
   const [capability,setCapability]=useState(null);
@@ -5967,7 +6056,7 @@ function AdminDocuments({events,onOpen}){
   );
 }
 
-function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false}) {
+function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,canEventAction=()=>false,planningAlerts}) {
   if(!event) return null;
 
   const safeText = value => {
@@ -6082,6 +6171,7 @@ function EventConsultationModal({event,onClose,onEdit,onDocuments,isAdmin=false,
           <div>
             <div className="eyebrow">CONSULTATION ÉVÉNEMENT</div>
             <h2>{safeText(event.name)||"Événement"}</h2>
+            <PlanningAlertNotice alerts={matchingPlanningAlerts(event,planningAlerts)}/>
           </div>
           <button type="button" className="icon-btn" onClick={onClose}>×</button>
         </div>
@@ -6309,6 +6399,16 @@ function Dashboard({onLogout,user}) {
   const [showWeeklyBilledAmount,setShowWeeklyBilledAmount]=useState(true);
   const [showWeeklyGiftAmount,setShowWeeklyGiftAmount]=useState(true);
   const isAdmin=user?.role==="ADMIN";
+  const [planningAlerts,setPlanningAlerts]=useState([]);
+  useEffect(()=>{
+    if(!isAdmin)return;
+    const controller=new AbortController();
+    fetch(PLANNING_ALERTS_URL,{signal:controller.signal})
+      .then(response=>response.ok?response.json():Promise.reject(new Error("Alertes indisponibles")))
+      .then(({alerts})=>setPlanningAlerts(alerts))
+      .catch(error=>{if(error.name!=="AbortError")console.warn(error)});
+    return ()=>controller.abort();
+  },[isAdmin]);
   const [opsSav,setOpsSav]=useState([]);
   const [opsBooths,setOpsBooths]=useState([]);
   useEffect(()=>{
@@ -7167,6 +7267,7 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
             <div className="event-content">
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <button type="button" onClick={()=>setViewEvent(event)} style={{padding:0,border:0,background:"transparent",color:"inherit",fontWeight:900,fontSize:"inherit",cursor:"pointer",textAlign:"left"}}>👁️ {event.name}</button>
+                <PlanningAlertNotice alerts={matchingPlanningAlerts(event,planningAlerts)}/>
                 {event.contractStatus==="SIGNED"&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dcfce7",color:"#166534",fontSize:12,fontWeight:700}}>🟢 Contrat signé</span>}
                 {isAdmin&&event.preparation?.clientReminderSentAt&&<span style={{display:"inline-block",padding:"4px 8px",borderRadius:999,background:"#dbeafe",color:"#1e40af",fontSize:12,fontWeight:800}}>📩 Rappel envoyé</span>}
                 {event.preparation?.gifted&&<span style={{display:"inline-block",padding:"5px 10px",borderRadius:999,background:"#7e22ce",color:"#faf5ff",border:"1px solid #c084fc",fontSize:12,fontWeight:900}}>🎁 DON / PRESTATION OFFERTE</span>}
@@ -7273,16 +7374,20 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
           <button type="button" className="primary" onClick={()=>setShowAvailabilityPublication(v=>!v)}>{showAvailabilityPublication?"✕ Fermer le générateur":"📣 Communiquer mes disponibilités"}</button>
         </section>}
         {isAdmin&&showAvailabilityPublication&&<AvailabilityPublicationPage/>}
+        {isAdmin&&<PlanningAlertControls alerts={planningAlerts}
+          onAdded={alert=>setPlanningAlerts(items=>[...items,alert].sort((a,b)=>a.startDate.localeCompare(b.startDate)))}
+          onRemoved={id=>setPlanningAlerts(items=>items.filter(alert=>alert.id!==id))}/>}
         <FamilyPlanningAccountControls onChanged={()=>setPlanningRefresh(v=>v+1)}/><AdminPlanningCalendar events={events} refreshKey={planningRefresh} onOpenEvent={event=>{setFormEvent(event);setShowForm(true)}} onDeleteEvent={isAdmin?remove:undefined}/>
         <section className="planning-legend"><span><i className="dot dot-marriage"></i>Mariage</span><span><i className="dot dot-anniversaire"></i>Anniversaire</span><span><i className="dot dot-entreprise"></i>Entreprise</span><span><i className="dot dot-bapteme"></i>Baptême</span><span><i className="dot dot-autre"></i>Autre</span>{isAdmin&&<span style={{fontWeight:800}}>🎁 Don / prestation offerte</span>}</section>
       </> : view==="inventory" ? <AdminInventory/> : view==="materialPlanning" ? <MaterialPlanning/> : view==="longPlanning" ? <LongRangePlanning/> : view==="galleries" ? <AdminGalleries/> : view==="booths" ? <AdminBooths/> : view==="collaborators" ? <CollaboratorsPanel/> : view==="google" ? <GooglePanel/> : view==="settings" ? <SettingsPage user={user}/> : view==="assistance" ? <AssistanceCenter/> : view==="documents" ? <AdminDocuments events={events} onOpen={setDocumentEvent}/> : null}
       {view==="cameraSettings" && isAdmin && <CameraSettingsPage/>}
     </main>
 
-    {showForm&&<EventForm event={formEvent} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
+    {showForm&&<EventForm event={formEvent} planningAlerts={planningAlerts} onClose={()=>{setShowForm(false);setFormEvent(undefined)}} onSaved={saved}/>}
     {viewEvent&&(
       <EventConsultationModal
         event={viewEvent}
+        planningAlerts={planningAlerts}
         onClose={()=>setViewEvent(null)}
         onEdit={event=>{
           setViewEvent(null);

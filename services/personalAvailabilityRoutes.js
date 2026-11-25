@@ -1,5 +1,7 @@
 "use strict";
 
+const { randomUUID } = require("node:crypto");
+
 // Disponibilités personnelles administrateur LP28.
 // Stockage persistant dans AppSetting, sans migration de schéma.
 module.exports = function registerPersonalAvailabilityRoutes(app, prisma, adminOnly) {
@@ -11,6 +13,50 @@ module.exports = function registerPersonalAvailabilityRoutes(app, prisma, adminO
     const d = new Date(v + "T12:00:00.000Z");
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
   };
+  const alertPrefix = "LP28_PLANNING_ALERT:";
+  const alertUrl = "/api/admin/planning-alerts";
+
+  app.get(alertUrl, adminOnly, async (req, res) => {
+    try {
+      const rows = await prisma.appSetting.findMany({where: {key: {startsWith: alertPrefix}}});
+      const alerts = rows.map(row => ({
+        ...JSON.parse(row.value),
+        id: row.key.slice(alertPrefix.length)
+      })).sort((a, b) => a.startDate.localeCompare(b.startDate));
+      res.set("Cache-Control", "no-store").json({alerts});
+    } catch (err) {
+      console.error("[planning-alerts]", err);
+      res.status(500).json({message: "Impossible de gérer les alertes de disponibilité."});
+    }
+  });
+
+  app.post(alertUrl, adminOnly, async (req, res) => {
+    try {
+      const {startDate, endDate} = req.body || {};
+      const notes = String(req.body?.notes || "").trim();
+      if (!validDay(startDate) || !validDay(endDate) || endDate < startDate || !notes || notes.length > 180) {
+        return res.status(400).json({message: "Renseigne une période valide et un motif de 180 caractères maximum."});
+      }
+      const id = randomUUID();
+      const entry = {startDate, endDate, notes};
+      await prisma.appSetting.create({data: {key: alertPrefix + id, value: JSON.stringify(entry)}});
+      res.status(201).json({...entry, id});
+    } catch (err) {
+      console.error("[planning-alerts]", err);
+      res.status(500).json({message: "Impossible de gérer les alertes de disponibilité."});
+    }
+  });
+
+  app.delete(alertUrl + "/:id", adminOnly, async (req, res) => {
+    try {
+      await prisma.appSetting.deleteMany({where: {key: alertPrefix + req.params.id}});
+      res.json({ok: true});
+    } catch (err) {
+      console.error("[planning-alerts]", err);
+      res.status(500).json({message: "Impossible de gérer les alertes de disponibilité."});
+    }
+  });
+
   const parse = row => {
     try {
       const data = JSON.parse(row?.value || "{}");
