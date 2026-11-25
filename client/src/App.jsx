@@ -7143,6 +7143,11 @@ html[data-lp28-theme="dark"] .event-list-section-title.week-later{--week-text:#c
     <main className="content">
       <header className={view==="dashboard"?"topbar dashboard-topbar":"topbar"}>
         <div><div className="eyebrow">LOCATION PHOTOBOOTH 28 SUITE</div><h1>{currentViewTitle}</h1><p className="muted">Simple, rapide, efficace.</p></div>
+        {isAdmin&&view==="dashboard"&&<div className="christmas-dashboard-decor" aria-hidden="true">
+          <span className="christmas-garland"/>
+          <span>🎅</span>
+          <span>🎄</span>
+        </div>}
         {isAdmin&&<button className="primary" onClick={()=>{setFormEvent(undefined);setShowForm(true)}}>＋ Nouvel événement</button>}
       </header>
 

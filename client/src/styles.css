@@ -1087,7 +1087,6 @@ html[data-lp28-christmas-2026] .role-admin .dashboard-topbar {
   background:
     radial-gradient(circle, #f3f8f0b3 0 1px, transparent 1.8px) 95% 17px / 31px 29px repeat-y,
     radial-gradient(circle, #e8f4e87a 0 1px, transparent 2px) 89% 6px / 37px 41px repeat-y,
-    radial-gradient(ellipse at 50% 0%, #f5d182 0 2px, transparent 4px) 0 0 / 34px 12px repeat-x,
     linear-gradient(115deg, #164233, #10291f) !important;
 }
 
@@ -1106,4 +1105,44 @@ html[data-lp28-theme="light"][data-lp28-christmas-2026] .role-admin .topbar .mut
 
 html[data-lp28-theme="light"][data-lp28-christmas-2026] .role-admin .topbar .eyebrow {
   color: #f8dfa1 !important;
+}
+
+.christmas-dashboard-decor {
+  display: none;
+}
+
+html[data-lp28-christmas-2026] .role-admin .christmas-dashboard-decor {
+  display: flex;
+  flex: 0 1 295px;
+  justify-content: center;
+  align-items: end;
+  gap: clamp(14px, 3vw, 40px);
+  position: relative;
+  padding: 30px 14px 0;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  font-size: clamp(40px, 6vw, 76px);
+  line-height: 1.15;
+  filter: drop-shadow(0 5px 8px #06160e);
+  pointer-events: none;
+}
+
+.christmas-garland {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 28px;
+  border-bottom: 4px solid #3d8259;
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  background:
+    radial-gradient(circle at center, #ffdf92 0 2px, transparent 4px) 8px 9px / 29px 11px repeat-x,
+    radial-gradient(circle at center, #ee8377 0 2px, transparent 4px) 22px 15px / 29px 11px repeat-x;
+  filter: drop-shadow(0 1px 5px #e9bf5655);
+}
+
+@media (max-width: 600px) {
+  html[data-lp28-christmas-2026] .role-admin .christmas-dashboard-decor {
+    flex-basis: auto;
+    align-self: stretch;
+    max-width: 280px;
+    font-size: 44px;
+  }
 }
