@@ -6627,6 +6627,10 @@ function Dashboard({onLogout,user}) {
       .sort((a,b)=>{
         const da=String(a.date||"");
         const db=String(b.date||"");
+        if(eventTab==="quoteSent"){
+          if(!da||!db)return Number(!da)-Number(!db);
+          return da.localeCompare(db);
+        }
         if(eventTab==="upcoming"||eventTab==="inProgress")return da.localeCompare(db);
         return db.localeCompare(da);
       });
